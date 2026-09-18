@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@getmed/db/proxy";
 
-const PUBLIC_PATHS = ["/", "/login", "/signup", "/api/auth", "/api/inngest"];
+const PUBLIC_PATHS = ["/", "/login", "/signup", "/api/auth"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

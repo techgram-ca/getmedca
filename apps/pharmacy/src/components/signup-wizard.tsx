@@ -59,7 +59,6 @@ export function SignupWizard({ data }: { data: ProfileData }) {
       return;
     }
     if (![1, 2, 5, 6].includes(step)) return;
-    setSaveState("idle");
     const t = setTimeout(() => void persist(), 1200);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps

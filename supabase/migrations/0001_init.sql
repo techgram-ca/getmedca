@@ -642,3 +642,24 @@ create policy "storage: admin write driver docs" on storage.objects for insert t
   with check (public.is_admin() and bucket_id = 'driver-docs');
 -- Patient uploads (prescriptions/insurance/health cards) and proof-of-delivery
 -- uploads are performed server-side with the service role after validation.
+
+-- ---------------------------------------------------------------------
+-- Driver projection: what a driver needs for pickup + delivery (patient
+-- name/phone/address/notes + coordinates). No prescription, insurance or
+-- health-card columns.
+-- ---------------------------------------------------------------------
+create view public.orders_driver
+with (security_invoker = true)
+as
+select
+  o.id, o.pharmacy_id, o.order_type, o.status, o.patient_name, o.patient_phone,
+  o.delivery_address_line, o.delivery_city, o.delivery_postal_code, o.delivery_notes,
+  st_y(o.delivery_location::geometry) as delivery_lat,
+  st_x(o.delivery_location::geometry) as delivery_lng,
+  o.assigned_driver_id, o.failure_reason, o.reassigned_at, o.reassigned_by,
+  o.assigned_at, o.picked_up_at, o.delivered_at, o.failed_at, o.created_at, o.updated_at,
+  p.name as pharmacy_name, p.phone as pharmacy_phone, p.address_line as pharmacy_address_line,
+  p.city as pharmacy_city, p.postal_code as pharmacy_postal_code,
+  st_y(p.location::geometry) as pharmacy_lat, st_x(p.location::geometry) as pharmacy_lng
+from public.orders o
+join public.pharmacies p on p.id = o.pharmacy_id;

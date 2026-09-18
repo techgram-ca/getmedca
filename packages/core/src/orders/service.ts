@@ -4,6 +4,7 @@ import { AppError, ForbiddenError, InvalidTransitionError, NotFoundError } from 
 import { shortId, statusLabel } from "../format";
 import { inngest, orderCreated, orderResponded } from "../inngest/client";
 import { adminTarget, notify } from "../notifications/dispatch";
+import { pushToDriver } from "../notifications/push";
 import { getPlatformSettings } from "../settings";
 import { ESCALATION_STATUSES, TRANSITIONS, canTransition, type Actor, type OrderAction } from "./state-machine";
 
@@ -238,12 +239,15 @@ export async function assignDriver(orderId: string, driverId: string, adminId: s
     assigned_at: new Date().toISOString(),
   }, driver.name);
   const pharmacy = await loadPharmacy(db, order.pharmacy_id);
-  await notify(db, "driver.assigned", { phone: driver.phone, email: driver.email }, {
-    orderId: shortId(orderId),
-    pharmacyName: pharmacy?.name,
-    pharmacyAddress: [pharmacy?.address_line, pharmacy?.city].filter(Boolean).join(", "),
-    deliveryAddress: [order.delivery_address_line, order.delivery_city].filter(Boolean).join(", "),
-  });
+  await Promise.all([
+    notify(db, "driver.assigned", { phone: driver.phone, email: driver.email }, {
+      orderId: shortId(orderId),
+      pharmacyName: pharmacy?.name,
+      pharmacyAddress: [pharmacy?.address_line, pharmacy?.city].filter(Boolean).join(", "),
+      deliveryAddress: [order.delivery_address_line, order.delivery_city].filter(Boolean).join(", "),
+    }),
+    pushToDriver(db, driverId, { title: "New delivery assigned", body: `Pickup at ${pharmacy?.name ?? "pharmacy"}`, url: `/orders/${orderId}` }),
+  ]);
   return updated;
 }
 
@@ -363,12 +367,15 @@ export async function reassignDriver(orderId: string, fromDriverId: string, toDr
   if (!data) throw new AppError("Order was reassigned by someone else", 409);
   await logEvent(db, order, "reassign", null, "driver", fromDriverId, `→ ${target.name}`);
   const pharmacy = await loadPharmacy(db, order.pharmacy_id);
-  await notify(db, "driver.assigned", { phone: target.phone, email: target.email }, {
-    orderId: shortId(orderId),
-    pharmacyName: pharmacy?.name,
-    pharmacyAddress: [pharmacy?.address_line, pharmacy?.city].filter(Boolean).join(", "),
-    deliveryAddress: [order.delivery_address_line, order.delivery_city].filter(Boolean).join(", "),
-  });
+  await Promise.all([
+    notify(db, "driver.assigned", { phone: target.phone, email: target.email }, {
+      orderId: shortId(orderId),
+      pharmacyName: pharmacy?.name,
+      pharmacyAddress: [pharmacy?.address_line, pharmacy?.city].filter(Boolean).join(", "),
+      deliveryAddress: [order.delivery_address_line, order.delivery_city].filter(Boolean).join(", "),
+    }),
+    pushToDriver(db, toDriverId, { title: "Delivery handed to you", body: `Pickup at ${pharmacy?.name ?? "pharmacy"}`, url: `/orders/${orderId}` }),
+  ]);
   return data;
 }
 

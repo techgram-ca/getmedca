@@ -346,6 +346,24 @@ export type OrderAdminRow = Pick<
   | "updated_at"
 >;
 
+export type OrderDriverRow = Pick<
+  OrderRow,
+  | "id" | "pharmacy_id" | "order_type" | "status" | "patient_name" | "patient_phone"
+  | "delivery_address_line" | "delivery_city" | "delivery_postal_code" | "delivery_notes"
+  | "assigned_driver_id" | "failure_reason" | "reassigned_at" | "reassigned_by"
+  | "assigned_at" | "picked_up_at" | "delivered_at" | "failed_at" | "created_at" | "updated_at"
+> & {
+  delivery_lat: number | null;
+  delivery_lng: number | null;
+  pharmacy_name: string | null;
+  pharmacy_phone: string | null;
+  pharmacy_address_line: string | null;
+  pharmacy_city: string | null;
+  pharmacy_postal_code: string | null;
+  pharmacy_lat: number | null;
+  pharmacy_lng: number | null;
+};
+
 export type PharmacyNearRow = {
   id: string;
   slug: string | null;
@@ -394,6 +412,7 @@ export type Database = {
     Views: {
       pharmacies_public: { Row: PharmacyPublicRow; Relationships: [] };
       orders_admin: { Row: OrderAdminRow; Relationships: [] };
+      orders_driver: { Row: OrderDriverRow; Relationships: [] };
     };
     Functions: {
       pharmacies_near: {
