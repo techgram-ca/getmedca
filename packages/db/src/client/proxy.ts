@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "../database.types";
+import { supabasePublishableKey, supabaseUrl } from "./env";
 
 export type SessionInfo = {
   response: NextResponse;
@@ -15,9 +16,18 @@ export type SessionInfo = {
 export async function updateSession(request: NextRequest): Promise<SessionInfo> {
   let response = NextResponse.next({ request });
 
+  const url = supabaseUrl();
+  const anonKey = supabasePublishableKey();
+  if (!url || !anonKey) {
+    // Misconfigured deployment: treat the visitor as signed out instead of
+    // failing every request with a 500, so login pages still render.
+    console.error("[auth] NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are not set; redeploy after adding them.");
+    return { response, userId: null, role: null };
+  }
+
   const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll() {
@@ -32,13 +42,17 @@ export async function updateSession(request: NextRequest): Promise<SessionInfo> 
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { response, userId: null, role: null };
 
-  if (!user) return { response, userId: null, role: null };
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-
-  return { response, userId: user.id, role: profile?.role ?? null };
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+    return { response, userId: user.id, role: profile?.role ?? null };
+  } catch (err) {
+    // Network/auth-service failure: fail closed (signed out) rather than 500.
+    console.error("[auth] session refresh failed", err instanceof Error ? err.message : err);
+    return { response, userId: null, role: null };
+  }
 }

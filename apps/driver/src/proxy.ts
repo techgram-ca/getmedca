@@ -3,11 +3,18 @@ import { updateSession } from "@getmed/db/proxy";
 
 const PUBLIC_PATHS = ["/login", "/api/auth", "/manifest.webmanifest", "/sw.js", "/offline"];
 
+function hasAuthCookie(request: NextRequest) {
+  return request.cookies.getAll().some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const { response, userId, role } = await updateSession(request);
 
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  // Public pages for anonymous visitors never touch Supabase (fast + config-independent).
+  if (isPublic && !hasAuthCookie(request)) return NextResponse.next({ request });
+
+  const { response, userId, role } = await updateSession(request);
   if (isPublic) {
     if (userId && role === "driver" && pathname === "/login") {
       return NextResponse.redirect(new URL("/", request.url));

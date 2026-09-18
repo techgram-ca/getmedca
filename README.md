@@ -73,7 +73,9 @@ check; set `OTP_DEV_LOG=1` to print OTP codes locally. Production requires all k
 
 ## Environment
 
-See `.env.example`. Required accounts: Supabase (**create the project in ca-central-1 / Montreal**),
+See `.env.example`. Supabase keys use the current format: `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+(`sb_publishable_…`) and `SUPABASE_SECRET_KEY` (`sb_secret_…`); the legacy anon / service_role
+variables still work as fallbacks. Required accounts: Supabase (**create the project in ca-central-1 / Montreal**),
 Mapbox (one token), Cloudflare Turnstile, Twilio, Resend, Inngest, Sentry, Vercel Pro. Web Push for
 the driver app needs VAPID keys (`npx web-push generate-vapid-keys`).
 
