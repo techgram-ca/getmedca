@@ -1,0 +1,44 @@
+{
+  "name": "@getmed/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./orders": "./src/orders/index.ts",
+    "./notifications": "./src/notifications/index.ts",
+    "./geo": "./src/geo/index.ts",
+    "./otp": "./src/otp/index.ts",
+    "./validation": "./src/validation/index.ts",
+    "./inngest": "./src/inngest/index.ts",
+    "./invoices": "./src/invoices/index.ts",
+    "./auth": "./src/auth/index.ts",
+    "./settings": "./src/settings.ts",
+    "./storage": "./src/storage.ts",
+    "./hours": "./src/hours.ts",
+    "./format": "./src/format.ts",
+    "./errors": "./src/errors.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@getmed/db": "workspace:*",
+    "inngest": "^4.20.0",
+    "pdf-lib": "^1.17.1",
+    "resend": "^6.28.1",
+    "twilio": "^6.1.1",
+    "zod": "^4.6.5"
+  },
+  "peerDependencies": {
+    "next": "^16.3.5"
+  },
+  "devDependencies": {
+    "@getmed/tsconfig": "workspace:*",
+    "@types/node": "^22.19.0",
+    "next": "^16.3.5",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3"
+  }
+}
