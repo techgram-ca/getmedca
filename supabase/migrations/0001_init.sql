@@ -24,6 +24,8 @@ create type public.callback_window as enum ('morning', 'afternoon', 'evening');
 create type public.notification_channel as enum ('sms', 'email');
 create type public.form_applies_to as enum ('new_order', 'transfer', 'consultation');
 create type public.otp_purpose as enum ('order', 'consultation');
+-- online = submitted by the patient (OTP + SLA); manual = entered by the pharmacy in its dashboard
+create type public.order_source as enum ('online', 'manual');
 
 -- ---------------------------------------------------------------------
 -- Profiles (one row per auth user; role drives RLS)
@@ -214,6 +216,8 @@ create table public.orders (
   pharmacy_id uuid not null references public.pharmacies (id),
   order_type public.order_type not null,
   status public.order_status not null default 'pending',
+  source public.order_source not null default 'online',
+  created_by uuid references auth.users (id),
   -- patient (PHI — never exposed to admin API responses beyond name/phone)
   patient_name text not null,
   patient_phone text not null,
@@ -271,6 +275,7 @@ create table public.orders (
 create index orders_pharmacy_idx on public.orders (pharmacy_id, created_at desc);
 create index orders_status_idx on public.orders (status);
 create index orders_driver_idx on public.orders (assigned_driver_id);
+create index orders_source_idx on public.orders (pharmacy_id, source);
 create index orders_escalated_idx on public.orders (escalated_at) where escalated_at is not null;
 create index orders_delivered_idx on public.orders (pharmacy_id, delivered_at) where status = 'delivered';
 
@@ -428,7 +433,7 @@ create view public.orders_admin
 with (security_invoker = true)
 as
 select
-  id, pharmacy_id, order_type, status, patient_name, patient_phone,
+  id, pharmacy_id, order_type, status, source, patient_name, patient_phone,
   delivery_city, delivery_postal_code,
   assigned_driver_id, rejection_reason, cancellation_reason, failure_reason,
   escalated_at, escalation_status, escalation_note, escalation_resolved_at,
