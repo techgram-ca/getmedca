@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./orders": "./src/orders/index.ts",
+    "./orders/state-machine": "./src/orders/state-machine.ts",
     "./notifications": "./src/notifications/index.ts",
     "./geo": "./src/geo/index.ts",
     "./otp": "./src/otp/index.ts",
