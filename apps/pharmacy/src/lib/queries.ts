@@ -1,17 +1,18 @@
 import type { ServiceClient } from "@getmed/db/service";
-import type { OrderStatus, OrderType } from "@getmed/db/types";
+import type { OrderSource, OrderStatus, OrderType } from "@getmed/db/types";
 
 /** Orders visible to a pharmacy: only phone-verified submissions. */
 export function visibleOrders(db: ServiceClient, pharmacyId: string) {
   return db.from("orders").select("*").eq("pharmacy_id", pharmacyId).not("phone_verified_at", "is", null);
 }
 
-export type OrderFilters = { status?: OrderStatus | ""; type?: OrderType | ""; from?: string; to?: string; q?: string };
+export type OrderFilters = { status?: OrderStatus | ""; type?: OrderType | ""; source?: OrderSource | ""; from?: string; to?: string; q?: string };
 
 export async function listOrders(db: ServiceClient, pharmacyId: string, f: OrderFilters) {
   let q = visibleOrders(db, pharmacyId).order("created_at", { ascending: false }).limit(200);
   if (f.status) q = q.eq("status", f.status);
   if (f.type) q = q.eq("order_type", f.type);
+  if (f.source) q = q.eq("source", f.source);
   if (f.from) q = q.gte("created_at", new Date(f.from).toISOString());
   if (f.to) q = q.lte("created_at", new Date(`${f.to}T23:59:59`).toISOString());
   if (f.q) {

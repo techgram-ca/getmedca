@@ -23,8 +23,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
   return (
     <div>
       <PageHeader
-        title={<span className="flex items-center gap-3"><span className="font-mono">{shortId(o.id)}</span><StatusBadge status={o.status} /></span>}
-        description={`${o.order_type === "transfer" ? "Prescription transfer" : "New prescription"} · received ${formatDate(o.phone_verified_at)}`}
+        title={<span className="flex items-center gap-3"><span className="font-mono">{shortId(o.id)}</span><StatusBadge status={o.status} />{o.source === "manual" ? <Badge tone="accent">Manual</Badge> : null}</span>}
+        description={`${o.order_type === "transfer" ? "Prescription transfer" : "New prescription"} · ${o.source === "manual" ? "entered by your pharmacy" : "submitted online"} ${formatDate(o.phone_verified_at)}`}
         actions={o.status === "pending" ? <SlaCountdown since={o.phone_verified_at ?? o.created_at} /> : null}
       />
       {locked && o.status === "picked_up" ? <Alert tone="info" className="mb-6"><span className="inline-flex items-center gap-2"><Lock className="size-4" /> The driver has picked up this order. It can no longer be modified or cancelled.</span></Alert> : null}

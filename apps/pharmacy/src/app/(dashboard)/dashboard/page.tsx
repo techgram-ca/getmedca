@@ -5,6 +5,7 @@ import { formatCurrency, shortId, timeAgo } from "@getmed/core/format";
 import { Button, Card, CardContent, EmptyState, PageHeader, Stat, StatusBadge } from "@getmed/ui";
 import { OrderActions } from "@/components/order-actions";
 import { SlaCountdown } from "@/components/sla-countdown";
+import { AddOrderDialog } from "@/components/add-order-dialog";
 import { dashboardStats } from "@/lib/queries";
 
 export default async function DashboardPage() {
@@ -13,7 +14,7 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title={`Good ${greeting()}, ${pharmacy.name ?? "there"}`} description="Here's what needs your attention." />
+      <PageHeader title={`Good ${greeting()}, ${pharmacy.name ?? "there"}`} description="Here's what needs your attention." actions={<AddOrderDialog />} />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Stat label="New orders" value={s.pending.length} tone={s.pending.length ? "brand" : "neutral"} hint="Respond within 30 min" icon={<Inbox />} className={s.pending.length ? "animate-pulse-ring" : ""} />
         <Stat label="Today / this week" value={`${s.todayCount} / ${s.weekCount}`} icon={<Package />} />

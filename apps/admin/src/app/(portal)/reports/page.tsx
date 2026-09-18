@@ -7,7 +7,7 @@ export default async function ReportsPage() {
   const { db } = await requireAdmin();
   const since = new Date(Date.now() - 90 * 86400000).toISOString();
   const [{ data: orders }, { data: pharmacies }, { data: consults }] = await Promise.all([
-    db.from("orders_admin").select("id, pharmacy_id, status, created_at, delivered_at, delivery_fee_charged").gte("created_at", since),
+    db.from("orders_admin").select("id, pharmacy_id, status, source, created_at, delivered_at, delivery_fee_charged").gte("created_at", since),
     db.from("pharmacies").select("id, name, status, approved_at").not("submitted_at", "is", null),
     db.from("consultation_requests").select("id, created_at").gte("created_at", since).not("phone_verified_at", "is", null),
   ]);
@@ -37,7 +37,7 @@ export default async function ReportsPage() {
     <div>
       <PageHeader title="Reports" description="Last 90 days." />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Orders" value={orders?.length ?? 0} />
+        <Stat label="Orders" value={orders?.length ?? 0} hint={`${(orders ?? []).filter((o) => o.source === "manual").length} entered manually by pharmacies`} />
         <Stat label="Delivered" value={series.reduce((s, d) => s + d.delivered, 0)} />
         <Stat label="Revenue (flat fees)" value={formatCurrency(totalRevenue)} tone="brand" />
         <Stat label="Consultations" value={consults?.length ?? 0} />

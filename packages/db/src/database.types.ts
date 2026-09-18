@@ -31,6 +31,7 @@ export type CallbackWindow = "morning" | "afternoon" | "evening";
 export type NotificationChannel = "sms" | "email";
 export type FormAppliesTo = "new_order" | "transfer" | "consultation";
 export type OtpPurpose = "order" | "consultation";
+export type OrderSource = "online" | "manual";
 
 export type ProfileRow = { id: string; role: UserRole; full_name: string | null; created_at: string };
 
@@ -138,6 +139,8 @@ export type OrderRow = {
   pharmacy_id: string;
   order_type: OrderType;
   status: OrderStatus;
+  source: OrderSource;
+  created_by: string | null;
   patient_name: string;
   patient_phone: string;
   patient_dob: string | null;
@@ -344,6 +347,7 @@ export type OrderAdminRow = Pick<
   | "timed_out_at"
   | "created_at"
   | "updated_at"
+  | "source"
 >;
 
 export type OrderDriverRow = Pick<
@@ -437,6 +441,7 @@ export type Database = {
       notification_channel: NotificationChannel;
       form_applies_to: FormAppliesTo;
       otp_purpose: OtpPurpose;
+      order_source: OrderSource;
     };
     CompositeTypes: Record<string, never>;
   };

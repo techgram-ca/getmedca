@@ -8,7 +8,7 @@ export const ADMIN_ORDER_KEYS = [
   "escalated_at", "escalation_status", "escalation_note", "escalation_resolved_at",
   "reassigned_at", "reassigned_by", "delivery_fee_charged",
   "accepted_at", "ready_at", "assigned_at", "picked_up_at", "delivered_at", "failed_at",
-  "rejected_at", "cancelled_at", "timed_out_at", "created_at", "updated_at",
+  "rejected_at", "cancelled_at", "timed_out_at", "created_at", "updated_at", "source",
 ] as const satisfies readonly (keyof OrderAdminRow)[];
 
 /**

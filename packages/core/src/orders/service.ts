@@ -153,6 +153,70 @@ export async function activateOrder(orderId: string, ctx: Ctx = {}): Promise<Ord
   return data;
 }
 
+export type ManualOrderInput = {
+  orderType: "new" | "transfer";
+  patientName: string;
+  patientPhone: string;
+  patientDob?: string | null;
+  deliveryAddress: { line: string; city?: string | null; postalCode?: string | null; lat?: number | null; lng?: number | null };
+  deliveryNotes?: string | null;
+  allergies?: string | null;
+  transferFromPharmacyName?: string | null;
+  transferFromPhone?: string | null;
+  transferPrescriptionNumber?: string | null;
+};
+
+/**
+ * Pharmacy enters an order it took by phone or in store (source = 'manual').
+ * The pharmacy already holds the prescription, so the order starts at
+ * `accepted`: no OTP, no SLA timer. Consent is attested by the pharmacy.
+ */
+export async function createManualOrder(pharmacyId: string, userId: string, input: ManualOrderInput, ctx: Ctx = {}): Promise<OrderRow> {
+  const db = dbOf(ctx);
+  const pharmacy = await loadPharmacy(db, pharmacyId);
+  if (!pharmacy) throw new NotFoundError("Pharmacy not found");
+  const now = new Date().toISOString();
+  const a = input.deliveryAddress;
+  const { data, error } = await db
+    .from("orders")
+    .insert({
+      pharmacy_id: pharmacyId,
+      order_type: input.orderType,
+      source: "manual",
+      created_by: userId,
+      status: "accepted",
+      accepted_at: now,
+      phone_verified_at: now,
+      consent_given_at: now,
+      patient_name: input.patientName,
+      patient_phone: input.patientPhone,
+      patient_dob: input.patientDob || null,
+      delivery_address_line: a.line,
+      delivery_city: a.city ?? null,
+      delivery_postal_code: a.postalCode ?? null,
+      delivery_location: a.lat != null && a.lng != null ? `SRID=4326;POINT(${a.lng} ${a.lat})` : null,
+      delivery_notes: input.deliveryNotes || null,
+      allergies: input.allergies || null,
+      transfer_from_pharmacy_name: input.transferFromPharmacyName || null,
+      transfer_from_phone: input.transferFromPhone || null,
+      transfer_prescription_number: input.transferPrescriptionNumber || null,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  await db.from("order_events").insert([
+    { order_id: data.id, from_status: null, to_status: "pending", action: "create_manual", actor_role: "pharmacy", actor_id: pharmacyId },
+    { order_id: data.id, from_status: "pending", to_status: "accepted", action: "accept", actor_role: "pharmacy", actor_id: pharmacyId, note: "Entered manually by pharmacy" },
+  ]);
+  await notify(db, "order.status", { phone: data.patient_phone }, {
+    orderId: shortId(data.id),
+    status: statusLabel("accepted").toLowerCase(),
+    pharmacyName: pharmacy.name,
+    estimatedTime: pharmacy.estimated_delivery_time ?? "same day",
+  }, { channels: ["sms"] });
+  return data;
+}
+
 export async function acceptOrder(orderId: string, pharmacyId: string, ctx: Ctx = {}) {
   const db = dbOf(ctx);
   const order = await loadOrder(db, orderId);

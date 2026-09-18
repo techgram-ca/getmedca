@@ -24,7 +24,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
 
   return (
     <div>
-      <PageHeader title={<span className="flex items-center gap-3"><span className="font-mono">{shortId(o!.id)}</span><StatusBadge status={o!.status} /></span>} description={`${o!.order_type === "transfer" ? "Transfer" : "New prescription"} · ${o!.pharmacy?.name ?? "—"} · created ${formatDate(o!.created_at)}`} />
+      <PageHeader title={<span className="flex items-center gap-3"><span className="font-mono">{shortId(o!.id)}</span><StatusBadge status={o!.status} />{o!.source === "manual" ? <Badge tone="accent">Manual</Badge> : null}</span>} description={`${o!.order_type === "transfer" ? "Transfer" : "New prescription"} · ${o!.pharmacy?.name ?? "—"} · created ${formatDate(o!.created_at)}`} />
       <Alert tone="info" className="mb-6"><span className="inline-flex items-center gap-2"><ShieldOff className="size-4" /> PHI redacted: prescription files, insurance, health card, date of birth and street address are not accessible from the admin portal.</span></Alert>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
@@ -52,6 +52,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
             <CardHeader><CardTitle>Order metadata</CardTitle></CardHeader>
             <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
               <Row k="Patient" v={o!.patient_name} /><Row k="Phone" v={o!.patient_phone} />
+              <Row k="Source" v={o!.source === "manual" ? "Entered manually by the pharmacy" : "Submitted online by the patient"} />
               <Row k="Pharmacy" v={<Link href={`/pharmacies/${o!.pharmacy_id}`} className="text-brand-700 hover:underline">{o!.pharmacy?.name ?? "—"}</Link>} />
               <Row k="Delivery area" v={[o!.delivery_city, o!.delivery_postal_code].filter(Boolean).join(" ") || "—"} />
               <Row k="Driver" v={o!.driver ? <Link href={`/drivers/${o!.assigned_driver_id}`} className="text-brand-700 hover:underline">{o!.driver.name}</Link> : "—"} />

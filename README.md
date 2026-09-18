@@ -23,6 +23,10 @@ everywhere, Supabase Postgres/PostGIS, Inngest for durable workflows, Mapbox for
   transitions and which actor may perform them. `service.ts` applies them with an optimistic
   `UPDATE … WHERE status = <expected>` so concurrent actors cannot double-transition. RLS enforces
   access control only.
+- **Order source.** `orders.source` is `online` (patient submitted, OTP-verified, SLA timer) or `manual`
+  (entered by the pharmacy from its dashboard via "Add order", one or many at a time). Manual orders
+  start at `accepted` with no OTP and no SLA timer; the pharmacy attests consent. Both sources are
+  filterable in the pharmacy and admin order lists.
 - **Pharmacy write access ends at `picked_up`.** Enforced by the transition table, not the UI.
 - **Escalation.** `rejected`, `cancelled`, `timed_out` and `failed` all set `escalated_at` and notify the
   admin. Pharmacies and drivers never re-contact the patient.
