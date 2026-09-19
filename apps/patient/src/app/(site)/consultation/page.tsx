@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRight, Stethoscope } from "lucide-react";
 import { createServiceClient } from "@getmed/db/service";
 import { ImageWithFallback } from "@getmed/ui";
-import { ConsultAddressSearch } from "@/components/consult-address-search";
+import { IssuePicker } from "@/components/issue-picker";
 
 export const metadata: Metadata = {
   title: "Consult a Pharmacist",
@@ -25,6 +25,7 @@ export default async function ConsultationIndex() {
   const db = createServiceClient();
   const { data: issues } = await db.from("issues").select("id, name, slug, description").eq("active", true).order("sort_order");
   const list = issues ?? [];
+  const pickable = list.map(({ id, name, slug }) => ({ id, name, slug }));
 
   return (
     <>
@@ -45,7 +46,7 @@ export default async function ConsultationIndex() {
                 Get expert advice and treatment for common conditions without leaving home.
               </p>
 
-              <div className="mb-8 flex flex-wrap gap-5 text-sm text-ink-500">
+              <div className="mb-7 flex flex-wrap gap-5 text-sm text-ink-500">
                 {["No appointment needed", "Same-day call back", "No booking fee"].map((t) => (
                   <span key={t} className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-brand-600" />
@@ -54,7 +55,7 @@ export default async function ConsultationIndex() {
                 ))}
               </div>
 
-              <ConsultAddressSearch />
+              <IssuePicker issues={pickable} />
             </div>
 
             <div className="hero-plate hidden lg:block">
@@ -109,6 +110,10 @@ export default async function ConsultationIndex() {
               <span className="font-medium text-ink-950">+ Many more minor conditions</span>
             </p>
             <p className="text-sm text-ink-500">If your condition is not suitable, the pharmacist will refer you to a doctor.</p>
+          </div>
+
+          <div className="mx-auto mt-10 max-w-xl rounded-2xl border border-ink-200 bg-ink-50 p-6">
+            <IssuePicker issues={pickable} id="consult-issue-bottom" label="Ready to start? Pick your topic" />
           </div>
         </div>
       </section>
