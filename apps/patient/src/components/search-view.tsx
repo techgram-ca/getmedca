@@ -17,7 +17,16 @@ const SearchMap = dynamic(() => import("./search-map").then((m) => m.SearchMap),
 export function SearchView({ address, response, error }: { address: string; response: SearchResponse; error: string | null }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const { results, origin, radiusKm } = response;
-  const q = address ? `?address=${encodeURIComponent(address)}` : "";
+
+  // Pass the address the patient searched with (and its coordinates) through to
+  // the pharmacy page and order form, so they are never asked for it twice.
+  const params = new URLSearchParams();
+  if (address) params.set("address", address);
+  if (origin) {
+    params.set("lat", String(origin.lat));
+    params.set("lng", String(origin.lng));
+  }
+  const q = params.size ? `?${params}` : "";
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -90,7 +99,7 @@ function ResultCard({ r, active, onHover, q }: { r: SearchResult; active: boolea
           {r.offersConsultation ? <Badge tone="brand">Consultations</Badge> : null}
           <span className="flex-1" />
           <Button asChild size="sm">
-            <Link href={`/order/new?pharmacyId=${r.id}`}>Order here <ArrowRight /></Link>
+            <Link href={`/order/new?pharmacyId=${r.id}${q ? `&${q.slice(1)}` : ""}`}>Order here <ArrowRight /></Link>
           </Button>
         </div>
       </div>

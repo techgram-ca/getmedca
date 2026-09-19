@@ -35,7 +35,7 @@ export type SendOtpInput = {
  */
 export async function sendOtp(db: ServiceClient, input: SendOtpInput): Promise<{ expiresAt: string }> {
   const ok = await verifyTurnstile(input.turnstileToken, input.ip);
-  if (!ok) throw new AppError("Bot check failed. Please try again.", 400, "turnstile_failed");
+  if (!ok) throw new AppError("The security check didn't pass. Please refresh the page and try again.", 400, "turnstile_failed");
 
   await enforceRateLimit(db, `otp:phone:${input.phone}`, 5, 15 * 60);
   if (input.ip) await enforceRateLimit(db, `otp:ip:${input.ip}`, 20, 15 * 60);

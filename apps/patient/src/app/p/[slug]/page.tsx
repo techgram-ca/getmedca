@@ -27,7 +27,7 @@ import { getPublicPharmacy } from "@/lib/pharmacy";
 export const dynamic = "force-dynamic";
 
 type Params = { slug: string };
-type Search = { address?: string };
+type Search = { address?: string; lat?: string; lng?: string };
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { slug } = await params;
@@ -44,7 +44,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 
 export default async function PharmacyPage({ params, searchParams }: { params: Promise<Params>; searchParams: Promise<Search> }) {
   const { slug } = await params;
-  const { address } = await searchParams;
+  const { address, lat: latParam, lng: lngParam } = await searchParams;
   const p = await getPublicPharmacy(slug);
   if (!p) notFound();
 
@@ -55,7 +55,13 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
   const main = p.pharmacists.find((s) => s.is_main) ?? p.pharmacists[0];
   const others = p.pharmacists.filter((s) => s.id !== main?.id);
   const fullAddress = [p.address_line, p.city, p.province, p.postal_code].filter(Boolean).join(", ");
-  const orderHref = `/order/new?pharmacyId=${p.id}${address ? `&address=${encodeURIComponent(address)}` : ""}`;
+  const orderParams = new URLSearchParams({ pharmacyId: p.id });
+  if (address) orderParams.set("address", address);
+  if (latParam && lngParam) {
+    orderParams.set("lat", latParam);
+    orderParams.set("lng", lngParam);
+  }
+  const orderHref = `/order/new?${orderParams}`;
   const consultHref = `/consultation/request?pharmacyId=${p.id}`;
 
   const chrome: ChromePharmacy = {
@@ -85,7 +91,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
 
   return (
     <div className="flex min-h-screen flex-col bg-ink-50">
-      <PharmacyHeader pharmacy={chrome} links={navLinks} />
+      <PharmacyHeader pharmacy={chrome} links={navLinks} orderHref={orderHref} />
 
       {/* ── Hero ─────────────────────────────────────────────── */}
       <section className="border-b border-ink-200 bg-gradient-to-b from-brand-50 to-ink-50">
@@ -453,7 +459,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
       </section>
 
       <PharmacyFooter pharmacy={chrome} address={fullAddress} />
-      <StickyOrderBar pharmacy={chrome} />
+      <StickyOrderBar pharmacy={chrome} orderHref={orderHref} />
       <div className="h-16 md:hidden" />
     </div>
   );
