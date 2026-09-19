@@ -139,7 +139,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
 
             <div className="hero-plate">
               <ImageWithFallback
-                src={p.coverUrl}
+                src={p.coverUrl ?? "/images/pharmacy.png"}
                 alt={p.name ?? "Our pharmacy"}
                 label="Add a cover photo from your dashboard"
                 wrapperClassName="relative h-[300px] w-full rounded-2xl shadow-hero md:h-[420px]"

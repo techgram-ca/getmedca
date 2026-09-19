@@ -29,3 +29,15 @@ Guidelines
 Pharmacy logos, cover photos, pharmacist portraits and gallery images are **not**
 uploaded here. Each pharmacy uploads its own from the pharmacy dashboard, and
 they are stored privately in Supabase Storage.
+
+## Status
+
+Uploaded: `hero.png`, `order.png`, `verification.png`, `delivery.png`,
+`user-1.jpg`–`user-4.jpg`, `consultation.jpg`, `pharmacy.png`.
+
+Still missing, so those slots show a plain gradient:
+- `about.png` — About page hero
+- `faq.png` — FAQ page hero
+
+`pharmacy.png` is used as the cover photo on a pharmacy's public page when that
+pharmacy has not uploaded one of its own.
