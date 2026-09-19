@@ -17,7 +17,7 @@ import {
   UserMinus,
   Users,
 } from "lucide-react";
-import { Button, ScrollReveal, SectionLabel } from "@getmed/ui";
+import { Button, Logo, ScrollReveal, SectionLabel } from "@getmed/ui";
 import { LOCAL_DEMAND_STAT, MARKET_STATS } from "@/lib/market-stats";
 
 /* ── Market opportunity ─────────────────────────────────────────────── */
@@ -421,14 +421,7 @@ export function FinalCta() {
 
       <footer className="border-t border-ink-200 bg-brand-50 px-6 py-10">
         <div className="mx-auto flex max-w-[1200px] flex-wrap items-center justify-between gap-5">
-          <Link href="/" className="no-underline">
-            <span className="inline-flex items-center gap-2.5 text-[1.2rem] font-extrabold tracking-tight text-ink-950">
-              <span className="flex size-9 items-center justify-center rounded-[10px] bg-brand-600">
-                <HeartIcon />
-              </span>
-              Get<span className="text-brand-600">Med</span>
-            </span>
-          </Link>
+          <Link href="/" className="no-underline"><Logo /></Link>
 
           <ul className="flex list-none flex-wrap gap-6">
             <li><a href={process.env.NEXT_PUBLIC_PATIENT_URL ?? "https://getmed.ca"} className="text-sm text-ink-500 no-underline hover:text-ink-950">For patients</a></li>
@@ -442,14 +435,5 @@ export function FinalCta() {
         </div>
       </footer>
     </>
-  );
-}
-
-function HeartIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-5 text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-      <path d="M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27" />
-    </svg>
   );
 }

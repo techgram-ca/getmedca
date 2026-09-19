@@ -42,13 +42,13 @@ export function PortalShell({ counts, children }: { counts: Counts; children: Re
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-60 shrink-0 flex-col bg-ink-950 lg:flex">
-        <div className="flex h-16 items-center px-5"><Logo light /><span className="ml-2 rounded bg-white/10 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-300">Admin</span></div>
+        <div className="flex h-16 items-center px-5"><Logo light size="sm" /><span className="ml-2 rounded bg-white/10 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-300">Admin</span></div>
         {nav}
         <form action={logout} className="border-t border-white/10 p-4"><button className="flex items-center gap-2 text-xs text-ink-400 hover:text-white"><LogOut className="size-3.5" /> Sign out</button></form>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between bg-ink-950 px-4 text-white lg:hidden">
-          <Logo light />
+          <Logo light size="sm" />
           <button className="rounded-md p-2" onClick={() => setOpen((o) => !o)} aria-label="Menu">{open ? <X className="size-5" /> : <Menu className="size-5" />}</button>
         </header>
         {open ? <div className="bg-ink-950 lg:hidden">{nav}</div> : null}

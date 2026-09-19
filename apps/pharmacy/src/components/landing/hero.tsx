@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, HeartPulse, TrendingUp } from "lucide-react";
-import { Button } from "@getmed/ui";
+import { ArrowRight, TrendingUp } from "lucide-react";
+import { Button, Logo } from "@getmed/ui";
 import { HEADLINE_STATS } from "@/lib/market-stats";
 
 const DASHBOARD_ORDERS = [
@@ -49,11 +49,9 @@ export function LandingHero() {
             <div className="absolute inset-[-16px] rotate-2 rounded-[32px] bg-brand-100" />
             <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_24px_64px_rgba(42,157,143,0.14)]">
               <div className="flex items-center justify-between border-b border-ink-200 bg-ink-50 px-5 py-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex size-6 items-center justify-center rounded-md bg-brand-600">
-                    <HeartPulse className="size-3.5 text-white" />
-                  </div>
-                  <span className="text-xs font-bold text-ink-950">Pharmacy dashboard</span>
+                <div className="flex items-center gap-2.5">
+                  <Logo size="sm" />
+                  <span className="text-xs font-medium text-ink-500">Pharmacy dashboard</span>
                 </div>
                 <div className="flex gap-1.5">
                   <div className="size-2.5 rounded-full bg-red-400" />

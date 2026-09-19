@@ -17,7 +17,7 @@ export function AppShell({ driverName, children }: { driverName: string; childre
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col">
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between bg-white/90 px-4 backdrop-blur border-b border-ink-200" style={{ paddingTop: "env(safe-area-inset-top)" }}>
-        <Logo />
+        <Logo size="sm" />
         <span className="truncate text-sm text-ink-600">{driverName}</span>
       </header>
       <main className="flex-1 px-4 py-4 pb-24">{children}</main>
