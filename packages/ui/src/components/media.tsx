@@ -23,6 +23,8 @@ export function ImageWithFallback({
 }) {
   const [failed, setFailed] = React.useState(false);
   const show = !!src && !failed;
+  // The label names the missing file; useful while building, noise for visitors.
+  const hint = process.env.NODE_ENV === "development" ? label : undefined;
   return (
     <div className={cn("relative overflow-hidden", wrapperClassName)}>
       {show ? (
@@ -38,7 +40,7 @@ export function ImageWithFallback({
           aria-label={alt}
         >
           <ImageIcon className="size-8 opacity-50" aria-hidden />
-          {label ? <span className="px-4 text-center text-xs font-medium opacity-70">{label}</span> : null}
+          {hint ? <span className="px-4 text-center text-xs font-medium opacity-70">{hint}</span> : null}
         </div>
       )}
     </div>

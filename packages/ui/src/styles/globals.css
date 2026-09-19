@@ -35,13 +35,14 @@
   --color-ink-900: #1a2f2c;
   --color-ink-950: #0d1f1c;
 
-  --color-accent-50: #fff8eb;
-  --color-accent-100: #ffedc6;
-  --color-accent-200: #ffd988;
-  --color-accent-300: #ffbf4a;
-  --color-accent-400: #ffa41f;
-  --color-accent-500: #f98207;
-  --color-accent-600: #dd5e02;
+  /* Amber sampled from the GetMed wordmark (#f0ab07). */
+  --color-accent-50: #fff8e8;
+  --color-accent-100: #ffecc0;
+  --color-accent-200: #fcd980;
+  --color-accent-300: #f7c33d;
+  --color-accent-400: #f0ab07;
+  --color-accent-500: #d69406;
+  --color-accent-600: #b07505;
   --color-accent-700: #b73f06;
   --color-accent-800: #94300c;
   --color-accent-900: #7a290d;

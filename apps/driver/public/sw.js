@@ -1,6 +1,6 @@
 /* GetMed Driver service worker: app-shell caching, offline fallback, Web Push. */
 const CACHE = "getmed-driver-v1";
-const PRECACHE = ["/offline", "/icons/icon-192.png", "/icons/icon-512.png"];
+const PRECACHE = ["/offline", "/icons/icon-192.png", "/icons/icon-512.png", "/images/logo.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));

@@ -1,44 +1,55 @@
 import * as React from "react";
-import { HeartPulse } from "lucide-react";
 import { cn } from "../lib/cn";
 
+/** Served from every app's own `public/images/logo.png`. */
+const LOGO_SRC = "/images/logo.png";
+
+const SIZES = {
+  sm: "h-6",
+  md: "h-8",
+  lg: "h-10",
+} as const;
+
+/**
+ * The GetMed wordmark.
+ *
+ * On dark surfaces pass `light`: the wordmark's teal half would otherwise sink
+ * into the background, so it is placed on a white plate to keep the brand
+ * colours intact and legible.
+ */
 export function Logo({
   className,
-  wordmark = true,
   light = false,
   size = "md",
 }: {
   className?: string;
+  /** @deprecated The mark is a wordmark; this prop is ignored. */
   wordmark?: boolean;
   light?: boolean;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
 }) {
-  const box = size === "sm" ? "size-7 rounded-lg" : "size-9 rounded-[10px]";
-  const icon = size === "sm" ? "size-3.5" : "size-5";
-  const text = size === "sm" ? "text-sm" : "text-[1.2rem]";
-  return (
-    <span className={cn("inline-flex items-center gap-2.5 font-extrabold tracking-tight", light ? "text-white" : "text-ink-950", className)}>
-      <span className={cn("flex items-center justify-center", box, light ? "bg-white/15" : "bg-brand-600")} aria-hidden>
-        <HeartPulse className={cn(icon, "text-white")} />
-      </span>
-      {wordmark ? (
-        <span className={text}>
-          Get<span className={light ? "text-brand-200" : "text-brand-600"}>Med</span>
-        </span>
-      ) : null}
-    </span>
+  const img = (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={LOGO_SRC} alt="GetMed" className={cn(SIZES[size], "w-auto select-none")} decoding="async" />
   );
+
+  if (light) {
+    return (
+      <span className={cn("inline-flex items-center rounded-xl bg-white px-2.5 py-1.5", className)}>
+        {img}
+      </span>
+    );
+  }
+  return <span className={cn("inline-flex items-center", className)}>{img}</span>;
 }
 
 /** Small "Powered by GetMed" mark for pharmacy-owned pages. */
 export function PoweredByGetMed({ className, light = false }: { className?: string; light?: boolean }) {
   return (
-    <span className={cn("inline-flex items-center gap-1 text-[0.65rem] font-medium whitespace-nowrap", light ? "text-white/70" : "text-ink-400", className)}>
+    <span className={cn("inline-flex items-center gap-1.5 text-[0.65rem] font-medium whitespace-nowrap", light ? "text-white/70" : "text-ink-400", className)}>
       Powered by
-      <span className={cn("inline-flex items-center gap-0.5 font-bold", light ? "text-white" : "text-ink-700")}>
-        <HeartPulse className={cn("size-3", light ? "text-brand-200" : "text-brand-600")} aria-hidden />
-        Get<span className="text-brand-600">Med</span>
-      </span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={LOGO_SRC} alt="GetMed" className={cn("h-3.5 w-auto select-none", light && "brightness-0 invert")} decoding="async" />
     </span>
   );
 }

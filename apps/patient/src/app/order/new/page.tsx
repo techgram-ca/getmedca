@@ -8,13 +8,17 @@ import { getPublicPharmacy } from "@/lib/pharmacy";
 export const metadata: Metadata = { title: "Order your prescription" };
 export const dynamic = "force-dynamic";
 
-export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ pharmacyId?: string; address?: string; type?: string }> }) {
+export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ pharmacyId?: string; address?: string; lat?: string; lng?: string; type?: string }> }) {
   const sp = await searchParams;
   if (!sp.pharmacyId) notFound();
   const pharmacy = await getPublicPharmacy(sp.pharmacyId);
   if (!pharmacy) notFound();
   const db = createServiceClient();
   const { data: config } = await db.from("form_field_config").select("*").order("sort_order");
+
+  const lat = Number(sp.lat);
+  const lng = Number(sp.lng);
+  const initialCoords = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
 
   const chrome: ChromePharmacy = {
     id: pharmacy.id,
@@ -38,6 +42,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
             pharmacy={{ id: pharmacy.id, name: chrome.name, offersTransfer: pharmacy.offers_transfer }}
             config={config ?? []}
             initialAddress={sp.address ?? ""}
+            initialCoords={initialCoords}
             initialType={sp.type === "transfer" ? "transfer" : "new"}
           />
         </div>

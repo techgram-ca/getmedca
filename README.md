@@ -68,8 +68,10 @@ delete from public.pharmacies where owner_user_id = '<auth user id>';
 Drivers are created only from the admin portal (`/drivers/new`). Pharmacies self-register at
 `pharmacy.getmed.ca/signup` and stay `pending` until approved in the admin portal.
 
-Without Twilio/Resend/Turnstile keys, development mode logs sends to the console and skips the bot
-check; set `OTP_DEV_LOG=1` to print OTP codes locally. Production requires all keys.
+Without Twilio/Resend keys, development mode logs sends to the console; set `OTP_DEV_LOG=1` to print
+OTP codes locally. Production requires Twilio and Resend. Turnstile is optional: the bot check runs
+only when both `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` are set, and OTP sends
+fall back to the per-phone and per-IP rate limits when they are not.
 
 ## Environment
 

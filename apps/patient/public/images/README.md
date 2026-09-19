@@ -29,3 +29,16 @@ Guidelines
 Pharmacy logos, cover photos, pharmacist portraits and gallery images are **not**
 uploaded here. Each pharmacy uploads its own from the pharmacy dashboard, and
 they are stored privately in Supabase Storage.
+
+## Brand assets
+
+`logo.png` is the GetMed wordmark used in every header and footer. A copy lives
+in each app (`apps/<app>/public/images/logo.png`); replace all four together
+when the logo changes.
+
+`pharmacy.png` is the cover photo shown on a pharmacy's public page when that
+pharmacy has not uploaded one of its own.
+
+## Status
+
+All hero and step images are uploaded.

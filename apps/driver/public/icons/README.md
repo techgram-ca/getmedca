@@ -1,5 +1,8 @@
 # Driver app icons
 
-`icon-192.png`, `icon-512.png` and `maskable-512.png` are generated placeholders
-(a teal rounded square with a white cross). Replace them with the real GetMed
-app icon at the same file names and sizes to change the installed PWA icon.
+`icon-192.png` and `icon-512.png` are the GetMed Driver app icon, used for the
+installed PWA and its push notifications. Replace them at the same file names
+and sizes to change the installed icon.
+
+They carry their own rounded frame, so they are declared with the default
+`any` purpose rather than `maskable` (a maskable crop would cut the wordmark).

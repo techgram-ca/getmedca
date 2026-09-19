@@ -9,23 +9,52 @@ export function IssueAddressSearch({ slug, initial }: { slug: string; initial: s
   const router = useRouter();
   const [text, setText] = useState(initial);
   const [picked, setPicked] = useState<AddressValue | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function go(selected?: AddressValue | null) {
+    const chosen = selected ?? picked;
+    const query = (chosen?.full ?? text).trim();
+    if (!query) {
+      document.getElementById("issue-address")?.focus();
+      return;
+    }
+    setBusy(true);
+    const p = new URLSearchParams({ address: query });
+    if (chosen?.lat != null && chosen?.lng != null) {
+      p.set("lat", String(chosen.lat));
+      p.set("lng", String(chosen.lng));
+    }
+    router.push(`/consultation/${slug}?${p}`);
+  }
+
   return (
     <form
-      className="flex flex-col gap-2 sm:flex-row"
       onSubmit={(e) => {
         e.preventDefault();
-        const q = (picked?.full ?? text).trim();
-        if (!q) return;
-        const p = new URLSearchParams({ address: q });
-        if (picked?.lat != null && picked?.lng != null) {
-          p.set("lat", String(picked.lat));
-          p.set("lng", String(picked.lng));
-        }
-        router.push(`/consultation/${slug}?${p}`);
+        go();
       }}
     >
-      <AddressAutocomplete value={text} onChange={(t) => { setText(t); setPicked(null); }} onSelect={setPicked} className="flex-1" />
-      <Button type="submit"><Search /> Search</Button>
+      <label htmlFor="issue-address" className="mb-2 block text-sm font-semibold text-ink-800">Your address</label>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <AddressAutocomplete
+          id="issue-address"
+          value={text}
+          onChange={(t) => {
+            setText(t);
+            setPicked(null);
+          }}
+          onSelect={(a) => {
+            setPicked(a);
+            go(a);
+          }}
+          placeholder="Street address or postal code"
+          className="flex-1"
+          autoFocus={!initial}
+        />
+        <Button type="submit" size="lg" loading={busy} loadingText="Searching…" className="shrink-0">
+          <Search /> Find pharmacists
+        </Button>
+      </div>
     </form>
   );
 }

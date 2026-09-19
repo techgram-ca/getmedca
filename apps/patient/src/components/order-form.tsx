@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, FileUp, Lock } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, CheckCircle2, FileText, FileUp, Lock, MapPin } from "lucide-react";
 import type { FormFieldConfigRow } from "@getmed/db/types";
 import {
   AddressAutocomplete,
@@ -16,9 +16,6 @@ import {
   Input,
   LoadingOverlay,
   Textarea,
-  Tabs,
-  TabsList,
-  TabsTrigger,
   Turnstile,
   cn,
   focusFirstError,
@@ -29,7 +26,9 @@ import {
 type Props = {
   pharmacy: { id: string; name: string; offersTransfer: boolean };
   config: FormFieldConfigRow[];
+  /** Address the patient already searched with; when present we confirm rather than re-ask. */
   initialAddress: string;
+  initialCoords: { lat: number; lng: number } | null;
   initialType: "new" | "transfer";
 };
 
@@ -52,7 +51,7 @@ const FIELD_META: Record<string, { label: string; id: string }> = {
 
 type Mode = "upload" | "manual";
 
-export function OrderForm({ pharmacy, config, initialAddress, initialType }: Props) {
+export function OrderForm({ pharmacy, config, initialAddress, initialCoords, initialType }: Props) {
   const router = useRouter();
   const [type, setType] = useState<"new" | "transfer">(initialType);
   const [busy, setBusy] = useState(false);
@@ -61,7 +60,13 @@ export function OrderForm({ pharmacy, config, initialAddress, initialType }: Pro
   const [turnstile, setTurnstile] = useState<string | null>(null);
 
   const [addressText, setAddressText] = useState(initialAddress);
-  const [address, setAddress] = useState<AddressValue | null>(initialAddress ? { line: initialAddress, full: initialAddress } : null);
+  const [address, setAddress] = useState<AddressValue | null>(
+    initialAddress
+      ? { line: initialAddress, full: initialAddress, lat: initialCoords?.lat ?? null, lng: initialCoords?.lng ?? null }
+      : null,
+  );
+  // Known address arrives from search: show it for confirmation instead of an empty field.
+  const [editingAddress, setEditingAddress] = useState(!initialAddress);
   const [insuranceMode, setInsuranceMode] = useState<Mode>("upload");
   const [healthMode, setHealthMode] = useState<Mode>("manual");
   const [consent, setConsent] = useState(false);
@@ -153,12 +158,7 @@ export function OrderForm({ pharmacy, config, initialAddress, initialType }: Pro
         <FormErrorSummary issues={issues} />
         <FormError message={error} title="We couldn't submit your order" />
 
-        <Tabs value={type} onValueChange={(v) => setType(v as "new" | "transfer")}>
-          <TabsList className="w-full sm:w-auto">
-            <TabsTrigger value="new" className="flex-1">New prescription</TabsTrigger>
-            <TabsTrigger value="transfer" className="flex-1" disabled={!pharmacy.offersTransfer}>Transfer prescription</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <OrderTypePicker value={type} onChange={setType} offersTransfer={pharmacy.offersTransfer} />
 
         <Section title="About the patient" step={1}>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -175,19 +175,41 @@ export function OrderForm({ pharmacy, config, initialAddress, initialType }: Pro
         </Section>
 
         <Section title="Delivery address" step={2}>
-          <Field label="Address" htmlFor="deliveryAddress" required error={fe("deliveryAddress")}>
-            <AddressAutocomplete
-              id="deliveryAddress"
-              value={addressText}
-              onChange={(t) => {
-                setAddressText(t);
-                setAddress(null);
-              }}
-              onSelect={setAddress}
-              placeholder="Street address, city"
-              invalid={!!fe("deliveryAddress")}
-            />
-          </Field>
+          {editingAddress ? (
+            <Field
+              label="Address"
+              htmlFor="deliveryAddress"
+              required
+              error={fe("deliveryAddress")}
+              hint="Pick a suggestion so the driver gets exact directions."
+            >
+              <AddressAutocomplete
+                id="deliveryAddress"
+                value={addressText}
+                onChange={(t) => {
+                  setAddressText(t);
+                  setAddress(null);
+                }}
+                onSelect={setAddress}
+                placeholder="Street address, city"
+                invalid={!!fe("deliveryAddress")}
+                autoFocus={!!initialAddress}
+              />
+            </Field>
+          ) : (
+            <div className="flex items-start justify-between gap-4 rounded-2xl border border-ink-200 bg-brand-50/60 p-4">
+              <p className="flex min-w-0 items-start gap-3">
+                <MapPin className="mt-0.5 size-5 shrink-0 text-brand-600" />
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold uppercase tracking-wide text-ink-500">Delivering to</span>
+                  <span className="block font-medium text-ink-950">{addressText}</span>
+                </span>
+              </p>
+              <Button type="button" size="sm" variant="ghost" className="shrink-0" onClick={() => setEditingAddress(true)}>
+                Change
+              </Button>
+            </div>
+          )}
           <Field label="Unit / buzzer / delivery notes" htmlFor="notes" optional={!required.has("notes")} required={required.has("notes")} error={fe("notes")} className="mt-4">
             <Textarea id="notes" name="notes" rows={2} placeholder="Apt 4B, buzz 204. Leave with concierge if not home." />
           </Field>
@@ -279,6 +301,50 @@ export function OrderForm({ pharmacy, config, initialAddress, initialType }: Pro
         </div>
       </aside>
     </form>
+  );
+}
+
+function OrderTypePicker({
+  value,
+  onChange,
+  offersTransfer,
+}: {
+  value: "new" | "transfer";
+  onChange: (v: "new" | "transfer") => void;
+  offersTransfer: boolean;
+}) {
+  const OPTIONS = [
+    { id: "new" as const, label: "New prescription", desc: "Upload a prescription", icon: FileText, enabled: true },
+    { id: "transfer" as const, label: "Transfer prescription", desc: "Move it from another pharmacy", icon: ArrowLeftRight, enabled: offersTransfer },
+  ];
+  return (
+    <div role="radiogroup" aria-label="Order type" className="grid gap-2 sm:grid-cols-2">
+      {OPTIONS.map((o) => {
+        const active = value === o.id;
+        return (
+          <button
+            key={o.id}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={!o.enabled}
+            onClick={() => onChange(o.id)}
+            className={cn(
+              "flex items-center gap-3 rounded-2xl border-2 p-4 text-left transition-soft focus-ring disabled:cursor-not-allowed disabled:opacity-50",
+              active ? "border-brand-600 bg-brand-50" : "border-ink-200 bg-white hover:border-brand-300",
+            )}
+          >
+            <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl", active ? "bg-brand-600 text-white" : "bg-ink-100 text-ink-500")}>
+              <o.icon className="size-5" />
+            </span>
+            <span className="min-w-0">
+              <span className={cn("block font-bold", active ? "text-brand-800" : "text-ink-950")}>{o.label}</span>
+              <span className="block text-xs text-ink-500">{o.enabled ? o.desc : "Not offered by this pharmacy"}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
