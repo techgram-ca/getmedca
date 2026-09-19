@@ -85,7 +85,8 @@ Create four Vercel projects pointing at this repo with root directories `apps/pa
 `apps/pharmacy`, `apps/admin`, `apps/driver` (framework: Next.js, install command
 `pnpm install`, build command `pnpm turbo run build --filter=@getmed/<app>`). Attach the same
 environment variables to each. Point the Inngest app at `https://getmed.ca/api/inngest` and set the
-Supabase Auth site URL / redirect URLs to the four hosts. Regenerate DB types after schema changes
+Supabase Auth site URL / redirect URLs to the four hosts — the redirect list must include
+`https://<pharmacy-host>/api/auth/callback`, which completes the pharmacy email confirmation. Regenerate DB types after schema changes
 with `pnpm db:types`.
 
 ## Checks
