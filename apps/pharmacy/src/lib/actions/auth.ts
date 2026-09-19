@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@getmed/db/server";
@@ -30,14 +31,31 @@ const signupSchema = z.object({
   password: z.string().min(10, "Use at least 10 characters"),
 });
 
+/** Absolute origin of this deployment, used to build email confirmation links. */
+async function appOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  if (host) {
+    const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+    return `${proto}://${host}`;
+  }
+  return process.env.NEXT_PUBLIC_PHARMACY_URL ?? "http://localhost:3001";
+}
+
 export async function signup(_prev: AuthState, fd: FormData): Promise<AuthState> {
   const parsed = signupSchema.safeParse(Object.fromEntries(fd.entries()));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check your details" };
   const supabase = await createClient();
+  const origin = await appOrigin();
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
-    options: { data: { role: "pharmacy", full_name: parsed.data.fullName } },
+    options: {
+      data: { role: "pharmacy", full_name: parsed.data.fullName },
+      // Without this, Supabase falls back to the project Site URL and the
+      // pharmacy lands on the marketing page with an unused code.
+      emailRedirectTo: `${origin}/api/auth/callback?next=/signup`,
+    },
   });
   if (error) return { error: error.message };
   if (!data.user) return { error: "Could not create your account" };
@@ -46,7 +64,7 @@ export async function signup(_prev: AuthState, fd: FormData): Promise<AuthState>
   const db = createServiceClient();
   await db.from("pharmacies").upsert({ owner_user_id: data.user.id, email: parsed.data.email, status: "pending", signup_step: 1 }, { onConflict: "owner_user_id" });
 
-  if (!data.session) return { message: "Check your email to confirm your address, then sign in to continue setup." };
+  if (!data.session) return { message: "Almost there — check your email and click the confirmation link to continue setting up your pharmacy." };
   redirect("/signup");
 }
 
