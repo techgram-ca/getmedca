@@ -147,7 +147,7 @@ export function AddressAutocomplete({
 
   return (
     <div className={cn("relative", className)}>
-      <MapPin className={cn("pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400", size === "lg" ? "size-5" : "size-4")} />
+      <MapPin className={cn("pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-ink-500", size === "lg" ? "size-5" : "size-4")} />
       <input
         id={id}
         name={name}
@@ -168,18 +168,18 @@ export function AddressAutocomplete({
         onBlur={() => setTimeout(() => setOpen(false), 120)}
         onKeyDown={onKeyDown}
         className={cn(
-          "w-full rounded-lg border border-ink-200 bg-white text-ink-900 placeholder:text-ink-400 transition-soft focus-ring focus:border-brand-400",
-          size === "lg" ? "h-14 pl-11 pr-10 text-base rounded-xl" : "h-10 pl-9 pr-9 text-sm",
-          invalid && "border-danger-500",
+          "w-full rounded-2xl border bg-white text-ink-900 outline-none placeholder:text-ink-400 transition-soft focus:border-brand-600 focus:ring-4 focus:ring-brand-600/12",
+          size === "lg" ? "h-14 pl-12 pr-11 text-base" : "h-12 pl-11 pr-10 text-sm",
+          invalid ? "border-danger-500 bg-red-50/40" : "border-ink-200",
           inputClassName,
         )}
       />
-      {loading ? <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-ink-400" /> : null}
+      {loading ? <Loader2 className="absolute right-4 top-1/2 z-10 size-4 -translate-y-1/2 animate-spin text-brand-600" aria-hidden /> : null}
       {open && suggestions.length > 0 ? (
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-40 mt-1.5 w-full overflow-hidden rounded-xl border border-ink-200 bg-white py-1 shadow-pop animate-fade-in"
+          className="absolute z-40 mt-1.5 w-full overflow-hidden rounded-2xl border border-ink-200 bg-white py-1 shadow-pop animate-fade-in"
         >
           {suggestions.map((s, i) => (
             <li
@@ -191,10 +191,13 @@ export function AddressAutocomplete({
                 void pick(s);
               }}
               onMouseEnter={() => setActive(i)}
-              className={cn("cursor-pointer px-3 py-2 text-sm", i === active ? "bg-brand-50 text-brand-900" : "text-ink-800")}
+              className={cn("flex cursor-pointer items-start gap-2.5 px-4 py-2.5 text-sm", i === active ? "bg-brand-50 text-brand-900" : "text-ink-800")}
             >
-              <span className="font-medium">{s.name}</span>
-              {s.place_formatted ? <span className="ml-1 text-ink-500">{s.place_formatted}</span> : null}
+              <MapPin className="mt-0.5 size-4 shrink-0 text-brand-600" aria-hidden />
+              <span className="min-w-0">
+                <span className="block truncate font-medium text-ink-900">{s.name}</span>
+                {s.place_formatted ? <span className="block truncate text-xs text-ink-500">{s.place_formatted}</span> : null}
+              </span>
             </li>
           ))}
         </ul>

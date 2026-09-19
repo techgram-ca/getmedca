@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { MessageSquare } from "lucide-react";
-import { Button, Card, CardContent, FormError, Turnstile, cn, toast } from "@getmed/ui";
+import { Button, Card, CardContent, FormError, Spinner, Turnstile, cn, toast } from "@getmed/ui";
 
 type Props = { kind: "order" | "consultation"; targetId: string; maskedPhone: string; successHref: string; failureHref: string };
 
@@ -40,7 +40,7 @@ export function OtpForm({ kind, targetId, maskedPhone, successHref, failureHref 
       router.push(failureHref);
       return;
     }
-    setError(j.error ?? "Verification failed");
+    setError(j.error ?? "That code didn't match. Check the message and try again.");
     setDigits(Array(6).fill(""));
     inputs.current[0]?.focus();
   }
@@ -51,7 +51,7 @@ export function OtpForm({ kind, targetId, maskedPhone, successHref, failureHref 
     const j = (await res.json().catch(() => ({}))) as { error?: string };
     setBusy(false);
     if (!res.ok) {
-      setError(j.error ?? "Could not resend");
+      setError(j.error ?? "We couldn't send a new code. Please try again in a moment.");
       return;
     }
     toast.success("New code sent");
@@ -80,7 +80,7 @@ export function OtpForm({ kind, targetId, maskedPhone, successHref, failureHref 
           <h1 className="text-xl font-semibold">Enter the code we texted you</h1>
           <p className="mt-1 text-sm text-ink-600">Sent to {maskedPhone}. It expires in 10 minutes.</p>
         </div>
-        <FormError message={error} />
+        <FormError message={error} title="We couldn't verify that code" />
         <div className="flex justify-between gap-2" onPaste={(e) => { e.preventDefault(); onChange(0, e.clipboardData.getData("text")); }}>
           {digits.map((d, i) => (
             <input
@@ -100,11 +100,14 @@ export function OtpForm({ kind, targetId, maskedPhone, successHref, failureHref 
             />
           ))}
         </div>
-        <Button size="lg" className="w-full" loading={busy} onClick={() => verify()} disabled={code.length !== 6}>Verify</Button>
+        <Button size="lg" className="w-full" loading={busy} loadingText="Verifying…" onClick={() => verify()} disabled={code.length !== 6}>
+          Verify
+        </Button>
+        {busy ? <div className="flex justify-center"><Spinner label="Confirming your number…" /></div> : null}
         <Turnstile onToken={setTurnstile} />
         <p className="text-center text-sm text-ink-500">
           Didn't get it?{" "}
-          <button type="button" className="font-medium text-brand-700 disabled:text-ink-400" disabled={cooldown > 0 || busy} onClick={resend}>
+          <button type="button" className="font-semibold text-brand-600 hover:underline disabled:text-ink-400 disabled:no-underline" disabled={cooldown > 0 || busy} onClick={resend}>
             {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
           </button>
         </p>

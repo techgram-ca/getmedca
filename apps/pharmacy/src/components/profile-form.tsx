@@ -92,7 +92,7 @@ export function ProfileForm({ data, patientUrl }: { data: ProfileData; patientUr
         </Card>
 
         <div className="flex items-center gap-3">
-          <Button type="submit" loading={pending} size="lg">Save changes</Button>
+          <Button type="submit" loading={pending} loadingText="Saving…" size="lg">Save changes</Button>
           {p.slug ? <Button asChild variant="link"><a href={`${patientUrl}/p/${p.slug}`} target="_blank" rel="noreferrer">View public page <ExternalLink /></a></Button> : null}
         </div>
       </form>

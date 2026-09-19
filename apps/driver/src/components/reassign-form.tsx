@@ -24,7 +24,7 @@ export function ReassignForm({ orderId, drivers }: { orderId: string; drivers: D
           </li>
         ))}
       </ul>
-      <Button size="lg" className="w-full" disabled={!sel} loading={pending} onClick={() => start(async () => { const r = await reassignAction(orderId, sel!); if (r.ok) { toast.success("Handed off"); router.push("/"); router.refresh(); } else toast.error(r.error); })}>Confirm hand-off</Button>
+      <Button size="lg" className="w-full" disabled={!sel} loading={pending} loadingText="Handing off…" onClick={() => start(async () => { const r = await reassignAction(orderId, sel!); if (r.ok) { toast.success("Handed off"); router.push("/"); router.refresh(); } else toast.error(r.error); })}>Confirm hand-off</Button>
     </div>
   );
 }

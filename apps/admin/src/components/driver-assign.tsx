@@ -17,7 +17,7 @@ export function DriverAssign({ orderId, currentDriverId, drivers }: { orderId: s
         <option value="">Choose an available driver…</option>
         {drivers.map((d) => <option key={d.id} value={d.id}>{d.name} · {d.phone}{d.vehicle_make ? ` · ${d.vehicle_make} ${d.vehicle_model ?? ""}` : ""}</option>)}
       </Select>
-      <Button disabled={!id || id === currentDriverId} loading={pending} onClick={() => start(async () => { const r = await assignDriverAction(orderId, id); if (r.ok) { toast.success("Driver assigned"); router.refresh(); } else toast.error(r.error); })}>{currentDriverId ? "Reassign" : "Assign driver"}</Button>
+      <Button disabled={!id || id === currentDriverId} loading={pending} loadingText="Assigning…" onClick={() => start(async () => { const r = await assignDriverAction(orderId, id); if (r.ok) { toast.success("Driver assigned"); router.refresh(); } else toast.error(r.error); })}>{currentDriverId ? "Reassign" : "Assign driver"}</Button>
     </div>
   );
 }

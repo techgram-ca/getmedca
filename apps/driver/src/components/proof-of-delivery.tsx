@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import SignaturePad from "signature_pad";
 import { Camera, Eraser, Check } from "lucide-react";
-import { Button, Card, CardContent, FormError, toast } from "@getmed/ui";
+import { Button, Card, CardContent, FormError, LoadingOverlay, toast } from "@getmed/ui";
 
 /** Camera capture (PWA) + canvas signature pad → POST /api/orders/[id]/deliver. */
 export function ProofOfDelivery({ orderId }: { orderId: string }) {
@@ -50,7 +50,7 @@ export function ProofOfDelivery({ orderId }: { orderId: string }) {
     const j = (await res.json().catch(() => ({}))) as { error?: string };
     setBusy(false);
     if (!res.ok) {
-      setError(j.error ?? "Could not complete delivery");
+      setError(j.error ?? "We couldn't upload the proof of delivery. Check your signal and try again.");
       return;
     }
     toast.success("Delivered — nice work");
@@ -59,8 +59,9 @@ export function ProofOfDelivery({ orderId }: { orderId: string }) {
   };
 
   return (
-    <div className="mt-4 space-y-4">
-      <FormError message={error} />
+    <div className="relative mt-4 space-y-4">
+      <LoadingOverlay show={busy} label="Uploading photo and signature…" />
+      <FormError message={error} title="Delivery not completed" />
       <Card>
         <CardContent>
           <p className="text-sm font-medium">1. Photo at the door</p>
@@ -77,7 +78,9 @@ export function ProofOfDelivery({ orderId }: { orderId: string }) {
           <p className="mt-1 text-xs text-ink-500">Ask the recipient to sign with their finger.</p>
         </CardContent>
       </Card>
-      <Button size="lg" className="w-full" disabled={!photo || !hasSignature} loading={busy} onClick={submit}><Check /> Mark as delivered</Button>
+      <Button size="lg" className="w-full" disabled={!photo || !hasSignature} loading={busy} loadingText="Uploading…" onClick={submit}>
+        <Check /> Mark as delivered
+      </Button>
     </div>
   );
 }

@@ -32,9 +32,9 @@ export function OrderActions({ orderId, status, compact }: Props) {
   const size = compact ? "sm" : "md";
   return (
     <div className="flex flex-wrap gap-2">
-      {actions.includes("accept") ? <Button size={size} loading={pending} onClick={() => exec(() => acceptOrderAction(orderId), "Order accepted")}><Check /> Accept</Button> : null}
+      {actions.includes("accept") ? <Button size={size} loading={pending} loadingText="Accepting…" onClick={() => exec(() => acceptOrderAction(orderId), "Order accepted")}><Check /> Accept</Button> : null}
       {actions.includes("reject") ? <Button size={size} variant="outline" disabled={pending} onClick={() => setDialog("reject")}><X /> Reject</Button> : null}
-      {actions.includes("mark_ready") ? <Button size={size} loading={pending} onClick={() => exec(() => markReadyAction(orderId), "Marked ready for delivery")}><PackageCheck /> Ready for delivery</Button> : null}
+      {actions.includes("mark_ready") ? <Button size={size} loading={pending} loadingText="Updating…" onClick={() => exec(() => markReadyAction(orderId), "Marked ready for delivery")}><PackageCheck /> Ready for delivery</Button> : null}
       {actions.includes("cancel") ? <Button size={size} variant="ghost" className="text-danger-500" disabled={pending} onClick={() => setDialog("cancel")}><Ban /> Cancel</Button> : null}
 
       <Dialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)}>
@@ -50,6 +50,7 @@ export function OrderActions({ orderId, status, compact }: Props) {
             <Button
               variant="danger"
               loading={pending}
+              loadingText="Submitting…"
               disabled={reason.trim().length < 3}
               onClick={() => exec(() => (dialog === "reject" ? rejectOrderAction(orderId, reason) : cancelOrderAction(orderId, reason)), dialog === "reject" ? "Order rejected" : "Order cancelled")}
             >

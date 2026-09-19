@@ -17,7 +17,7 @@ export function DriverForm() {
   return (
     <form action={action}>
       <Card><CardContent className="space-y-4">
-        <FormError message={state?.error} />
+        <FormError message={state?.error} title="Driver not created" />
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Full name" htmlFor="name" required className="sm:col-span-2"><Input id="name" name="name" required /></Field>
           <Field label="Phone" htmlFor="phone" required><Input id="phone" name="phone" type="tel" required /></Field>
@@ -30,7 +30,7 @@ export function DriverForm() {
           <Field label="Driver's licence (PDF/image)" htmlFor="licenseDoc"><Input id="licenseDoc" name="licenseDoc" type="file" accept="image/*,.pdf" /></Field>
           <Field label="Insurance (PDF/image)" htmlFor="insuranceDoc"><Input id="insuranceDoc" name="insuranceDoc" type="file" accept="image/*,.pdf" /></Field>
         </div>
-        <Button type="submit" loading={pending} size="lg">Create driver</Button>
+        <Button type="submit" loading={pending} loadingText="Creating driver…" size="lg">Create driver</Button>
       </CardContent></Card>
     </form>
   );

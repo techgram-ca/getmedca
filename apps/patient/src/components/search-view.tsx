@@ -7,7 +7,7 @@ import { ArrowRight, Clock, MapPin, Phone } from "lucide-react";
 import type { SearchResponse, SearchResult } from "@getmed/core/geo";
 import { formatDistance, formatDuration } from "@getmed/core/format";
 import { Alert, Avatar, Badge, Button, EmptyState, cn } from "@getmed/ui";
-import { HomeSearch } from "./home-search";
+import { HomeSearchInline } from "./home-search-inline";
 
 const SearchMap = dynamic(() => import("./search-map").then((m) => m.SearchMap), {
   ssr: false,
@@ -32,7 +32,7 @@ export function SearchView({ address, response, error }: { address: string; resp
             <p className="mt-1 text-sm text-ink-500">Enter an address to see nearby pharmacies.</p>
           )}
         </div>
-        <HomeSearch size="md" className="lg:w-[28rem]" />
+        <HomeSearchInline className="lg:w-[28rem]" />
       </div>
 
       {error ? <Alert tone="danger" title="We couldn't run that search">{error}</Alert> : null}
@@ -50,7 +50,7 @@ export function SearchView({ address, response, error }: { address: string; resp
             <ResultCard key={r.id} r={r} active={activeId === r.id} onHover={() => setActiveId(r.id)} q={q} />
           ))}
         </div>
-        <div className="sticky top-20 hidden h-[calc(100vh-7rem)] overflow-hidden rounded-2xl border border-ink-200 lg:block">
+        <div className="sticky top-24 hidden h-[calc(100vh-7rem)] overflow-hidden rounded-2xl border border-ink-200 lg:block">
           <SearchMap origin={origin} results={results} activeId={activeId} onActivate={setActiveId} />
         </div>
       </div>

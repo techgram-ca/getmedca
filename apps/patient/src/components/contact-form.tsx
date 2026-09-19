@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Field, FormError, Input, Textarea, toast } from "@getmed/ui";
+import { Button, Field, FormError, Input, LoadingOverlay, Textarea, toast } from "@getmed/ui";
 
 export function ContactForm() {
   const [busy, setBusy] = useState(false);
@@ -21,7 +21,7 @@ export function ContactForm() {
     setBusy(false);
     if (!res.ok) {
       const j = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(j.error ?? "Could not send your message");
+      setError(j.error ?? "We couldn't send your message. Please try again.");
       return;
     }
     setDone(true);
@@ -38,8 +38,9 @@ export function ContactForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <FormError message={error} />
+    <form onSubmit={onSubmit} className="relative space-y-4">
+      <LoadingOverlay show={busy} label="Sending…" />
+      <FormError message={error} title="Message not sent" />
       <Field label="Your name" htmlFor="name" required>
         <Input id="name" name="name" required maxLength={120} />
       </Field>
@@ -54,7 +55,7 @@ export function ContactForm() {
       <Field label="Message" htmlFor="message" required>
         <Textarea id="message" name="message" required minLength={10} maxLength={2000} rows={5} />
       </Field>
-      <Button type="submit" loading={busy} size="lg">Send message</Button>
+      <Button type="submit" loading={busy} loadingText="Sending…" size="lg">Send message</Button>
     </form>
   );
 }

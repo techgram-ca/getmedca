@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ArrowRight, FileUp, Lock } from "lucide-react";
+import { ArrowRight, CheckCircle2, FileUp, Lock } from "lucide-react";
 import type { FormFieldConfigRow } from "@getmed/db/types";
 import {
   AddressAutocomplete,
@@ -12,14 +12,18 @@ import {
   Checkbox,
   Field,
   FormError,
+  FormErrorSummary,
   Input,
+  LoadingOverlay,
   Textarea,
   Tabs,
   TabsList,
   TabsTrigger,
   Turnstile,
   cn,
+  focusFirstError,
   type AddressValue,
+  type FieldIssue,
 } from "@getmed/ui";
 
 type Props = {
@@ -27,6 +31,23 @@ type Props = {
   config: FormFieldConfigRow[];
   initialAddress: string;
   initialType: "new" | "transfer";
+};
+
+/** Human labels + the input id to focus, keyed by the error keys the API returns. */
+const FIELD_META: Record<string, { label: string; id: string }> = {
+  patientName: { label: "Full name", id: "patientName" },
+  patientDob: { label: "Date of birth", id: "patientDob" },
+  patientPhone: { label: "Mobile phone", id: "patientPhone" },
+  deliveryAddress: { label: "Delivery address", id: "deliveryAddress" },
+  prescription: { label: "Prescription upload", id: "prescription" },
+  insurance: { label: "Insurance", id: "insuranceProvider" },
+  healthCard: { label: "Health card", id: "healthCardNumber" },
+  notes: { label: "Notes", id: "notes" },
+  allergies: { label: "Allergies", id: "allergies" },
+  transferFromPharmacyName: { label: "Current pharmacy", id: "transferFromPharmacyName" },
+  transferFromPhone: { label: "Current pharmacy phone", id: "transferFromPhone" },
+  transferPrescriptionNumber: { label: "Prescription number", id: "transferPrescriptionNumber" },
+  consent: { label: "Consent", id: "consent-checkbox" },
 };
 
 type Mode = "upload" | "manual";
@@ -50,10 +71,21 @@ export function OrderForm({ pharmacy, config, initialAddress, initialType }: Pro
     return new Set(config.filter((c) => c.applies_to === applies && c.required).map((c) => c.field_key));
   }, [config, type]);
 
+  const issues: FieldIssue[] = Object.entries(fieldErrors).map(([field, message]) => ({
+    field: FIELD_META[field]?.id ?? field,
+    label: FIELD_META[field]?.label ?? field,
+    message,
+  }));
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setFieldErrors({});
+    if (!consent) {
+      setFieldErrors({ consent: "Please confirm your consent to continue" });
+      setTimeout(() => focusFirstError(), 0);
+      return;
+    }
     const form = e.currentTarget;
     const fd = new FormData(form);
     const g = (k: string) => String(fd.get(k) ?? "");
@@ -98,14 +130,15 @@ export function OrderForm({ pharmacy, config, initialAddress, initialType }: Pro
       const res = await fetch("/api/orders", { method: "POST", body });
       const j = (await res.json()) as { orderId?: string; error?: string; fieldErrors?: Record<string, string> };
       if (!res.ok || !j.orderId) {
-        setError(j.error ?? "Something went wrong");
         setFieldErrors(j.fieldErrors ?? {});
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        setError(j.fieldErrors && Object.keys(j.fieldErrors).length ? null : (j.error ?? "Something went wrong"));
+        setTimeout(() => focusFirstError(), 0);
         return;
       }
       router.push(`/order/verify?orderId=${j.orderId}`);
     } catch {
-      setError("Network error — please try again");
+      setError("We couldn't reach the server. Check your connection and try again.");
+      setTimeout(() => focusFirstError(), 0);
     } finally {
       setBusy(false);
     }
@@ -114,9 +147,11 @@ export function OrderForm({ pharmacy, config, initialAddress, initialType }: Pro
   const fe = (k: string) => fieldErrors[k] ?? null;
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-6 lg:grid-cols-[1fr_18rem]">
+    <form onSubmit={onSubmit} className="relative grid gap-6 lg:grid-cols-[1fr_18rem]">
+      <LoadingOverlay show={busy} label="Sending your order…" />
       <div className="space-y-6">
-        <FormError message={error} />
+        <FormErrorSummary issues={issues} />
+        <FormError message={error} title="We couldn't submit your order" />
 
         <Tabs value={type} onValueChange={(v) => setType(v as "new" | "transfer")}>
           <TabsList className="w-full sm:w-auto">
@@ -216,17 +251,18 @@ export function OrderForm({ pharmacy, config, initialAddress, initialType }: Pro
 
         <Card>
           <CardContent className="space-y-4">
-            <label className="flex cursor-pointer items-start gap-3 text-sm">
-              <Checkbox checked={consent} onCheckedChange={(v) => setConsent(v === true)} className="mt-0.5" required />
+            <label htmlFor="consent-checkbox" className="flex cursor-pointer items-start gap-3 text-sm">
+              <Checkbox id="consent-checkbox" checked={consent} onCheckedChange={(v) => setConsent(v === true)} className="mt-0.5" />
               <span className="text-ink-700">
                 I consent to GetMed sharing my prescription and delivery details with <strong>{pharmacy.name}</strong> for the purpose of filling and delivering this order, and to receiving SMS updates about it. <span className="text-ink-500">Learn more in our <a href="/faq" className="underline">FAQ</a>.</span>
               </span>
             </label>
-            {fe("consent") ? <p className="text-xs text-danger-500">{fe("consent")}</p> : null}
+            {fe("consent") ? <p className="text-sm font-medium text-danger-500">{fe("consent")}</p> : null}
             <Turnstile onToken={setTurnstile} />
-            <Button type="submit" size="lg" loading={busy} disabled={!consent} className="w-full sm:w-auto">
+            <Button type="submit" size="lg" loading={busy} loadingText="Sending your order…" className="w-full sm:w-auto">
               Continue to phone verification <ArrowRight />
             </Button>
+            <p className="text-xs text-ink-400">You&#39;ll confirm your phone number on the next step. Nothing is sent to the pharmacy until then.</p>
           </CardContent>
         </Card>
       </div>
@@ -281,19 +317,34 @@ function ModeToggle({ value, onChange, labels }: { value: Mode; onChange: (m: Mo
 }
 
 function FileDrop({ id, name, accept, className, invalid }: { id: string; name: string; accept: string; className?: string; invalid?: boolean }) {
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<{ name: string; size: number } | null>(null);
   return (
     <label
       htmlFor={id}
       className={cn(
-        "flex cursor-pointer items-center gap-3 rounded-xl border border-dashed px-4 py-4 text-sm transition-soft hover:border-brand-400 hover:bg-brand-50/40",
-        invalid ? "border-danger-500" : "border-ink-300",
+        "flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed px-4 py-4 text-sm transition-soft hover:border-brand-600 hover:bg-brand-50/50",
+        invalid ? "border-danger-500 bg-red-50/40" : file ? "border-brand-600 bg-brand-50/60" : "border-ink-300",
         className,
       )}
     >
-      <FileUp className="size-5 shrink-0 text-brand-600" />
-      <span className="flex-1 truncate text-ink-700">{fileName ?? "Tap to choose a photo or PDF"}</span>
-      <input id={id} name={name} type="file" accept={accept} className="sr-only" onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)} />
+      {file ? <CheckCircle2 className="size-5 shrink-0 text-brand-600" /> : <FileUp className="size-5 shrink-0 text-brand-600" />}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium text-ink-800">{file ? file.name : "Tap to choose a photo or PDF"}</span>
+        <span className="block text-xs text-ink-500">
+          {file ? `${(file.size / 1024 / 1024).toFixed(1)} MB · tap to replace` : "JPEG, PNG, HEIC or PDF, up to 20 MB"}
+        </span>
+      </span>
+      <input
+        id={id}
+        name={name}
+        type="file"
+        accept={accept}
+        className="sr-only"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          setFile(f ? { name: f.name, size: f.size } : null);
+        }}
+      />
     </label>
   );
 }
