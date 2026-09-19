@@ -10,7 +10,6 @@ import { logout } from "@/lib/actions/auth";
 import type { ProfileData } from "@/lib/load-profile";
 import { HoursEditor } from "./hours-editor";
 import { PharmacistsEditor } from "./pharmacists-editor";
-import { PharmacyPreview } from "./pharmacy-preview";
 import { ServicesEditor } from "./services-editor";
 import { TagInput } from "./tag-input";
 import { UploadField } from "./upload-field";
@@ -87,13 +86,6 @@ export function SignupWizard({ data }: { data: ProfileData }) {
       router.push("/dashboard");
     });
 
-  const preview = {
-    name: s1.name, tagline: s6.tagline, bio: s6.bio, addressLine: s1.addressLine, city: s1.city, phone: s1.phone, logoUrl: logo.url, coverUrl: cover.url,
-    hours: s5.hours, estimatedDeliveryTime: s5.estimatedDeliveryTime, offersDelivery: s5.offersDelivery, offersTransfer: s5.offersTransfer, offersConsultation: s5.offersConsultation,
-    pharmacists: data.pharmacists.map((x) => ({ name: x.name, credentials: x.credentials ?? "", photoUrl: x.photoUrl, isMain: x.is_main })),
-    services: data.services.map((x) => ({ name: x.name, price: x.price })), acceptedInsurance: s5.acceptedInsurance,
-  };
-
   return (
     <div className="min-h-screen bg-ink-50">
       <header className="flex h-16 items-center justify-between border-b border-ink-200 bg-white px-4 sm:px-6">
@@ -105,7 +97,7 @@ export function SignupWizard({ data }: { data: ProfileData }) {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        <ol className="mb-8 flex flex-wrap gap-2" aria-label="Progress">
+        <ol className="mx-auto mb-8 flex max-w-3xl flex-wrap gap-2" aria-label="Progress">
           {STEPS.map((label, i) => {
             const n = i + 1;
             const state = n < step ? "done" : n === step ? "current" : "todo";
@@ -120,7 +112,7 @@ export function SignupWizard({ data }: { data: ProfileData }) {
           })}
         </ol>
 
-        <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
+        <div className="mx-auto max-w-3xl">
           <div className="space-y-6">
             {error ? <Alert tone="danger" title="We couldn't save this step">{error}</Alert> : null}
 
@@ -216,13 +208,8 @@ export function SignupWizard({ data }: { data: ProfileData }) {
               <Button variant="ghost" disabled={step === 1 || pending} onClick={() => setStep((s) => s - 1)}><ArrowLeft /> Back</Button>
               {step < 7 ? <Button loading={pending} loadingText="Saving…" onClick={next}>Continue <ArrowRight /></Button> : null}
             </div>
+            <p className="text-center text-xs text-ink-400">Your progress is saved automatically as you type.</p>
           </div>
-
-          <aside className="lg:sticky lg:top-6 lg:self-start">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">Live preview of your page</p>
-            <PharmacyPreview d={preview} />
-            <p className="mt-2 text-xs text-ink-400">Updates as you type. Progress is saved automatically.</p>
-          </aside>
         </div>
       </div>
     </div>
