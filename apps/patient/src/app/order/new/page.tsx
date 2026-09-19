@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@getmed/db/service";
-import { Avatar } from "@getmed/ui";
+import { PharmacyTopBar, type ChromePharmacy } from "@/components/pharmacy/pharmacy-chrome";
 import { OrderForm } from "@/components/order-form";
 import { getPublicPharmacy } from "@/lib/pharmacy";
 
-export const metadata: Metadata = { title: "New order" };
+export const metadata: Metadata = { title: "Order your prescription" };
 export const dynamic = "force-dynamic";
 
 export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ pharmacyId?: string; address?: string; type?: string }> }) {
@@ -17,23 +16,32 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
   const db = createServiceClient();
   const { data: config } = await db.from("form_field_config").select("*").order("sort_order");
 
+  const chrome: ChromePharmacy = {
+    id: pharmacy.id,
+    slug: pharmacy.slug ?? pharmacy.id,
+    name: pharmacy.name ?? "Your pharmacy",
+    logoUrl: pharmacy.logoUrl,
+    phone: pharmacy.phone,
+    offersConsultation: pharmacy.offers_consultation,
+  };
+
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-      <div className="mb-8 flex items-center gap-4">
-        <Avatar src={pharmacy.logoUrl} name={pharmacy.name ?? "Pharmacy"} size={56} className="rounded-xl" />
-        <div>
-          <p className="text-sm text-ink-500">Ordering from</p>
-          <h1 className="text-xl font-semibold">
-            <Link href={`/p/${pharmacy.slug ?? pharmacy.id}`} className="hover:underline">{pharmacy.name}</Link>
-          </h1>
+    <div className="flex min-h-screen flex-col bg-ink-50">
+      <PharmacyTopBar pharmacy={chrome} step="Step 1 of 2 · Your details" />
+      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
+        <h1 className="text-2xl font-extrabold tracking-tight text-ink-950 sm:text-3xl">Order your prescription</h1>
+        <p className="mt-2 text-ink-500">
+          Fill in your details and {chrome.name} will take it from there. It takes about two minutes.
+        </p>
+        <div className="mt-8">
+          <OrderForm
+            pharmacy={{ id: pharmacy.id, name: chrome.name, offersTransfer: pharmacy.offers_transfer }}
+            config={config ?? []}
+            initialAddress={sp.address ?? ""}
+            initialType={sp.type === "transfer" ? "transfer" : "new"}
+          />
         </div>
-      </div>
-      <OrderForm
-        pharmacy={{ id: pharmacy.id, name: pharmacy.name ?? "Pharmacy", offersTransfer: pharmacy.offers_transfer }}
-        config={config ?? []}
-        initialAddress={sp.address ?? ""}
-        initialType={sp.type === "transfer" ? "transfer" : "new"}
-      />
+      </main>
     </div>
   );
 }

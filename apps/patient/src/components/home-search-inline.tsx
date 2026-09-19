@@ -5,46 +5,41 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { AddressAutocomplete, Button, type AddressValue } from "@getmed/ui";
 
-export function HomeSearch({ className, size = "lg" }: { className?: string; size?: "md" | "lg" }) {
+/** Compact address search reused on secondary pages. */
+export function HomeSearchInline({ className }: { className?: string }) {
   const router = useRouter();
   const [text, setText] = useState("");
-  const [picked, setPicked] = useState<AddressValue | null>(null);
-
-  const go = () => {
-    const q = (picked?.full ?? text).trim();
-    if (!q) return;
-    const params = new URLSearchParams({ address: q });
-    if (picked?.lat != null && picked?.lng != null) {
-      params.set("lat", String(picked.lat));
-      params.set("lng", String(picked.lng));
-    }
-    router.push(`/search?${params.toString()}`);
-  };
+  const [place, setPlace] = useState<AddressValue | null>(null);
+  const [busy, setBusy] = useState(false);
 
   return (
     <form
-      id="search"
       className={className}
       onSubmit={(e) => {
         e.preventDefault();
-        go();
+        const query = (place?.full ?? text).trim();
+        if (!query) return;
+        setBusy(true);
+        const params = new URLSearchParams({ address: query });
+        if (place?.lat != null && place?.lng != null) {
+          params.set("lat", String(place.lat));
+          params.set("lng", String(place.lng));
+        }
+        router.push(`/search?${params}`);
       }}
     >
       <div className="flex flex-col gap-2 sm:flex-row">
         <AddressAutocomplete
-          id="home-address"
-          size={size}
           value={text}
           onChange={(t) => {
             setText(t);
-            setPicked(null);
+            setPlace(null);
           }}
-          onSelect={setPicked}
+          onSelect={setPlace}
           placeholder="Enter your delivery address or postal code"
           className="flex-1"
-          name="address"
         />
-        <Button type="submit" size={size} className="sm:w-auto">
+        <Button type="submit" loading={busy} loadingText="Searching…" className="sm:w-auto">
           <Search /> Find pharmacies
         </Button>
       </div>

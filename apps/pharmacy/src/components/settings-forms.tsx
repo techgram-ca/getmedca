@@ -47,11 +47,11 @@ export function PasswordForm() {
   const [state, action, pending] = useActionState<AuthState, FormData>(changePassword, null);
   return (
     <form action={action} className="space-y-4">
-      <FormError message={state?.error} />
+      <FormError message={state?.error} title="Password not changed" />
       {state?.message ? <Alert tone="success">{state.message}</Alert> : null}
       <Field label="New password" htmlFor="password" hint="At least 10 characters."><Input id="password" name="password" type="password" autoComplete="new-password" required minLength={10} /></Field>
       <Field label="Confirm password" htmlFor="confirm"><Input id="confirm" name="confirm" type="password" autoComplete="new-password" required /></Field>
-      <Button type="submit" loading={pending}>Update password</Button>
+      <Button type="submit" loading={pending} loadingText="Updating…">Update password</Button>
     </form>
   );
 }

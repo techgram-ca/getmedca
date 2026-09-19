@@ -3,7 +3,24 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { AddressAutocomplete, Button, Checkbox, Dialog, DialogContent, Field, FormError, Input, Select, Textarea, cn, toast, type AddressValue } from "@getmed/ui";
+import {
+  AddressAutocomplete,
+  Button,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  Field,
+  FormError,
+  FormErrorSummary,
+  Input,
+  LoadingOverlay,
+  Select,
+  Textarea,
+  cn,
+  toast,
+  type AddressValue,
+  type FieldIssue,
+} from "@getmed/ui";
 import { createManualOrdersAction } from "@/lib/actions/orders";
 
 type Row = {
@@ -42,6 +59,21 @@ export function AddOrderDialog() {
   const [pending, start] = useTransition();
 
   const update = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+
+  const LABELS: Record<string, string> = {
+    patientName: "Patient name",
+    patientPhone: "Mobile phone",
+    patientDob: "Date of birth",
+    deliveryAddress: "Delivery address",
+    consentConfirmed: "Consent confirmation",
+  };
+  const summary: FieldIssue[] = Object.entries(errors).flatMap(([idx, fields]) =>
+    Object.entries(fields).map(([field, message]) => ({
+      field: `${field}-${rows[Number(idx)]?.key ?? idx}`,
+      label: `Order ${Number(idx) + 1} — ${LABELS[field] ?? field}`,
+      message,
+    })),
+  );
   const reset = () => {
     setRows([blank()]);
     setErrors({});
@@ -87,7 +119,12 @@ export function AddOrderDialog() {
           description="For prescriptions you took by phone or in store. Orders are created as accepted and skip the patient's OTP step."
           className="max-w-3xl max-h-[90vh] overflow-y-auto"
         >
-          <FormError message={error} />
+          <div className="relative">
+            <LoadingOverlay show={pending} label="Creating orders…" />
+            <div className="space-y-3">
+              <FormErrorSummary issues={summary} />
+              <FormError message={summary.length ? null : error} title="We couldn't create these orders" />
+            </div>
           <div className="mt-3 space-y-4">
             {rows.map((row, i) => {
               const fe = (k: string) => errors[i]?.[k] ?? (k === "deliveryAddress" ? errors[i]?.["deliveryAddress"] : null);
@@ -104,18 +141,18 @@ export function AddOrderDialog() {
                         <option value="transfer">Transfer</option>
                       </Select>
                     </Field>
-                    <Field label="Date of birth" htmlFor={`dob-${row.key}`} optional error={fe("patientDob")}>
-                      <Input id={`dob-${row.key}`} type="date" value={row.patientDob} onChange={(e) => update(i, { patientDob: e.target.value })} />
+                    <Field label="Date of birth" htmlFor={`patientDob-${row.key}`} optional error={fe("patientDob")}>
+                      <Input id={`patientDob-${row.key}`} type="date" value={row.patientDob} onChange={(e) => update(i, { patientDob: e.target.value })} />
                     </Field>
-                    <Field label="Patient name" htmlFor={`name-${row.key}`} required error={fe("patientName")}>
-                      <Input id={`name-${row.key}`} value={row.patientName} onChange={(e) => update(i, { patientName: e.target.value })} invalid={!!fe("patientName")} />
+                    <Field label="Patient name" htmlFor={`patientName-${row.key}`} required error={fe("patientName")}>
+                      <Input id={`patientName-${row.key}`} value={row.patientName} onChange={(e) => update(i, { patientName: e.target.value })} invalid={!!fe("patientName")} />
                     </Field>
-                    <Field label="Mobile phone" htmlFor={`phone-${row.key}`} required error={fe("patientPhone")} hint="Receives SMS delivery updates.">
-                      <Input id={`phone-${row.key}`} type="tel" value={row.patientPhone} onChange={(e) => update(i, { patientPhone: e.target.value })} invalid={!!fe("patientPhone")} />
+                    <Field label="Mobile phone" htmlFor={`patientPhone-${row.key}`} required error={fe("patientPhone")} hint="Receives SMS delivery updates.">
+                      <Input id={`patientPhone-${row.key}`} type="tel" value={row.patientPhone} onChange={(e) => update(i, { patientPhone: e.target.value })} invalid={!!fe("patientPhone")} />
                     </Field>
-                    <Field label="Delivery address" htmlFor={`addr-${row.key}`} required className="sm:col-span-2" error={fe("deliveryAddress")}>
+                    <Field label="Delivery address" htmlFor={`deliveryAddress-${row.key}`} required className="sm:col-span-2" error={fe("deliveryAddress")}>
                       <AddressAutocomplete
-                        id={`addr-${row.key}`}
+                        id={`deliveryAddress-${row.key}`}
                         value={row.addressText}
                         onChange={(t) => update(i, { addressText: t, address: null })}
                         onSelect={(a) => update(i, { address: a })}
@@ -145,11 +182,12 @@ export function AddOrderDialog() {
               );
             })}
           </div>
+          </div>
           <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Button type="button" variant="outline" disabled={rows.length >= 20} onClick={() => setRows((rs) => [...rs, blank()])}><Plus /> Add another order</Button>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="button" loading={pending} onClick={submit}>{rows.length > 1 ? `Create ${rows.length} orders` : "Create order"}</Button>
+              <Button type="button" loading={pending} loadingText="Creating…" onClick={submit}>{rows.length > 1 ? `Create ${rows.length} orders` : "Create order"}</Button>
             </div>
           </div>
         </DialogContent>

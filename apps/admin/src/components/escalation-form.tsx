@@ -14,8 +14,8 @@ export function EscalationForm({ orderId, status, note }: { orderId: string; sta
     <div className="space-y-3">
       <Field label="Outcome note" htmlFor="note"><Textarea id="note" rows={3} value={n} onChange={(e) => setN(e.target.value)} placeholder="Spoke with patient; re-routed to another pharmacy…" /></Field>
       <div className="flex gap-2">
-        <Button variant="outline" loading={pending} onClick={() => run("contacted")} disabled={status === "resolved"}>Mark contacted</Button>
-        <Button loading={pending} onClick={() => run("resolved")} disabled={status === "resolved"}>Mark resolved</Button>
+        <Button variant="outline" loading={pending} loadingText="Saving…" onClick={() => run("contacted")} disabled={status === "resolved"}>Mark contacted</Button>
+        <Button loading={pending} loadingText="Saving…" onClick={() => run("resolved")} disabled={status === "resolved"}>Mark resolved</Button>
         {status === "resolved" ? <span className="self-center text-sm text-green-700">Resolved</span> : null}
       </div>
     </div>

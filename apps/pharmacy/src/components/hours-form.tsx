@@ -14,7 +14,7 @@ export function HoursForm({ hours }: { hours: WeeklyHours }) {
   return (
     <div className="max-w-2xl space-y-4">
       <HoursEditor value={v} onChange={setV} />
-      <Button loading={pending} onClick={() => start(async () => { const r = await saveHours(v); if (r.ok) { toast.success("Hours saved"); router.refresh(); } else toast.error(r.error); })}>Save hours</Button>
+      <Button loading={pending} loadingText="Saving…" onClick={() => start(async () => { const r = await saveHours(v); if (r.ok) { toast.success("Hours saved"); router.refresh(); } else toast.error(r.error); })}>Save hours</Button>
     </div>
   );
 }

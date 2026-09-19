@@ -1,22 +1,22 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import { Toaster } from "@getmed/ui";
 import "./globals.css";
 
+const inter = Inter({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700", "800"], variable: "--font-inter", display: "swap" });
+
 export const metadata: Metadata = {
-  title: { default: "GetMed for Pharmacies", template: "%s · GetMed Pharmacy" },
-  description: "Grow your independent pharmacy with prescription delivery orders from patients nearby.",
+  title: { default: "Grow Your Pharmacy Online — GetMed", template: "%s · GetMed Pharmacy" },
+  description:
+    "GetMed helps independent Ontario pharmacies compete online: free onboarding, no contracts, no commission — you pay a flat fee only when an order is delivered.",
   robots: { index: false },
 };
-export const viewport: Viewport = { themeColor: "#0f7a73", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#2a9d8f", width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-CA">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className="min-h-screen">
+    <html lang="en-CA" className={`${inter.variable} h-full antialiased`}>
+      <body className="min-h-full">
         {children}
         <Toaster />
       </body>

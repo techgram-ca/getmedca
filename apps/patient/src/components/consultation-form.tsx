@@ -4,7 +4,22 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import type { FormFieldConfigRow } from "@getmed/db/types";
-import { Button, Card, CardContent, Checkbox, Field, FormError, Input, Select, Textarea, Turnstile, cn } from "@getmed/ui";
+import {
+  Button,
+  Card,
+  CardContent,
+  Checkbox,
+  Field,
+  FormError,
+  FormErrorSummary,
+  Input,
+  LoadingOverlay,
+  Select,
+  Textarea,
+  Turnstile,
+  focusFirstError,
+  type FieldIssue,
+} from "@getmed/ui";
 
 type Props = {
   pharmacyId: string;
@@ -31,10 +46,25 @@ export function ConsultationForm({ pharmacyId, pharmacyName, issues, initialIssu
   const required = new Set(config.filter((c) => c.required).map((c) => c.field_key));
   const fe = (k: string) => fieldErrors[k] ?? null;
 
+  const LABELS: Record<string, string> = {
+    issueSlug: "Topic",
+    patientName: "Your name",
+    patientPhone: "Mobile phone",
+    description: "What you'd like to discuss",
+    callbackWindow: "Best time for a call",
+    consent: "Consent",
+  };
+  const fieldIssues: FieldIssue[] = Object.entries(fieldErrors).map(([field, message]) => ({ field, label: LABELS[field] ?? field, message }));
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setFieldErrors({});
+    if (!consent) {
+      setFieldErrors({ consent: "Please confirm your consent to continue" });
+      setTimeout(() => focusFirstError(), 0);
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     const g = (k: string) => String(fd.get(k) ?? "");
     setBusy(true);
@@ -56,8 +86,9 @@ export function ConsultationForm({ pharmacyId, pharmacyName, issues, initialIssu
       });
       const j = (await res.json()) as { requestId?: string; error?: string; fieldErrors?: Record<string, string> };
       if (!res.ok || !j.requestId) {
-        setError(j.error ?? "Something went wrong");
         setFieldErrors(j.fieldErrors ?? {});
+        setError(j.fieldErrors && Object.keys(j.fieldErrors).length ? null : (j.error ?? "Something went wrong"));
+        setTimeout(() => focusFirstError(), 0);
         return;
       }
       router.push(`/consultation/verify?requestId=${j.requestId}`);
@@ -67,8 +98,10 @@ export function ConsultationForm({ pharmacyId, pharmacyName, issues, initialIssu
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
-      <FormError message={error} />
+    <form onSubmit={onSubmit} className="relative space-y-5">
+      <LoadingOverlay show={busy} label="Sending your request…" />
+      <FormErrorSummary issues={fieldIssues} />
+      <FormError message={error} title="We couldn't send your request" />
       <Card>
         <CardContent className="space-y-4">
           {service ? (
@@ -102,12 +135,15 @@ export function ConsultationForm({ pharmacyId, pharmacyName, issues, initialIssu
       </Card>
       <Card>
         <CardContent className="space-y-4">
-          <label className={cn("flex cursor-pointer items-start gap-3 text-sm")}>
-            <Checkbox checked={consent} onCheckedChange={(v) => setConsent(v === true)} className="mt-0.5" />
+          <label htmlFor="consent" className="flex cursor-pointer items-start gap-3 text-sm">
+            <Checkbox id="consent" checked={consent} onCheckedChange={(v) => setConsent(v === true)} className="mt-0.5" />
             <span className="text-ink-700">I consent to GetMed sharing this request with <strong>{pharmacyName}</strong> so a pharmacist can call me, and to receiving an SMS verification code.</span>
           </label>
+          {fe("consent") ? <p className="text-sm font-medium text-danger-500">{fe("consent")}</p> : null}
           <Turnstile onToken={setTurnstile} />
-          <Button type="submit" size="lg" loading={busy} disabled={!consent} className="w-full sm:w-auto">Continue to phone verification <ArrowRight /></Button>
+          <Button type="submit" size="lg" loading={busy} loadingText="Sending your request…" className="w-full sm:w-auto">
+            Continue to phone verification <ArrowRight />
+          </Button>
         </CardContent>
       </Card>
     </form>

@@ -122,7 +122,7 @@ export function SignupWizard({ data }: { data: ProfileData }) {
 
         <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
           <div className="space-y-6">
-            {error ? <Alert tone="danger">{error}</Alert> : null}
+            {error ? <Alert tone="danger" title="We couldn't save this step">{error}</Alert> : null}
 
             {step === 1 ? (
               <StepCard title="Business basics" desc="How patients and GetMed reach you.">
@@ -208,13 +208,13 @@ export function SignupWizard({ data }: { data: ProfileData }) {
                   <Item k="Pharmacists" v={`${data.pharmacists.length} added`} warn={data.pharmacists.length === 0} />
                   <Item k="Services" v={`${data.services.length} listed`} /><Item k="Consultation topics" v={`${s5.issueIds.length} selected`} />
                 </dl>
-                <Button size="lg" className="mt-6" loading={pending} onClick={submit}>Submit for review <Check /></Button>
+                <Button size="lg" className="mt-6" loading={pending} loadingText="Submitting your profile…" onClick={submit}>Submit for review <Check /></Button>
               </StepCard>
             ) : null}
 
             <div className="flex items-center justify-between">
               <Button variant="ghost" disabled={step === 1 || pending} onClick={() => setStep((s) => s - 1)}><ArrowLeft /> Back</Button>
-              {step < 7 ? <Button loading={pending} onClick={next}>Continue <ArrowRight /></Button> : null}
+              {step < 7 ? <Button loading={pending} loadingText="Saving…" onClick={next}>Continue <ArrowRight /></Button> : null}
             </div>
           </div>
 
