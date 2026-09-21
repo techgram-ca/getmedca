@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { maskPhone } from "@getmed/core/format";
 import { OtpForm } from "@/components/otp-form";
-import { PharmacyTopBar } from "@/components/pharmacy/pharmacy-chrome";
+import { OrderingFrom } from "@/components/pharmacy/ordering-from";
 import { getOrderSummary, toChrome } from "@/lib/order-summary";
 
 export const metadata: Metadata = { title: "Verify your phone" };
@@ -17,17 +17,22 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
   const chrome = toChrome(order.pharmacy);
 
   return (
-    <div className="flex min-h-screen flex-col bg-ink-50">
-      {chrome ? <PharmacyTopBar pharmacy={chrome} step="Step 2 of 2 · Verify your phone" /> : null}
-      <main className="mx-auto w-full max-w-md flex-1 px-6 py-16">
-        <OtpForm
-          kind="order"
-          targetId={order.id}
-          maskedPhone={maskPhone(order.patient_phone)}
-          successHref={`/order/success?orderId=${order.id}`}
-          failureHref={`/order/failure?orderId=${order.id}`}
+    <div className="mx-auto w-full max-w-md px-6 py-14">
+      {chrome ? (
+        <OrderingFrom
+          className="mb-6"
+          showBack={false}
+          label="Your order goes to"
+          pharmacy={{ id: chrome.id, slug: chrome.slug, name: chrome.name, logoUrl: chrome.logoUrl }}
         />
-      </main>
+      ) : null}
+      <OtpForm
+        kind="order"
+        targetId={order.id}
+        maskedPhone={maskPhone(order.patient_phone)}
+        successHref={`/order/success?orderId=${order.id}`}
+        failureHref={`/order/failure?orderId=${order.id}`}
+      />
     </div>
   );
 }

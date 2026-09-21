@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@getmed/db/service";
-import { Avatar } from "@getmed/ui";
+import { OrderingFrom } from "@/components/pharmacy/ordering-from";
 import { ConsultationForm } from "@/components/consultation-form";
 import { getPublicPharmacy } from "@/lib/pharmacy";
 
@@ -20,13 +20,21 @@ export default async function RequestPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
-      <div className="mb-8 flex items-center gap-4">
-        <Avatar src={pharmacy.logoUrl} name={pharmacy.name ?? "Pharmacy"} size={52} className="rounded-xl" />
-        <div>
-          <p className="text-sm text-ink-500">Consultation with</p>
-          <h1 className="text-xl font-semibold">{pharmacy.name}</h1>
-        </div>
-      </div>
+      <h1 className="text-2xl font-extrabold tracking-tight text-ink-950 sm:text-3xl">Request a pharmacist call</h1>
+      <p className="mt-2 text-ink-500">
+        Tell us how to reach you and a pharmacist will call you back, usually the same business day.
+      </p>
+
+      <OrderingFrom
+        className="my-6"
+        label="Consultation with"
+        pharmacy={{
+          id: pharmacy.id,
+          slug: pharmacy.slug ?? pharmacy.id,
+          name: pharmacy.name ?? "this pharmacy",
+          logoUrl: pharmacy.logoUrl,
+        }}
+      />
       <ConsultationForm
         pharmacyId={pharmacy.id}
         pharmacyName={pharmacy.name ?? "the pharmacy"}

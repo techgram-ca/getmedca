@@ -106,26 +106,3 @@ export function StickyOrderBar({ pharmacy, className, orderHref }: { pharmacy: C
     </div>
   );
 }
-
-/** Compact pharmacy-branded bar used across the order flow. */
-export function PharmacyTopBar({ pharmacy, step }: { pharmacy: ChromePharmacy; step?: string }) {
-  return (
-    <header className="sticky top-0 z-50 border-b border-ink-200 bg-white/92 backdrop-blur-[16px]">
-      <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-4 px-6">
-        <Link href={`/p/${pharmacy.slug}`} className="flex min-w-0 items-center gap-3 no-underline">
-          <Avatar src={pharmacy.logoUrl} name={pharmacy.name} size={36} className="shrink-0 rounded-xl" />
-          <span className="min-w-0">
-            <span className="block truncate font-extrabold tracking-tight text-ink-950">{pharmacy.name}</span>
-            <PoweredByGetMed />
-          </span>
-        </Link>
-        {step ? <span className="hidden shrink-0 text-sm font-medium text-ink-500 sm:block">{step}</span> : null}
-        {pharmacy.phone ? (
-          <a href={`tel:${pharmacy.phone}`} className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-ink-950 no-underline hover:text-brand-700">
-            <Phone className="size-4" /> <span className="hidden sm:inline">{pharmacy.phone}</span>
-          </a>
-        ) : null}
-      </div>
-    </header>
-  );
-}

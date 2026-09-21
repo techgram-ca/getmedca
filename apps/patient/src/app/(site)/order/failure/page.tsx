@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@getmed/ui";
-import { PharmacyTopBar } from "@/components/pharmacy/pharmacy-chrome";
 import { getOrderSummary, toChrome } from "@/lib/order-summary";
 
 export const metadata: Metadata = { title: "We couldn't complete your order" };
@@ -14,9 +13,7 @@ export default async function FailurePage({ searchParams }: { searchParams: Prom
   const chrome = toChrome(order?.pharmacy ?? null);
 
   return (
-    <div className="flex min-h-screen flex-col bg-ink-50">
-      {chrome ? <PharmacyTopBar pharmacy={chrome} /> : null}
-      <main className="mx-auto w-full max-w-lg flex-1 px-6 py-20 text-center">
+    <div className="mx-auto w-full max-w-lg px-6 py-20 text-center">
         <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-danger-100 text-red-700">
           <AlertTriangle className="size-8" />
         </div>
@@ -28,10 +25,9 @@ export default async function FailurePage({ searchParams }: { searchParams: Prom
           {orderId ? <Button asChild><Link href={`/order/verify?orderId=${orderId}`}>Try a new code</Link></Button> : null}
           {chrome ? <Button asChild variant="outline"><Link href={`/p/${chrome.slug}`}>Back to {chrome.name}</Link></Button> : null}
         </div>
-        <p className="mt-6 text-sm text-ink-500">
-          Need help? <Link href="/contact" className="font-semibold text-brand-600 underline">Contact us</Link>.
-        </p>
-      </main>
+      <p className="mt-6 text-sm text-ink-500">
+        Need help? <Link href="/contact" className="font-semibold text-brand-600 underline">Contact us</Link>.
+      </p>
     </div>
   );
 }

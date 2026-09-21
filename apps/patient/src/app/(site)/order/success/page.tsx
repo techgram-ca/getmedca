@@ -4,7 +4,6 @@ import { notFound, redirect } from "next/navigation";
 import { CheckCircle2, Clock, MessageSquare, Truck } from "lucide-react";
 import { shortId } from "@getmed/core/format";
 import { Avatar, Button, Card, CardContent } from "@getmed/ui";
-import { PharmacyTopBar } from "@/components/pharmacy/pharmacy-chrome";
 import { getOrderSummary, toChrome } from "@/lib/order-summary";
 
 export const metadata: Metadata = { title: "Order submitted" };
@@ -20,9 +19,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
   const chrome = toChrome(p);
 
   return (
-    <div className="flex min-h-screen flex-col bg-ink-50">
-      {chrome ? <PharmacyTopBar pharmacy={chrome} /> : null}
-      <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-16">
+    <div className="mx-auto w-full max-w-2xl px-6 py-16">
         <div className="text-center animate-slide-up">
           <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-success-100 text-green-700">
             <CheckCircle2 className="size-9" />
@@ -70,11 +67,10 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
           </CardContent>
         </Card>
 
-        <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-          {p ? <Button asChild variant="secondary"><Link href={`/order/new?pharmacyId=${p.id}`}>Submit another prescription</Link></Button> : null}
-          {chrome ? <Button asChild variant="outline"><Link href={`/p/${chrome.slug}`}>Back to {chrome.name}</Link></Button> : null}
-        </div>
-      </main>
+      <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+        {p ? <Button asChild variant="secondary"><Link href={`/order/new?pharmacyId=${p.id}`}>Submit another prescription</Link></Button> : null}
+        {chrome ? <Button asChild variant="outline"><Link href={`/p/${chrome.slug}`}>Back to {chrome.name}</Link></Button> : null}
+      </div>
     </div>
   );
 }
