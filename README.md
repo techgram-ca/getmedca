@@ -23,6 +23,11 @@ everywhere, Supabase Postgres/PostGIS, Inngest for durable workflows, Mapbox for
   transitions and which actor may perform them. `service.ts` applies them with an optimistic
   `UPDATE … WHERE status = <expected>` so concurrent actors cannot double-transition. RLS enforces
   access control only.
+- **Branding split.** Only `/p/[slug]` is pharmacy-owned: it renders the pharmacy's own header and
+  footer, with GetMed reduced to a small "Powered by" credit. Every other patient page, including the
+  order and consultation flows, lives in the `(site)` route group and carries GetMed's header and
+  footer, because GetMed owns phone verification, delivery and support. The pharmacy still appears
+  inside those pages as context via `OrderingFrom`.
 - **Order source.** `orders.source` is `online` (patient submitted, OTP-verified, SLA timer) or `manual`
   (entered by the pharmacy from its dashboard via "Add order", one or many at a time). Manual orders
   start at `accepted` with no OTP and no SLA timer; the pharmacy attests consent. Both sources are
