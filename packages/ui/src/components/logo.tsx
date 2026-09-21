@@ -5,9 +5,9 @@ import { cn } from "../lib/cn";
 const LOGO_SRC = "/images/logo.png";
 
 const SIZES = {
-  sm: "h-6",
-  md: "h-8",
-  lg: "h-10",
+  sm: "h-8",
+  md: "h-10",
+  lg: "h-12",
 } as const;
 
 /**
@@ -35,7 +35,7 @@ export function Logo({
 
   if (light) {
     return (
-      <span className={cn("inline-flex items-center rounded-xl bg-white px-2.5 py-1.5", className)}>
+      <span className={cn("inline-flex items-center rounded-xl bg-white px-3 py-2", className)}>
         {img}
       </span>
     );
@@ -49,7 +49,7 @@ export function PoweredByGetMed({ className, light = false }: { className?: stri
     <span className={cn("inline-flex items-center gap-1.5 text-[0.65rem] font-medium whitespace-nowrap", light ? "text-white/70" : "text-ink-400", className)}>
       Powered by
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={LOGO_SRC} alt="GetMed" className={cn("h-3.5 w-auto select-none", light && "brightness-0 invert")} decoding="async" />
+      <img src={LOGO_SRC} alt="GetMed" className={cn("h-5 w-auto select-none", light && "brightness-0 invert")} decoding="async" />
     </span>
   );
 }
