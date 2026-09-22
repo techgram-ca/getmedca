@@ -7,17 +7,21 @@ import { ReportsCharts } from "@/components/reports-charts";
 export default async function ReportsPage() {
   const { db } = await requireAdmin();
   const since = new Date(Date.now() - 90 * 86400000).toISOString();
-  const [{ data: orders }, { data: pharmacies }, { data: consults }] = await Promise.all([
+  const [{ data: orders }, { data: pharmacies }, { data: consults }, { data: charges }] = await Promise.all([
     db.from("orders_admin").select("id, pharmacy_id, status, source, delivery_type, created_at, delivered_at, delivery_fee_charged").gte("created_at", since),
     db.from("pharmacies").select("id, name, status, approved_at").not("submitted_at", "is", null),
     db.from("consultation_requests").select("id, created_at").gte("created_at", since).not("phone_verified_at", "is", null),
+    // Revenue comes from the charges, not the orders: a failed attempt bills
+    // too, and an order sent out again bills once per trip.
+    db.from("order_charges").select("kind, amount, delivery_type, created_at").gte("created_at", since),
   ]);
 
   // Daily series (last 90 days)
   const days: Record<string, { date: string; orders: number; delivered: number; revenue: number; consultations: number }> = {};
   const key = (d: string) => d.slice(0, 10);
   for (let i = 89; i >= 0; i--) { const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10); days[d] = { date: d, orders: 0, delivered: 0, revenue: 0, consultations: 0 }; }
-  for (const o of orders ?? []) { const d = days[key(o.created_at)]; if (d) d.orders++; if (o.delivered_at && days[key(o.delivered_at)]) { days[key(o.delivered_at)]!.delivered++; days[key(o.delivered_at)]!.revenue += Number(o.delivery_fee_charged ?? 0); } }
+  for (const o of orders ?? []) { const d = days[key(o.created_at)]; if (d) d.orders++; if (o.delivered_at && days[key(o.delivered_at)]) days[key(o.delivered_at)]!.delivered++; }
+  for (const c of charges ?? []) { const d = days[key(c.created_at)]; if (d) d.revenue += Number(c.amount ?? 0); }
   for (const c of consults ?? []) { const d = days[key(c.created_at)]; if (d) d.consultations++; }
   const series = Object.values(days);
 
@@ -37,17 +41,22 @@ export default async function ReportsPage() {
 
   // Revenue split by the delivery type chosen when the driver was assigned.
   const byType = new Map<string, { count: number; revenue: number }>();
-  for (const o of orders ?? []) {
-    if (o.status !== "delivered") continue;
-    const key = o.delivery_type ?? "uncategorised";
+  for (const c of charges ?? []) {
+    // Failed attempts bill at their own rate, so they get their own row rather
+    // than distorting a delivery tier's average.
+    const key = c.kind === "failed_delivery" ? "failed" : c.delivery_type ?? "uncategorised";
     const entry = byType.get(key) ?? { count: 0, revenue: 0 };
     entry.count += 1;
-    entry.revenue += Number(o.delivery_fee_charged ?? 0);
+    entry.revenue += Number(c.amount ?? 0);
     byType.set(key, entry);
   }
-  const typeRows = [...DELIVERY_TYPES.map((t) => t.id), "uncategorised"]
+  const typeRows = [...DELIVERY_TYPES.map((t) => t.id), "uncategorised", "failed"]
     .filter((key) => byType.has(key))
-    .map((key) => ({ key, label: key === "uncategorised" ? "Uncategorised" : deliveryTypeLabel(key as never), ...byType.get(key)! }));
+    .map((key) => ({
+      key,
+      label: key === "uncategorised" ? "Uncategorised" : key === "failed" ? "Failed attempts" : deliveryTypeLabel(key as never),
+      ...byType.get(key)!,
+    }));
   return (
     <div>
       <PageHeader title="Reports" description="Last 90 days." />

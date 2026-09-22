@@ -184,6 +184,7 @@ export type OrderRow = {
   delivery_type: DeliveryType | null;
   delivery_type_set_at: string | null;
   delivery_fee_charged: number | null;
+  delivery_attempt: number;
   accepted_at: string | null;
   ready_at: string | null;
   assigned_at: string | null;
@@ -220,7 +221,23 @@ export type ProofOfDeliveryRow = {
   order_id: string;
   photo_path: string;
   signature_path: string;
+  /** What the driver wrote when handing the order over. */
+  note: string | null;
   driver_id: string | null;
+  created_at: string;
+};
+
+export type OrderChargeKind = "delivery" | "failed_delivery";
+
+/** One billable event. A retried order has a row per attempt. */
+export type OrderChargeRow = {
+  id: string;
+  order_id: string;
+  pharmacy_id: string;
+  kind: OrderChargeKind;
+  amount: number;
+  delivery_type: DeliveryType | null;
+  attempt: number;
   created_at: string;
 };
 
@@ -289,6 +306,8 @@ export type PlatformSettingsRow = {
   default_local_fee: number;
   default_gta_fee: number;
   default_extended_fee: number;
+  /** Share of the quoted fee a failed attempt bills. 100 = the full fee. */
+  failed_delivery_fee_percent: number;
   updated_at: string;
 };
 
@@ -382,6 +401,7 @@ export type OrderAdminRow = Pick<
   | "delivery_duration_s"
   | "delivery_route_avoids_tolls"
   | "delivery_route_computed_at"
+  | "delivery_attempt"
 >;
 
 export type OrderDriverRow = Pick<
@@ -435,6 +455,7 @@ export type Database = {
       orders: Tbl<OrderRow, OrderInsert>;
       order_events: Tbl<OrderEventRow, Pick<OrderEventRow, "order_id" | "action" | "actor_role"> & Partial<OrderEventRow>>;
       proof_of_delivery: Tbl<ProofOfDeliveryRow, Pick<ProofOfDeliveryRow, "order_id" | "photo_path" | "signature_path"> & Partial<ProofOfDeliveryRow>>;
+      order_charges: Tbl<OrderChargeRow, Pick<OrderChargeRow, "order_id" | "pharmacy_id" | "kind" | "amount"> & Partial<OrderChargeRow>>;
       consultation_requests: Tbl<
         ConsultationRequestRow,
         Pick<ConsultationRequestRow, "pharmacy_id" | "patient_name" | "patient_phone" | "consent_given_at"> & Partial<ConsultationRequestRow>

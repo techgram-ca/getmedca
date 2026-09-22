@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: PlatformSettingsRow = {
   default_local_fee: 5,
   default_gta_fee: 8,
   default_extended_fee: 12,
+  failed_delivery_fee_percent: 100,
   updated_at: new Date(0).toISOString(),
 };
 
@@ -19,7 +20,7 @@ export async function getPlatformSettings(db: ServiceClient): Promise<PlatformSe
 
 export async function updatePlatformSettings(
   db: ServiceClient,
-  patch: Partial<Pick<PlatformSettingsRow, "search_radius_km" | "sla_minutes" | "default_local_fee" | "default_gta_fee" | "default_extended_fee">>,
+  patch: Partial<Pick<PlatformSettingsRow, "search_radius_km" | "sla_minutes" | "default_local_fee" | "default_gta_fee" | "default_extended_fee" | "failed_delivery_fee_percent">>,
 ): Promise<PlatformSettingsRow> {
   const { data, error } = await db
     .from("platform_settings")

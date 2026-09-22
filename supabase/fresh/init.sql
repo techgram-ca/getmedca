@@ -28,6 +28,8 @@ create type public.otp_purpose as enum ('order', 'consultation');
 create type public.order_source as enum ('online', 'manual');
 -- Local/GTA/Extended carry a configured price; Custom is priced per order.
 create type public.delivery_type as enum ('local', 'gta', 'extended', 'custom');
+-- A delivery bills once; a failed attempt bills its own share of the same fee.
+create type public.order_charge_kind as enum ('delivery', 'failed_delivery');
 
 -- ---------------------------------------------------------------------
 -- Profiles (one row per auth user; role drives RLS)
@@ -276,6 +278,10 @@ create table public.orders (
   -- price snapshotted at that moment
   delivery_type public.delivery_type,
   delivery_type_set_at timestamptz,
+  -- Which delivery trip this order is on. Bumped when a failed order is sent
+  -- back out, so each attempt bills separately.
+  delivery_attempt int not null default 1
+    constraint orders_delivery_attempt_positive check (delivery_attempt >= 1),
   delivery_fee_charged numeric(10,2),
   -- per-transition timestamps
   accepted_at timestamptz,
@@ -316,9 +322,29 @@ create table public.proof_of_delivery (
   order_id uuid not null unique references public.orders (id) on delete cascade,
   photo_path text not null,
   signature_path text not null,
+  -- What the driver wrote when handing the order over.
+  note text,
   driver_id uuid references public.drivers (id),
   created_at timestamptz not null default now()
 );
+
+-- One row per billable event. An order retried after a failed attempt has a
+-- failed_delivery row for the first trip and a delivery row for the second,
+-- which is why the order's own fee column cannot be the billing record.
+create table public.order_charges (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders (id) on delete cascade,
+  pharmacy_id uuid not null references public.pharmacies (id) on delete cascade,
+  kind public.order_charge_kind not null,
+  amount numeric(10,2) not null constraint order_charges_amount_non_negative check (amount >= 0),
+  delivery_type public.delivery_type,
+  -- Which delivery attempt produced this charge (1 for the first trip).
+  attempt int not null default 1,
+  created_at timestamptz not null default now(),
+  constraint order_charges_unique_attempt unique (order_id, kind, attempt)
+);
+create index order_charges_pharmacy_idx on public.order_charges (pharmacy_id, created_at desc);
+create index order_charges_order_idx on public.order_charges (order_id);
 
 -- ---------------------------------------------------------------------
 -- Consultations
@@ -410,6 +436,10 @@ create table public.platform_settings (
   default_local_fee numeric(10,2) not null default 5.00,
   default_gta_fee numeric(10,2) not null default 8.00,
   default_extended_fee numeric(10,2) not null default 12.00,
+  -- Share of the quoted fee a failed attempt bills. 100 = the full fee (the
+  -- driver drove the route either way), 0 = failed attempts are free.
+  failed_delivery_fee_percent numeric(5,2) not null default 100
+    constraint platform_settings_failed_fee_percent_range check (failed_delivery_fee_percent between 0 and 100),
   sla_minutes int not null default 30,
   updated_at timestamptz not null default now()
 );
@@ -483,7 +513,8 @@ select
   rejected_at, cancelled_at, timed_out_at, created_at, updated_at,
   delivery_type,
   delivery_address_line, delivery_notes,
-  delivery_distance_m, delivery_duration_s, delivery_route_avoids_tolls, delivery_route_computed_at
+  delivery_distance_m, delivery_duration_s, delivery_route_avoids_tolls, delivery_route_computed_at,
+  delivery_attempt
 from public.orders;
 
 -- ---------------------------------------------------------------------
@@ -594,6 +625,7 @@ alter table public.drivers enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_events enable row level security;
 alter table public.proof_of_delivery enable row level security;
+alter table public.order_charges enable row level security;
 alter table public.consultation_requests enable row level security;
 alter table public.otp_codes enable row level security;
 alter table public.rate_limits enable row level security;
@@ -660,6 +692,11 @@ create policy "order_events: read" on public.order_events for select using (
   public.is_admin()
   or exists (select 1 from public.orders o where o.id = order_id and (public.owns_pharmacy(o.pharmacy_id) or o.assigned_driver_id = public.current_driver_id()))
 );
+
+create policy "order_charges: pharmacy reads own" on public.order_charges for select
+  using (public.owns_pharmacy(pharmacy_id) or public.is_admin());
+create policy "order_charges: admin" on public.order_charges for all
+  using (public.is_admin()) with check (public.is_admin());
 
 create policy "pod: read" on public.proof_of_delivery for select using (
   public.is_admin()

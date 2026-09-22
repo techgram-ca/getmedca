@@ -17,6 +17,7 @@ export const ADMIN_ORDER_KEYS = [
   "rejected_at", "cancelled_at", "timed_out_at", "created_at", "updated_at", "source", "delivery_type",
   "delivery_address_line", "delivery_notes",
   "delivery_distance_m", "delivery_duration_s", "delivery_route_avoids_tolls", "delivery_route_computed_at",
+  "delivery_attempt",
 ] as const satisfies readonly (keyof OrderAdminRow)[];
 
 /**

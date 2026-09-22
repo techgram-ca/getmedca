@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { ShieldOff } from "lucide-react";
 import { requireAdmin } from "@getmed/core/auth";
 import { formatCurrency, formatDate, formatDistance, formatDuration, shortId, statusLabel } from "@getmed/core/format";
+import { loadDeliveryProof, orderCharges } from "@getmed/core/orders";
 import { deliveryTypeLabel, resolvePricing } from "@getmed/core/pricing";
-import { Alert, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader, StatusBadge } from "@getmed/ui";
+import { Alert, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, DeliveryProofCard, PageHeader, StatusBadge } from "@getmed/ui";
 import { DeliveryDistance } from "@/components/delivery-distance";
 import { DeliveryTypePicker } from "@/components/delivery-type-picker";
 import { DriverAssign } from "@/components/driver-assign";
 import { EscalationForm } from "@/components/escalation-form";
+import { RetryDelivery } from "@/components/retry-delivery";
 import { adminOrders, escalationReason, withNames } from "@/lib/queries";
 
 export default async function AdminOrderDetail({ params }: { params: Promise<{ orderId: string }> }) {
@@ -17,11 +19,13 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
   const { data: row } = await adminOrders(db).eq("id", orderId).maybeSingle();
   if (!row) notFound();
   const [o] = await withNames(db, [row]);
-  const [{ data: events }, { data: drivers }, { data: pod }] = await Promise.all([
+  const [{ data: events }, { data: drivers }, proof, charges] = await Promise.all([
     db.from("order_events").select("*").eq("order_id", orderId).order("created_at"),
     db.from("drivers").select("id, name, phone, vehicle_make, vehicle_model").eq("active", true).order("name"),
-    db.from("proof_of_delivery").select("created_at").eq("order_id", orderId).maybeSingle(),
+    loadDeliveryProof(db, orderId),
+    orderCharges(db, orderId),
   ]);
+  const billed = charges.reduce((sum, c) => sum + c.amount, 0);
   const r = escalationReason(o!);
   const canAssign = o!.status === "ready_for_delivery" || o!.status === "assigned";
   const pricing = await resolvePricing(db, o!.pharmacy_id);
@@ -51,6 +55,18 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
               </CardContent>
             </Card>
           ) : null}
+
+          {o!.status === "failed" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Delivery failed</CardTitle>
+                <CardDescription>{o!.failure_reason ?? "No reason recorded."}</CardDescription>
+              </CardHeader>
+              <CardContent><RetryDelivery orderId={o!.id} attempt={o!.delivery_attempt} /></CardContent>
+            </Card>
+          ) : null}
+
+          {proof ? <DeliveryProofCard proof={proof} capturedAtLabel={formatDate(proof.capturedAt)} /> : null}
 
           <Card>
             <CardHeader>
@@ -103,8 +119,13 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
               <Row k="Distance" v={o!.delivery_distance_m != null ? `${formatDistance(Number(o!.delivery_distance_m))}${o!.delivery_duration_s != null ? ` · ${formatDuration(o!.delivery_duration_s)}` : ""}` : "—"} />
               <Row k="Driver" v={o!.driver ? <Link href={`/drivers/${o!.assigned_driver_id}`} className="text-brand-700 hover:underline">{o!.driver.name}</Link> : "—"} />
               <Row k="Delivery type" v={o!.delivery_type ? deliveryTypeLabel(o!.delivery_type) : "Not set"} />
-              <Row k="Delivery fee charged" v={o!.delivery_fee_charged != null ? formatCurrency(o!.delivery_fee_charged) : "—"} />
-              <Row k="Proof of delivery" v={pod ? <Badge tone="success">Captured {formatDate(pod.created_at)}</Badge> : "—"} />
+              <Row k="Quoted delivery fee" v={o!.delivery_fee_charged != null ? formatCurrency(o!.delivery_fee_charged) : "—"} />
+              <Row
+                k="Billed to date"
+                v={charges.length ? `${formatCurrency(billed)} over ${charges.length} ${charges.length === 1 ? "charge" : "charges"}` : "Not billed yet"}
+              />
+              <Row k="Delivery attempt" v={o!.delivery_attempt > 1 ? `Attempt ${o!.delivery_attempt}` : "First attempt"} />
+              <Row k="Proof of delivery" v={proof ? <Badge tone="success">Captured {formatDate(proof.capturedAt)}</Badge> : "—"} />
             </CardContent>
           </Card>
         </div>

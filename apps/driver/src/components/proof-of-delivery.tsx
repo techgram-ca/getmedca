@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import SignaturePad from "signature_pad";
 import { Camera, Eraser, Check } from "lucide-react";
-import { Button, Card, CardContent, FormError, LoadingOverlay, toast } from "@getmed/ui";
+import { Button, Card, CardContent, FormError, LoadingOverlay, Textarea, toast } from "@getmed/ui";
 
 /** Camera capture (PWA) + canvas signature pad → POST /api/orders/[id]/deliver. */
 export function ProofOfDelivery({ orderId }: { orderId: string }) {
@@ -12,6 +12,7 @@ export function ProofOfDelivery({ orderId }: { orderId: string }) {
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [hasSignature, setHasSignature] = useState(false);
+  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -46,6 +47,7 @@ export function ProofOfDelivery({ orderId }: { orderId: string }) {
     const fd = new FormData();
     fd.set("photo", photo);
     fd.set("signature", pad.current.toDataURL("image/png"));
+    fd.set("note", note.trim());
     const res = await fetch(`/api/orders/${orderId}/deliver`, { method: "POST", body: fd });
     const j = (await res.json().catch(() => ({}))) as { error?: string };
     setBusy(false);
@@ -76,6 +78,23 @@ export function ProofOfDelivery({ orderId }: { orderId: string }) {
           <div className="flex items-center justify-between"><p className="text-sm font-medium">2. Recipient signature</p><Button size="sm" variant="ghost" onClick={() => { pad.current?.clear(); setHasSignature(false); }}><Eraser /> Clear</Button></div>
           <canvas ref={canvas} className="mt-2 h-44 w-full touch-none rounded-xl border border-ink-300 bg-white" aria-label="Signature pad" />
           <p className="mt-1 text-xs text-ink-500">Ask the recipient to sign with their finger.</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent>
+          <label htmlFor="pod-note" className="text-sm font-medium">3. Note <span className="font-normal text-ink-500">(optional)</span></label>
+          <Textarea
+            id="pod-note"
+            rows={3}
+            maxLength={500}
+            className="mt-2"
+            placeholder="Left with the building concierge. Patient not home."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-ink-500">
+            Anything the pharmacy should know. Never write down medication or health details.
+          </p>
         </CardContent>
       </Card>
       <Button size="lg" className="w-full" disabled={!photo || !hasSignature} loading={busy} loadingText="Uploading…" onClick={submit}>

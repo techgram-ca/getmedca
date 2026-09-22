@@ -1,8 +1,9 @@
 import { createServiceClient, type ServiceClient } from "@getmed/db/service";
 import type { DeliveryType, OrderInsert, OrderRow, OrderStatus } from "@getmed/db/types";
 import { AppError, ForbiddenError, InvalidTransitionError, NotFoundError } from "../errors";
-import { shortId, statusLabel } from "../format";
+import { formatCurrency, shortId, statusLabel } from "../format";
 import { inngest, orderCreated, orderResponded } from "../inngest/client";
+import { chargeDelivery, chargeFailedDelivery } from "./charges";
 import { ensureOrderRoute } from "./distance";
 import { adminTarget, notify } from "../notifications/dispatch";
 import { pushToDriver } from "../notifications/push";
@@ -394,7 +395,7 @@ export async function pickUpOrder(orderId: string, driverId: string, ctx: Ctx = 
 export async function deliverOrder(
   orderId: string,
   driverId: string,
-  proof: { photoPath: string; signaturePath: string },
+  proof: { photoPath: string; signaturePath: string; note?: string | null },
   ctx: Ctx = {},
 ) {
   const db = dbOf(ctx);
@@ -404,9 +405,16 @@ export async function deliverOrder(
     delivered_at: new Date().toISOString(),
   });
   await db.from("proof_of_delivery").upsert(
-    { order_id: orderId, photo_path: proof.photoPath, signature_path: proof.signaturePath, driver_id: driverId },
+    {
+      order_id: orderId,
+      photo_path: proof.photoPath,
+      signature_path: proof.signaturePath,
+      note: proof.note?.trim() || null,
+      driver_id: driverId,
+    },
     { onConflict: "order_id" },
   );
+  await chargeDelivery(db, updated);
   const pharmacy = await loadPharmacy(db, order.pharmacy_id);
   await Promise.all([
     notify(db, "order.status", { phone: order.patient_phone }, {
@@ -437,6 +445,9 @@ export async function failDelivery(orderId: string, driverId: string, reason: st
     failed_at: new Date().toISOString(),
   }, reason);
   updated = await escalate(db, updated);
+  // The trip happened, so the attempt is billable. See chargeFailedDelivery for
+  // the share, which the admin sets on the Pricing page.
+  const charged = await chargeFailedDelivery(db, updated);
   const pharmacy = await loadPharmacy(db, order.pharmacy_id);
   await notify(db, "order.delivery_failed", adminTarget(), {
     orderId: shortId(orderId),
@@ -444,7 +455,50 @@ export async function failDelivery(orderId: string, driverId: string, reason: st
     patientName: order.patient_name,
     patientPhone: order.patient_phone,
     failureReason: reason,
+    amount: charged > 0 ? formatCurrency(charged) : undefined,
   });
+  return updated;
+}
+
+/**
+ * A failed delivery goes out again. The pharmacy or an admin puts it back in
+ * the ready queue; the driver, pickup and failure are cleared, and the attempt
+ * counter is bumped so the next trip bills separately from the one that failed.
+ *
+ * The charge for the failed attempt stands — that trip was made.
+ */
+export async function returnToDelivery(
+  orderId: string,
+  actor: "pharmacy" | "admin",
+  actorId: string,
+  note: string | null,
+  ctx: Ctx = {},
+) {
+  const db = dbOf(ctx);
+  const order = await loadOrder(db, orderId);
+  if (actor === "pharmacy") assertPharmacyOwns(order, actorId);
+  if (order.status !== "failed") throw new AppError("Only a failed delivery can be sent out again", 409);
+
+  const updated = await transition(db, order, "return_to_delivery", actor, actorId, {
+    delivery_attempt: order.delivery_attempt + 1,
+    assigned_driver_id: null,
+    failure_reason: null,
+    failed_at: null,
+    picked_up_at: null,
+    assigned_at: null,
+    // The escalation was raised by the failure that has just been handled.
+    escalation_status: order.escalated_at ? "resolved" : order.escalation_status,
+    escalation_resolved_at: order.escalated_at ? new Date().toISOString() : order.escalation_resolved_at,
+    escalation_note: note?.trim() || order.escalation_note,
+  }, note);
+
+  const pharmacy = await loadPharmacy(db, order.pharmacy_id);
+  await notify(db, "order.status", { phone: order.patient_phone }, {
+    orderId: shortId(orderId),
+    status: "out for delivery again",
+    pharmacyName: pharmacy?.name,
+    estimatedTime: pharmacy?.estimated_delivery_time ?? "shortly",
+  }, { channels: ["sms"] });
   return updated;
 }
 

@@ -17,3 +17,4 @@ export * from "./components/logo";
 export * from "./components/toaster";
 export * from "./components/turnstile";
 export * from "./components/address-autocomplete";
+export * from "./components/delivery-proof";

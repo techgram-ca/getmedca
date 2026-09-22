@@ -38,6 +38,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0003_delivery_distance.sql` | Stored driving distance per order, admin-visible delivery address |
 | `migrations/0004_pharmacy_theme_color.sql` | Per-pharmacy theme colour for the public page |
 | `migrations/0005_consultation_pharmacist.sql` | Consultation price per topic, and the pharmacist a patient picked |
+| `migrations/0006_failed_delivery_charges.sql` | Billing per delivery attempt, retryable failed deliveries, delivery note |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
 After any schema change, regenerate the TypeScript types with `pnpm db:types`.
@@ -56,3 +57,10 @@ falls back to the GetMed teal.
 for a consultation topic; null means no fee) and, on `consultation_requests`, `pharmacist_id` and
 `price_quoted`. The price is snapshotted at request time so a later change never reprices a request
 already made — the same rule delivery pricing follows.
+
+`migrations/0006_failed_delivery_charges.sql` moves billing out of `orders.delivery_fee_charged`
+and into `order_charges`, one row per billable event, because a failed delivery can now be sent
+back out and each trip bills separately. It also adds `platform_settings.failed_delivery_fee_percent`
+(the share of the quoted fee a failed attempt bills, default 100), `orders.delivery_attempt`, and
+`proof_of_delivery.note`. Existing delivered orders are backfilled into `order_charges` so past
+invoices keep their totals.

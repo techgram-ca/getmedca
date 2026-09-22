@@ -14,10 +14,11 @@ export default async function OverviewPage() {
     db.from("orders").select("id", { count: "exact", head: true }).in("status", ["pending", "accepted", "ready_for_delivery", "assigned", "picked_up"]).not("phone_verified_at", "is", null),
     db.from("drivers").select("id", { count: "exact", head: true }).eq("active", true),
     db.from("consultation_requests").select("id", { count: "exact", head: true }).eq("status", "new").not("phone_verified_at", "is", null),
-    db.from("orders").select("delivery_fee_charged").eq("status", "delivered").gte("delivered_at", monthStart),
+    // Billed from order_charges so failed attempts and retries are counted once each.
+    db.from("order_charges").select("amount").gte("created_at", monthStart),
   ]);
   const escalations = await withNames(db, esc ?? []);
-  const revenue = (delivered ?? []).reduce((s, o) => s + Number(o.delivery_fee_charged ?? 0), 0);
+  const revenue = (delivered ?? []).reduce((s, c) => s + Number(c.amount ?? 0), 0);
 
   return (
     <div>

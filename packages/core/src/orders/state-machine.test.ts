@@ -35,3 +35,25 @@ test("only system times out, only from pending", () => {
   assert.equal(canTransition("time_out", "accepted", "system"), false);
   assert.equal(canTransition("time_out", "pending", "admin"), false);
 });
+
+test("a failed delivery can be sent out again by the pharmacy or an admin", () => {
+  assert.equal(canTransition("return_to_delivery", "failed", "pharmacy"), true);
+  assert.equal(canTransition("return_to_delivery", "failed", "admin"), true);
+  // Not the driver's call, and not a way to revive any other terminal status.
+  assert.equal(canTransition("return_to_delivery", "failed", "driver"), false);
+  assert.equal(canTransition("return_to_delivery", "cancelled", "pharmacy"), false);
+  assert.equal(canTransition("return_to_delivery", "rejected", "admin"), false);
+  assert.equal(canTransition("return_to_delivery", "delivered", "admin"), false);
+});
+
+test("sending a failed order out again is the ONLY thing the pharmacy may do to it", () => {
+  assert.deepEqual(availableActions("failed", "pharmacy"), ["return_to_delivery"]);
+  assert.equal(canTransition("cancel", "failed", "pharmacy"), false);
+  assert.equal(canTransition("mark_ready", "failed", "pharmacy"), false);
+  assert.equal(canTransition("accept", "failed", "pharmacy"), false);
+});
+
+test("a re-queued order picks the normal flow back up", () => {
+  // return_to_delivery lands on ready_for_delivery, where admin assigns again.
+  assert.equal(canTransition("assign_driver", "ready_for_delivery", "admin"), true);
+});

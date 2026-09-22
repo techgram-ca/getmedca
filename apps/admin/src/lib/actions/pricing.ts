@@ -14,7 +14,12 @@ const PRICE_HINT = "Enter a price, for example 7.50";
 const range = z.number().min(0, "Price cannot be negative").max(1000, "That price looks too high");
 const money = requiredNumberField(range, PRICE_HINT);
 
-const defaultsSchema = z.object({ local: money, gta: money, extended: money });
+const percent = requiredNumberField(
+  z.number().min(0, "Cannot be below 0%").max(100, "Cannot be above 100%"),
+  "Enter a percentage between 0 and 100",
+);
+
+const defaultsSchema = z.object({ local: money, gta: money, extended: money, failedDeliveryPercent: percent });
 
 /** Platform fallbacks, used by any pharmacy without its own override. */
 export async function savePricingDefaults(input: unknown): Promise<PricingResult> {
@@ -26,6 +31,7 @@ export async function savePricingDefaults(input: unknown): Promise<PricingResult
       default_local_fee: parsed.data.local,
       default_gta_fee: parsed.data.gta,
       default_extended_fee: parsed.data.extended,
+      failed_delivery_fee_percent: parsed.data.failedDeliveryPercent,
     });
     revalidatePath("/pricing");
     return { ok: true };
