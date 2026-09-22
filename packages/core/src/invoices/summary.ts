@@ -1,12 +1,21 @@
 import type { ServiceClient } from "@getmed/db/service";
-import type { DeliveryType } from "@getmed/db/types";
+import type { DeliveryType, OrderChargeKind } from "@getmed/db/types";
 import { DELIVERY_TYPES, deliveryTypeLabel } from "../pricing";
 
-export type InvoiceLine = { orderId: string; deliveredAt: string; fee: number; type: DeliveryType | null };
+export type InvoiceLine = {
+  orderId: string;
+  /** When the charge was raised — the delivery, or the attempt that failed. */
+  deliveredAt: string;
+  fee: number;
+  type: DeliveryType | null;
+  kind: OrderChargeKind;
+  /** Which trip this line bills. 1 unless the order was sent out again. */
+  attempt: number;
+};
 
 /** One row per delivery type used in the period. */
 export type InvoiceBreakdownRow = {
-  type: DeliveryType | "uncategorised";
+  type: DeliveryType | "uncategorised" | "failed";
   label: string;
   count: number;
   subtotal: number;
@@ -21,6 +30,8 @@ export type InvoiceSummary = {
   periodStart: string;
   periodEnd: string;
   deliveredCount: number;
+  /** Attempts that failed and were billed. Zero when none, or when the rate is 0%. */
+  failedCount: number;
   total: number;
   breakdown: InvoiceBreakdownRow[];
   lines: InvoiceLine[];
@@ -49,23 +60,37 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export function buildBreakdown(lines: InvoiceLine[]): InvoiceBreakdownRow[] {
   const order: (DeliveryType | "uncategorised")[] = [...DELIVERY_TYPES.map((t) => t.id), "uncategorised"];
   const groups = new Map<DeliveryType | "uncategorised", InvoiceLine[]>();
-  for (const line of lines) {
+  // Failed attempts are billed at a different rate from completed deliveries,
+  // so they get their own row rather than distorting a delivery tier's unit price.
+  const failed = lines.filter((l) => l.kind === "failed_delivery");
+  for (const line of lines.filter((l) => l.kind !== "failed_delivery")) {
     const key = line.type ?? "uncategorised";
     groups.set(key, [...(groups.get(key) ?? []), line]);
   }
-  return order
+  const rows: InvoiceBreakdownRow[] = order
     .filter((key) => groups.has(key))
     .map((key) => {
-      const rows = groups.get(key)!;
-      const fees = new Set(rows.map((r) => r.fee));
+      const group = groups.get(key)!;
+      const fees = new Set(group.map((r) => r.fee));
       return {
         type: key,
         label: key === "uncategorised" ? "Uncategorised" : deliveryTypeLabel(key),
-        count: rows.length,
-        subtotal: round2(rows.reduce((sum, r) => sum + r.fee, 0)),
+        count: group.length,
+        subtotal: round2(group.reduce((sum, r) => sum + r.fee, 0)),
         unitPrice: fees.size === 1 ? [...fees][0]! : null,
       };
     });
+  if (failed.length) {
+    const fees = new Set(failed.map((r) => r.fee));
+    rows.push({
+      type: "failed",
+      label: "Failed delivery attempts",
+      count: failed.length,
+      subtotal: round2(failed.reduce((sum, r) => sum + r.fee, 0)),
+      unitPrice: fees.size === 1 ? [...fees][0]! : null,
+    });
+  }
+  return rows;
 }
 
 /**
@@ -78,20 +103,23 @@ export async function buildInvoice(db: ServiceClient, pharmacyId: string, id: st
   const { data: pharmacy } = await db.from("pharmacies").select("id, name").eq("id", pharmacyId).maybeSingle();
   if (!pharmacy) return null;
 
-  const { data: orders } = await db
-    .from("orders")
-    .select("id, delivered_at, delivery_fee_charged, delivery_type")
+  // Billed from order_charges, not from the orders themselves: an order retried
+  // after a failed attempt is charged once per trip.
+  const { data: charges } = await db
+    .from("order_charges")
+    .select("order_id, kind, amount, delivery_type, attempt, created_at")
     .eq("pharmacy_id", pharmacyId)
-    .eq("status", "delivered")
-    .gte("delivered_at", bounds.start.toISOString())
-    .lt("delivered_at", bounds.end.toISOString())
-    .order("delivered_at", { ascending: true });
+    .gte("created_at", bounds.start.toISOString())
+    .lt("created_at", bounds.end.toISOString())
+    .order("created_at", { ascending: true });
 
-  const lines: InvoiceLine[] = (orders ?? []).map((o) => ({
-    orderId: o.id,
-    deliveredAt: o.delivered_at!,
-    fee: Number(o.delivery_fee_charged ?? 0),
-    type: o.delivery_type,
+  const lines: InvoiceLine[] = (charges ?? []).map((c) => ({
+    orderId: c.order_id,
+    deliveredAt: c.created_at,
+    fee: Number(c.amount),
+    type: c.delivery_type,
+    kind: c.kind,
+    attempt: c.attempt,
   }));
 
   return {
@@ -100,24 +128,24 @@ export async function buildInvoice(db: ServiceClient, pharmacyId: string, id: st
     pharmacyName: pharmacy.name ?? "Pharmacy",
     periodStart: bounds.start.toISOString(),
     periodEnd: new Date(bounds.end.getTime() - 1).toISOString(),
-    deliveredCount: lines.length,
+    deliveredCount: lines.filter((l) => l.kind === "delivery").length,
+    failedCount: lines.filter((l) => l.kind === "failed_delivery").length,
     total: round2(lines.reduce((s, l) => s + l.fee, 0)),
     breakdown: buildBreakdown(lines),
     lines,
   };
 }
 
-/** List of months (newest first) since the pharmacy's first delivered order. */
+/** List of months (newest first) since the pharmacy's first billable event. */
 export async function listInvoiceMonths(db: ServiceClient, pharmacyId: string): Promise<InvoiceSummary[]> {
   const { data: first } = await db
-    .from("orders")
-    .select("delivered_at")
+    .from("order_charges")
+    .select("created_at")
     .eq("pharmacy_id", pharmacyId)
-    .eq("status", "delivered")
-    .order("delivered_at", { ascending: true })
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
-  const start = first?.delivered_at ? new Date(first.delivered_at) : new Date();
+  const start = first?.created_at ? new Date(first.created_at) : new Date();
   const months: string[] = [];
   const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
   const now = new Date();

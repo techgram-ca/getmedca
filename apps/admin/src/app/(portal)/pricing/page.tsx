@@ -27,10 +27,10 @@ export default async function PricingPage() {
       />
 
       <Alert tone="info" className="mb-6">
-        A pharmacy with no price of its own is charged the default. Custom deliveries have no set price — you type one in when choosing the delivery type for an order. Prices are snapshotted onto each order at that moment, so changing them here never reprices past orders.
+        A pharmacy with no price of its own is charged the default. Custom deliveries have no set price — you type one in when choosing the delivery type for an order. Prices are snapshotted onto each order at that moment, so changing them here never reprices past orders. A delivery a driver marks failed is billed at the rate below, and an order sent out again is billed once per attempt.
       </Alert>
 
-      <PricingDefaultsForm defaults={defaultPrices(settings)} />
+      <PricingDefaultsForm defaults={defaultPrices(settings)} failedDeliveryPercent={Number(settings.failed_delivery_fee_percent)} />
 
       <div className="mt-8">
         <PharmacyPricingTable

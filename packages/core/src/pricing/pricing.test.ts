@@ -24,6 +24,7 @@ test("defaults are read as numbers even when the driver returns strings", () => 
     default_local_fee: "4.50" as unknown as number,
     default_gta_fee: 8,
     default_extended_fee: 12,
+    failed_delivery_fee_percent: 100,
     updated_at: "",
   });
   assert.deepEqual(prices, { local: 4.5, gta: 8, extended: 12 });

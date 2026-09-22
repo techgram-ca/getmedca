@@ -11,7 +11,8 @@ export type OrderAction =
   | "deliver"
   | "fail"
   | "cancel"
-  | "time_out";
+  | "time_out"
+  | "return_to_delivery";
 
 type Transition = { from: readonly OrderStatus[]; to: OrderStatus; actors: readonly Actor[] };
 
@@ -30,13 +31,21 @@ export const TRANSITIONS: Record<OrderAction, Transition> = {
   // Pharmacy may cancel only AFTER accepting and BEFORE pickup.
   cancel: { from: ["accepted", "ready_for_delivery", "assigned"], to: "cancelled", actors: ["pharmacy"] },
   time_out: { from: ["pending"], to: "timed_out", actors: ["system"] },
+  // A failed delivery can go out again: the pharmacy or an admin puts it back
+  // in the ready queue, which clears the driver and starts a new attempt.
+  return_to_delivery: { from: ["failed"], to: "ready_for_delivery", actors: ["pharmacy", "admin"] },
 };
 
-/** Statuses at which the pharmacy has lost all write access (spec §4). */
+/**
+ * Statuses at which the pharmacy has lost all write access (spec §4).
+ *
+ * `failed` is not among them: the one thing a pharmacy may still do is send the
+ * order out again. Every other write is refused by the transition table, which
+ * allows only `return_to_delivery` from `failed`.
+ */
 export const PHARMACY_LOCKED_STATUSES: readonly OrderStatus[] = [
   "picked_up",
   "delivered",
-  "failed",
   "rejected",
   "cancelled",
   "timed_out",

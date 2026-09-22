@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@getmed/core/auth";
 import { AppError } from "@getmed/core/errors";
-import { assignDriver, ensureOrderRoute, setDeliveryType, updateEscalation } from "@getmed/core/orders";
+import { assignDriver, ensureOrderRoute, returnToDelivery, setDeliveryType, updateEscalation } from "@getmed/core/orders";
 import type { DeliveryType } from "@getmed/db/types";
 
 type R = { ok: true } | { ok: false; error: string };
@@ -53,4 +53,9 @@ export async function setDeliveryTypeAction(orderId: string, type: DeliveryType,
 
 export async function escalationAction(orderId: string, status: "contacted" | "resolved", note: string) {
   return wrap((admin) => updateEscalation(orderId, status, note || null, admin));
+}
+
+/** Sends a failed delivery back out. The failed attempt stays billed. */
+export async function returnToDeliveryAction(orderId: string, note: string) {
+  return wrap((admin) => returnToDelivery(orderId, "admin", admin, note || null));
 }

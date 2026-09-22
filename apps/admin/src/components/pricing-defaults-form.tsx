@@ -6,13 +6,14 @@ import { PRICED_DELIVERY_TYPES, deliveryTypeLabel, type PricedDeliveryType } fro
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Field, FormError, Input, toast } from "@getmed/ui";
 import { savePricingDefaults } from "@/lib/actions/pricing";
 
-export function PricingDefaultsForm({ defaults }: { defaults: Record<PricedDeliveryType, number> }) {
+export function PricingDefaultsForm({ defaults, failedDeliveryPercent }: { defaults: Record<PricedDeliveryType, number>; failedDeliveryPercent: number }) {
   const router = useRouter();
   const [values, setValues] = useState<Record<PricedDeliveryType, string>>({
     local: String(defaults.local),
     gta: String(defaults.gta),
     extended: String(defaults.extended),
   });
+  const [failedPercent, setFailedPercent] = useState(String(failedDeliveryPercent));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -33,6 +34,7 @@ export function PricingDefaultsForm({ defaults }: { defaults: Record<PricedDeliv
                 local: values.local,
                 gta: values.gta,
                 extended: values.extended,
+                failedDeliveryPercent: failedPercent,
               });
               if (r.ok) {
                 toast.success("Default prices saved");
@@ -59,6 +61,28 @@ export function PricingDefaultsForm({ defaults }: { defaults: Record<PricedDeliv
                 </div>
               </Field>
             ))}
+          </div>
+          <div className="border-t border-ink-200 pt-4">
+            <Field
+              label="Failed delivery charge"
+              htmlFor="failed-percent"
+              hint="Share of the quoted fee billed when a driver marks a delivery failed — the trip was still made. Set 0 to make failed attempts free."
+              className="max-w-xs"
+            >
+              <div className="relative">
+                <Input
+                  id="failed-percent"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="1"
+                  className="pr-9"
+                  value={failedPercent}
+                  onChange={(e) => setFailedPercent(e.target.value)}
+                />
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-ink-500">%</span>
+              </div>
+            </Field>
           </div>
           <Button type="submit" loading={pending} loadingText="Saving…">Save defaults</Button>
         </form>

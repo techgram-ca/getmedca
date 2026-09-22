@@ -34,7 +34,9 @@ export async function dashboardStats(db: ServiceClient, pharmacyId: string) {
     visibleOrders(db, pharmacyId).gte("created_at", startOfDay),
     visibleOrders(db, pharmacyId).gte("created_at", weekAgo),
     db.from("consultation_requests").select("id", { count: "exact", head: true }).eq("pharmacy_id", pharmacyId).eq("status", "new").not("phone_verified_at", "is", null),
-    db.from("orders").select("delivery_fee_charged").eq("pharmacy_id", pharmacyId).eq("status", "delivered").gte("delivered_at", monthStart),
+    // Billed from order_charges: a failed attempt is charged too, and a retried
+    // order is charged once per trip.
+    db.from("order_charges").select("amount, kind").eq("pharmacy_id", pharmacyId).gte("created_at", monthStart),
     db.from("orders").select("phone_verified_at, accepted_at").eq("pharmacy_id", pharmacyId).not("accepted_at", "is", null).gte("created_at", weekAgo),
   ]);
 
@@ -49,8 +51,9 @@ export async function dashboardStats(db: ServiceClient, pharmacyId: string) {
     todayCount: todayRes.data?.length ?? 0,
     weekCount: weekRes.data?.length ?? 0,
     pendingConsults: consultsRes.count ?? 0,
-    monthOwed: (deliveredRes.data ?? []).reduce((s, o) => s + Number(o.delivery_fee_charged ?? 0), 0),
-    monthDelivered: deliveredRes.data?.length ?? 0,
+    monthOwed: (deliveredRes.data ?? []).reduce((s, c) => s + Number(c.amount ?? 0), 0),
+    monthDelivered: (deliveredRes.data ?? []).filter((c) => c.kind === "delivery").length,
+    monthFailed: (deliveredRes.data ?? []).filter((c) => c.kind === "failed_delivery").length,
     avgAcceptMin,
   };
 }

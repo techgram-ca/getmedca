@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { FileText, Lock } from "lucide-react";
 import { requirePharmacy } from "@getmed/core/auth";
 import { formatCurrency, formatDate, formatDateOnly, shortId, statusLabel } from "@getmed/core/format";
+import { loadDeliveryProof, orderCharges } from "@getmed/core/orders";
 import { pharmacyCanModify } from "@getmed/core/orders/state-machine";
 import { deliveryTypeLabel } from "@getmed/core/pricing";
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader, StatusBadge } from "@getmed/ui";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, DeliveryProofCard, PageHeader, StatusBadge } from "@getmed/ui";
 import { OrderActions } from "@/components/order-actions";
+import { RetryDelivery } from "@/components/retry-delivery";
 import { SlaCountdown } from "@/components/sla-countdown";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
@@ -14,11 +16,13 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
   const { pharmacy, db } = await requirePharmacy();
   const { data: o } = await db.from("orders").select("*").eq("id", orderId).eq("pharmacy_id", pharmacy.id).not("phone_verified_at", "is", null).maybeSingle();
   if (!o) notFound();
-  const [{ data: events }, { data: driver }, { data: pod }] = await Promise.all([
+  const [{ data: events }, { data: driver }, proof, charges] = await Promise.all([
     db.from("order_events").select("*").eq("order_id", o.id).order("created_at"),
     o.assigned_driver_id ? db.from("drivers").select("name, phone, vehicle_make, vehicle_model, vehicle_color").eq("id", o.assigned_driver_id).maybeSingle() : Promise.resolve({ data: null }),
-    db.from("proof_of_delivery").select("id").eq("order_id", o.id).maybeSingle(),
+    loadDeliveryProof(db, o.id),
+    orderCharges(db, o.id),
   ]);
+  const billed = charges.reduce((sum, c) => sum + c.amount, 0);
   const locked = !pharmacyCanModify(o.status);
 
   return (
@@ -29,9 +33,14 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         actions={o.status === "pending" ? <SlaCountdown since={o.phone_verified_at ?? o.created_at} /> : null}
       />
       {locked && o.status === "picked_up" ? <Alert tone="info" className="mb-6"><span className="inline-flex items-center gap-2"><Lock className="size-4" /> The driver has picked up this order. It can no longer be modified or cancelled.</span></Alert> : null}
-      {o.status === "rejected" || o.status === "cancelled" || o.status === "timed_out" || o.status === "failed" ? (
+      {o.status === "rejected" || o.status === "cancelled" || o.status === "timed_out" ? (
         <Alert tone="warning" className="mb-6" title={`${statusLabel(o.status)} — GetMed support is handling the patient`}>
-          {o.rejection_reason ?? o.cancellation_reason ?? o.failure_reason ?? "No pharmacy response within the SLA."}
+          {o.rejection_reason ?? o.cancellation_reason ?? "No pharmacy response within the SLA."}
+        </Alert>
+      ) : null}
+      {o.status === "failed" ? (
+        <Alert tone="warning" className="mb-6" title="Delivery failed — GetMed support is contacting the patient">
+          {o.failure_reason ?? "No reason recorded."}
         </Alert>
       ) : null}
 
@@ -39,8 +48,16 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         <div className="space-y-6">
           <Card>
             <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
-            <CardContent><OrderActions orderId={o.id} status={o.status} /></CardContent>
+            <CardContent>
+              {o.status === "failed" ? (
+                <RetryDelivery orderId={o.id} attempt={o.delivery_attempt} />
+              ) : (
+                <OrderActions orderId={o.id} status={o.status} />
+              )}
+            </CardContent>
           </Card>
+
+          {proof ? <DeliveryProofCard proof={proof} capturedAtLabel={formatDate(proof.capturedAt)} /> : null}
 
           <Card>
             <CardHeader><CardTitle>Patient</CardTitle></CardHeader>
@@ -86,7 +103,22 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
               <Row k="Notes" v={o.delivery_notes ?? "—"} />
               <Row k="Driver" v={driver ? `${driver.name} · ${driver.phone}${driver.vehicle_make ? ` · ${[driver.vehicle_color, driver.vehicle_make, driver.vehicle_model].filter(Boolean).join(" ")}` : ""}` : "Not assigned yet"} />
               <Row k="Delivery type" v={o.delivery_type ? `${deliveryTypeLabel(o.delivery_type)}${o.delivery_fee_charged != null ? ` · ${formatCurrency(Number(o.delivery_fee_charged))}` : ""}` : "Not set yet"} />
-              <Row k="Proof of delivery" v={pod ? <Badge tone="success">Captured</Badge> : "—"} />
+              <Row k="Attempt" v={o.delivery_attempt > 1 ? `Attempt ${o.delivery_attempt}` : "First attempt"} />
+              <Row
+                k="Billed"
+                v={charges.length ? (
+                  <span>
+                    {formatCurrency(billed)}
+                    {charges.some((c) => c.kind === "failed_delivery") ? (
+                      <span className="block text-xs text-ink-500">
+                        includes {charges.filter((c) => c.kind === "failed_delivery").length} failed attempt
+                        {charges.filter((c) => c.kind === "failed_delivery").length === 1 ? "" : "s"}
+                      </span>
+                    ) : null}
+                  </span>
+                ) : "Not billed yet"}
+              />
+              <Row k="Proof of delivery" v={proof ? <Badge tone="success">Captured</Badge> : "—"} />
             </CardContent>
           </Card>
         </div>

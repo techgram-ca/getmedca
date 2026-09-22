@@ -5,13 +5,14 @@ import { deliverOrder } from "@getmed/core/orders";
 import { uploadDataUrl, uploadPrivate } from "@getmed/core/storage";
 import { handler } from "@/lib/api";
 
-/** Proof of delivery: photo + signature → private bucket → status delivered (fee snapshotted). */
+/** Proof of delivery: photo + signature + optional note → private bucket → status delivered. */
 export const POST = handler(async (req: Request, ctx: { params: Promise<{ orderId: string }> }) => {
   const { orderId } = await ctx.params;
   const { driver, db } = await requireDriver();
   const fd = await req.formData();
   const photo = fd.get("photo");
   const signature = fd.get("signature");
+  const note = typeof fd.get("note") === "string" ? String(fd.get("note")).slice(0, 500) : null;
   if (!(photo instanceof File) || photo.size === 0) throw new AppError("A delivery photo is required");
   if (typeof signature !== "string" || !signature.startsWith("data:image/")) throw new AppError("A signature is required");
 
@@ -19,6 +20,6 @@ export const POST = handler(async (req: Request, ctx: { params: Promise<{ orderI
     uploadPrivate(db, "proof-of-delivery", `${orderId}/photo`, photo, true),
     uploadDataUrl(db, "proof-of-delivery", `${orderId}/signature`, signature),
   ]);
-  const order = await deliverOrder(orderId, driver.id, { photoPath, signaturePath }, { db });
+  const order = await deliverOrder(orderId, driver.id, { photoPath, signaturePath, note }, { db });
   return NextResponse.json({ ok: true, status: order.status });
 });

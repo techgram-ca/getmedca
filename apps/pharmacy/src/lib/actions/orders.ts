@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requirePharmacy } from "@getmed/core/auth";
 import { AppError } from "@getmed/core/errors";
-import { acceptOrder, cancelOrder, createManualOrder, markReady, rejectOrder } from "@getmed/core/orders";
+import { acceptOrder, cancelOrder, createManualOrder, markReady, rejectOrder, returnToDelivery } from "@getmed/core/orders";
 import { manualOrdersSchema } from "@getmed/core/validation";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -31,6 +31,11 @@ export async function markReadyAction(orderId: string) {
 }
 export async function cancelOrderAction(orderId: string, reason: string) {
   return run((pid) => cancelOrder(orderId, pid, reason));
+}
+
+/** Sends a failed delivery back out. The failed attempt stays billed. */
+export async function returnToDeliveryAction(orderId: string, note: string) {
+  return run((pid) => returnToDelivery(orderId, "pharmacy", pid, note || null));
 }
 
 export type ManualOrdersResult =
