@@ -3,6 +3,7 @@ import type { DeliveryType, OrderInsert, OrderRow, OrderStatus } from "@getmed/d
 import { AppError, ForbiddenError, InvalidTransitionError, NotFoundError } from "../errors";
 import { shortId, statusLabel } from "../format";
 import { inngest, orderCreated, orderResponded } from "../inngest/client";
+import { ensureOrderRoute } from "./distance";
 import { adminTarget, notify } from "../notifications/dispatch";
 import { pushToDriver } from "../notifications/push";
 import { deliveryTypeLabel, resolvePricing, type PricedDeliveryType } from "../pricing";
@@ -142,6 +143,10 @@ export async function activateOrder(orderId: string, ctx: Ctx = {}): Promise<Ord
     inngest.send(orderCreated.create({ orderId, slaMinutes: settings.sla_minutes })).catch((e) => {
       console.error("[inngest] failed to schedule SLA timer", e instanceof Error ? e.message : e);
     }),
+    // Routing must never block an order; the admin page recomputes if missing.
+    ensureOrderRoute(db, orderId).catch((e) => {
+      console.error("[route] failed to compute delivery distance", e instanceof Error ? e.message : e);
+    }),
     pharmacy
       ? notify(
           db,
@@ -209,12 +214,17 @@ export async function createManualOrder(pharmacyId: string, userId: string, inpu
     { order_id: data.id, from_status: null, to_status: "pending", action: "create_manual", actor_role: "pharmacy", actor_id: pharmacyId },
     { order_id: data.id, from_status: "pending", to_status: "accepted", action: "accept", actor_role: "pharmacy", actor_id: pharmacyId, note: "Entered manually by pharmacy" },
   ]);
-  await notify(db, "order.status", { phone: data.patient_phone }, {
-    orderId: shortId(data.id),
-    status: statusLabel("accepted").toLowerCase(),
-    pharmacyName: pharmacy.name,
-    estimatedTime: pharmacy.estimated_delivery_time ?? "same day",
-  }, { channels: ["sms"] });
+  await Promise.all([
+    notify(db, "order.status", { phone: data.patient_phone }, {
+      orderId: shortId(data.id),
+      status: statusLabel("accepted").toLowerCase(),
+      pharmacyName: pharmacy.name,
+      estimatedTime: pharmacy.estimated_delivery_time ?? "same day",
+    }, { channels: ["sms"] }),
+    ensureOrderRoute(db, data.id).catch((e) => {
+      console.error("[route] failed to compute delivery distance", e instanceof Error ? e.message : e);
+    }),
+  ]);
   return data;
 }
 

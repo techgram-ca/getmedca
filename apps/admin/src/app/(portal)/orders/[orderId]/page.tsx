@@ -2,9 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ShieldOff } from "lucide-react";
 import { requireAdmin } from "@getmed/core/auth";
-import { formatCurrency, formatDate, shortId, statusLabel } from "@getmed/core/format";
+import { formatCurrency, formatDate, formatDistance, formatDuration, shortId, statusLabel } from "@getmed/core/format";
 import { deliveryTypeLabel, resolvePricing } from "@getmed/core/pricing";
 import { Alert, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader, StatusBadge } from "@getmed/ui";
+import { DeliveryDistance } from "@/components/delivery-distance";
 import { DeliveryTypePicker } from "@/components/delivery-type-picker";
 import { DriverAssign } from "@/components/driver-assign";
 import { EscalationForm } from "@/components/escalation-form";
@@ -31,7 +32,12 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
   return (
     <div>
       <PageHeader title={<span className="flex items-center gap-3"><span className="font-mono">{shortId(o!.id)}</span><StatusBadge status={o!.status} />{o!.source === "manual" ? <Badge tone="accent">Manual</Badge> : null}</span>} description={`${o!.order_type === "transfer" ? "Transfer" : "New prescription"} · ${o!.pharmacy?.name ?? "—"} · created ${formatDate(o!.created_at)}`} />
-      <Alert tone="info" className="mb-6"><span className="inline-flex items-center gap-2"><ShieldOff className="size-4" /> PHI redacted: prescription files, insurance, health card, date of birth and street address are not accessible from the admin portal.</span></Alert>
+      <Alert tone="info" className="mb-6">
+        <span className="inline-flex items-center gap-2">
+          <ShieldOff className="size-4" />
+          PHI redacted: prescription files, insurance details, health card and date of birth are not accessible from the admin portal.
+        </span>
+      </Alert>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
@@ -51,7 +57,16 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
               <CardTitle>1 · Delivery type &amp; price</CardTitle>
               <CardDescription>Fixes what this pharmacy is charged for this delivery. Required before a driver can be assigned.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-5">
+              <DeliveryDistance
+                orderId={o!.id}
+                address={[o!.delivery_address_line, o!.delivery_city, o!.delivery_postal_code].filter(Boolean).join(", ") || null}
+                route={{
+                  distanceM: o!.delivery_distance_m != null ? Number(o!.delivery_distance_m) : null,
+                  durationS: o!.delivery_duration_s,
+                  avoidsTolls: o!.delivery_route_avoids_tolls,
+                }}
+              />
               <DeliveryTypePicker
                 orderId={o!.id}
                 current={{ type: o!.delivery_type, fee: o!.delivery_fee_charged != null ? Number(o!.delivery_fee_charged) : null }}
@@ -83,7 +98,9 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
               <Row k="Patient" v={o!.patient_name} /><Row k="Phone" v={o!.patient_phone} />
               <Row k="Source" v={o!.source === "manual" ? "Entered manually by the pharmacy" : "Submitted online by the patient"} />
               <Row k="Pharmacy" v={<Link href={`/pharmacies/${o!.pharmacy_id}`} className="text-brand-700 hover:underline">{o!.pharmacy?.name ?? "—"}</Link>} />
-              <Row k="Delivery area" v={[o!.delivery_city, o!.delivery_postal_code].filter(Boolean).join(" ") || "—"} />
+              <Row k="Delivery address" v={[o!.delivery_address_line, o!.delivery_city, o!.delivery_postal_code].filter(Boolean).join(", ") || "—"} />
+              <Row k="Delivery notes" v={o!.delivery_notes ?? "—"} />
+              <Row k="Distance" v={o!.delivery_distance_m != null ? `${formatDistance(Number(o!.delivery_distance_m))}${o!.delivery_duration_s != null ? ` · ${formatDuration(o!.delivery_duration_s)}` : ""}` : "—"} />
               <Row k="Driver" v={o!.driver ? <Link href={`/drivers/${o!.assigned_driver_id}`} className="text-brand-700 hover:underline">{o!.driver.name}</Link> : "—"} />
               <Row k="Delivery type" v={o!.delivery_type ? deliveryTypeLabel(o!.delivery_type) : "Not set"} />
               <Row k="Delivery fee charged" v={o!.delivery_fee_charged != null ? formatCurrency(o!.delivery_fee_charged) : "—"} />

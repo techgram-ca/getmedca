@@ -44,9 +44,15 @@ everywhere, Supabase Postgres/PostGIS, Inngest for durable workflows, Mapbox for
   before assigning a driver, which resolves the price and snapshots it onto
   `orders.delivery_fee_charged`, so later pricing changes never reprice a quoted order. Invoices
   group delivered orders by type.
+- **Stored delivery distance.** `ensureOrderRoute` resolves the pharmacy → patient driving distance
+  once via the Mapbox Directions API (toll roads excluded where a toll-free route exists; falls back
+  to the normal route and flags `delivery_route_avoids_tolls = false` otherwise) and caches it on the
+  order row. It is computed automatically when an order becomes visible to its pharmacy, and shown
+  to the admin — recalculable on demand — alongside the delivery-type picker.
 - **Admin PHI redaction.** Admin reads use the `orders_admin` view, which has no prescription /
-  insurance / health-card / DOB / street-address columns, and `redactForAdmin()` exists for any
-  code path that starts from a full row. Drivers use `orders_driver` (name, phone, address, notes only).
+  insurance / health-card / DOB columns, and `redactForAdmin()` exists for any code path that starts
+  from a full row. The delivery address *is* included — support needs it to route drivers and help
+  with failed deliveries. Drivers use `orders_driver` (name, phone, address, notes only).
 - **Discovery.** Geocode → PostGIS `pharmacies_near` (1.8× admin radius, straight line) → one batched
   Mapbox Matrix call (cached 5 min by rounded origin + pharmacy set) → filter by admin
   `search_radius_km` on real driving distance → sort.

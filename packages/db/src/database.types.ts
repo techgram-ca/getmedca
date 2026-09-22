@@ -150,6 +150,11 @@ export type OrderRow = {
   delivery_postal_code: string | null;
   delivery_location: unknown | null;
   delivery_notes: string | null;
+  /** Driving route pharmacy → patient, computed once and stored. */
+  delivery_distance_m: number | null;
+  delivery_duration_s: number | null;
+  delivery_route_avoids_tolls: boolean | null;
+  delivery_route_computed_at: string | null;
   allergies: string | null;
   prescription_file_path: string | null;
   insurance_provider: string | null;
@@ -328,7 +333,11 @@ export type PharmacyPublicRow = {
   gallery_paths: string[];
 };
 
-/** Admin projection: structurally excludes prescription / insurance / health-card / address-line / DOB. */
+/**
+ * Admin projection: carries order metadata, the patient's name, phone and
+ * delivery address (needed to route drivers and resolve failed deliveries),
+ * and structurally excludes prescription, insurance, health-card and DOB.
+ */
 export type OrderAdminRow = Pick<
   OrderRow,
   | "id"
@@ -363,6 +372,12 @@ export type OrderAdminRow = Pick<
   | "updated_at"
   | "source"
   | "delivery_type"
+  | "delivery_address_line"
+  | "delivery_notes"
+  | "delivery_distance_m"
+  | "delivery_duration_s"
+  | "delivery_route_avoids_tolls"
+  | "delivery_route_computed_at"
 >;
 
 export type OrderDriverRow = Pick<
@@ -440,6 +455,10 @@ export type Database = {
         Returns: PharmacyNearRow[];
       };
       bump_rate_limit: { Args: { p_key: string; p_window_seconds: number }; Returns: number };
+      order_route_points: {
+        Args: { p_order_id: string };
+        Returns: { from_lat: number; from_lng: number; to_lat: number; to_lng: number }[];
+      };
       is_admin: { Args: Record<string, never>; Returns: boolean };
       current_role_name: { Args: Record<string, never>; Returns: UserRole };
       owns_pharmacy: { Args: { p_pharmacy_id: string }; Returns: boolean };

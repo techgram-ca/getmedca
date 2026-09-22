@@ -35,6 +35,12 @@ migration, and the same change is folded into `fresh/`.
 | `fresh/seed.sql` | Reference data matching `fresh/init.sql` |
 | `migrations/0001_init.sql` | Original schema (frozen) |
 | `migrations/0002_delivery_pricing.sql` | Per-pharmacy delivery pricing |
+| `migrations/0003_delivery_distance.sql` | Stored driving distance per order, admin-visible delivery address |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
 After any schema change, regenerate the TypeScript types with `pnpm db:types`.
+
+`migrations/0003_delivery_distance.sql` adds `public.order_route_points`, a helper the app calls
+through the service-role client to read an order's pharmacy and delivery coordinates for routing.
+The actual route (distance, duration, toll status) is fetched from the Mapbox Directions API at
+request time and cached on the order row — see `packages/core/src/orders/distance.ts`.

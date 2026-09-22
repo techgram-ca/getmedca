@@ -259,6 +259,12 @@ create table public.orders (
   -- reassignment log (no UI)
   reassigned_at timestamptz,
   reassigned_by uuid references public.drivers (id),
+  -- driving distance pharmacy -> patient, computed once and stored (toll-free
+  -- where a toll-free route exists; see delivery_route_avoids_tolls)
+  delivery_distance_m numeric(10,1),
+  delivery_duration_s integer,
+  delivery_route_avoids_tolls boolean,
+  delivery_route_computed_at timestamptz,
   -- delivery pricing: type chosen by admin before assigning a driver,
   -- price snapshotted at that moment
   delivery_type public.delivery_type,
@@ -459,7 +465,10 @@ select
   escalated_at, escalation_status, escalation_note, escalation_resolved_at,
   reassigned_at, reassigned_by, delivery_fee_charged,
   accepted_at, ready_at, assigned_at, picked_up_at, delivered_at, failed_at,
-  rejected_at, cancelled_at, timed_out_at, created_at, updated_at
+  rejected_at, cancelled_at, timed_out_at, created_at, updated_at,
+  delivery_type,
+  delivery_address_line, delivery_notes,
+  delivery_distance_m, delivery_duration_s, delivery_route_avoids_tolls, delivery_route_computed_at
 from public.orders;
 
 -- ---------------------------------------------------------------------
@@ -506,6 +515,31 @@ as $$
     )
   order by 17
   limit 50;
+$$;
+
+-- Coordinates for an order's route. PostgREST returns geography columns as WKB
+-- hex, so the app reads them through st_x/st_y here (same pattern as
+-- pharmacies_near and the orders_driver view).
+create or replace function public.order_route_points(p_order_id uuid)
+returns table (
+  from_lat double precision,
+  from_lng double precision,
+  to_lat double precision,
+  to_lng double precision
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    st_y(p.location::geometry), st_x(p.location::geometry),
+    st_y(o.delivery_location::geometry), st_x(o.delivery_location::geometry)
+  from public.orders o
+  join public.pharmacies p on p.id = o.pharmacy_id
+  where o.id = p_order_id
+    and p.location is not null
+    and o.delivery_location is not null;
 $$;
 
 -- Rate limit helper: atomically bump a counter within a window.

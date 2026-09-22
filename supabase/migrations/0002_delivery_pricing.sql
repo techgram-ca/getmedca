@@ -76,12 +76,12 @@ create or replace view public.orders_admin
 with (security_invoker = true)
 as
 select
-  id, pharmacy_id, order_type, status, patient_name, patient_phone,
+  id, pharmacy_id, order_type, status, source, patient_name, patient_phone,
   delivery_city, delivery_postal_code,
   assigned_driver_id, rejection_reason, cancellation_reason, failure_reason,
   escalated_at, escalation_status, escalation_note, escalation_resolved_at,
   reassigned_at, reassigned_by, delivery_fee_charged,
   accepted_at, ready_at, assigned_at, picked_up_at, delivered_at, failed_at,
   rejected_at, cancelled_at, timed_out_at, created_at, updated_at,
-  source, delivery_type
+  delivery_type
 from public.orders;

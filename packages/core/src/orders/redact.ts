@@ -1,6 +1,12 @@
 import type { OrderAdminRow, OrderRow } from "@getmed/db/types";
 
-/** Keys the admin portal is allowed to receive. Everything else is PHI and is stripped. */
+/**
+ * Keys the admin portal is allowed to receive. Everything else is stripped.
+ *
+ * The delivery address is included: support assigns drivers and handles failed
+ * deliveries, and cannot do either without it. Prescription files, insurance,
+ * health card and date of birth remain excluded.
+ */
 export const ADMIN_ORDER_KEYS = [
   "id", "pharmacy_id", "order_type", "status", "patient_name", "patient_phone",
   "delivery_city", "delivery_postal_code", "assigned_driver_id",
@@ -9,6 +15,8 @@ export const ADMIN_ORDER_KEYS = [
   "reassigned_at", "reassigned_by", "delivery_fee_charged",
   "accepted_at", "ready_at", "assigned_at", "picked_up_at", "delivered_at", "failed_at",
   "rejected_at", "cancelled_at", "timed_out_at", "created_at", "updated_at", "source", "delivery_type",
+  "delivery_address_line", "delivery_notes",
+  "delivery_distance_m", "delivery_duration_s", "delivery_route_avoids_tolls", "delivery_route_computed_at",
 ] as const satisfies readonly (keyof OrderAdminRow)[];
 
 /**
