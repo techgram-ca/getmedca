@@ -10,8 +10,8 @@ export default async function SettingsPage() {
     <div className="max-w-2xl space-y-6">
       <PageHeader title="Settings" />
       <Card>
-        <CardHeader><CardTitle>Platform settings</CardTitle><CardDescription>Applied at query time — no reprocessing needed. The delivery fee is snapshotted onto each order when it's delivered, so past invoices never change.</CardDescription></CardHeader>
-        <CardContent><PlatformSettingsForm searchRadiusKm={Number(s.search_radius_km)} flatDeliveryFee={Number(s.flat_delivery_fee)} slaMinutes={s.sla_minutes} /></CardContent>
+        <CardHeader><CardTitle>Platform settings</CardTitle><CardDescription>Applied at query time — no reprocessing needed. Delivery prices live on the Pricing page.</CardDescription></CardHeader>
+        <CardContent><PlatformSettingsForm searchRadiusKm={Number(s.search_radius_km)} slaMinutes={s.sla_minutes} /></CardContent>
       </Card>
       <Card>
         <CardHeader><CardTitle>Admin account</CardTitle><CardDescription>Signed in as {session.email}. Single admin user.</CardDescription></CardHeader>

@@ -1,10 +1,11 @@
 import { createServiceClient, type ServiceClient } from "@getmed/db/service";
-import type { OrderInsert, OrderRow, OrderStatus } from "@getmed/db/types";
+import type { DeliveryType, OrderInsert, OrderRow, OrderStatus } from "@getmed/db/types";
 import { AppError, ForbiddenError, InvalidTransitionError, NotFoundError } from "../errors";
 import { shortId, statusLabel } from "../format";
 import { inngest, orderCreated, orderResponded } from "../inngest/client";
 import { adminTarget, notify } from "../notifications/dispatch";
 import { pushToDriver } from "../notifications/push";
+import { deliveryTypeLabel, resolvePricing, type PricedDeliveryType } from "../pricing";
 import { getPlatformSettings } from "../settings";
 import { ESCALATION_STATUSES, TRANSITIONS, canTransition, type Actor, type OrderAction } from "./state-machine";
 
@@ -292,10 +293,55 @@ export async function cancelOrder(orderId: string, pharmacyId: string, reason: s
   return updated;
 }
 
+/** Statuses at which the admin may still set or change the delivery type. */
+const PRICEABLE_STATUSES: OrderStatus[] = ["accepted", "ready_for_delivery", "assigned"];
+
+export type DeliveryTypeInput = { type: DeliveryType; customPrice?: number | null };
+
+/**
+ * Admin sets the delivery type for an order, which fixes its price.
+ *
+ * Local/GTA/Extended resolve to the pharmacy's configured price (or the
+ * platform default). Custom takes a price typed in for this order only. The
+ * resolved price is snapshotted immediately, so later pricing changes never
+ * reprice an order that has already been quoted.
+ */
+export async function setDeliveryType(orderId: string, input: DeliveryTypeInput, adminId: string, ctx: Ctx = {}) {
+  const db = dbOf(ctx);
+  const order = await loadOrder(db, orderId);
+  if (!PRICEABLE_STATUSES.includes(order.status)) {
+    throw new AppError("The delivery type can only be set before the driver picks the order up", 409);
+  }
+
+  let price: number;
+  if (input.type === "custom") {
+    if (input.customPrice == null || !Number.isFinite(input.customPrice) || input.customPrice < 0) {
+      throw new AppError("Enter a price for this custom delivery");
+    }
+    price = Math.round(input.customPrice * 100) / 100;
+  } else {
+    const pricing = await resolvePricing(db, order.pharmacy_id);
+    price = pricing[input.type as PricedDeliveryType].price;
+  }
+
+  const { data, error } = await db
+    .from("orders")
+    .update({ delivery_type: input.type, delivery_type_set_at: new Date().toISOString(), delivery_fee_charged: price })
+    .eq("id", orderId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  await logEvent(db, order, "set_delivery_type", null, "admin", adminId, `${deliveryTypeLabel(input.type)} · $${price.toFixed(2)}`);
+  return data;
+}
+
 /** Admin manually assigns (or re-assigns before pickup) a driver. */
 export async function assignDriver(orderId: string, driverId: string, adminId: string, ctx: Ctx = {}) {
   const db = dbOf(ctx);
   const order = await loadOrder(db, orderId);
+  if (!order.delivery_type) {
+    throw new AppError("Choose a delivery type before assigning a driver", 409, "delivery_type_required");
+  }
   const { data: driver } = await db.from("drivers").select("*").eq("id", driverId).eq("active", true).maybeSingle();
   if (!driver) throw new NotFoundError("Driver not found or inactive");
   const updated = await transition(db, order, "assign_driver", "admin", adminId, {
@@ -331,7 +377,10 @@ export async function pickUpOrder(orderId: string, driverId: string, ctx: Ctx = 
   return updated;
 }
 
-/** Driver completes delivery with proof. Snapshots the platform flat fee onto the order. */
+/**
+ * Driver completes delivery with proof. The price was fixed when the admin set
+ * the delivery type, so it is not recalculated here.
+ */
 export async function deliverOrder(
   orderId: string,
   driverId: string,
@@ -341,10 +390,8 @@ export async function deliverOrder(
   const db = dbOf(ctx);
   const order = await loadOrder(db, orderId);
   assertDriverAssigned(order, driverId);
-  const settings = await getPlatformSettings(db);
   const updated = await transition(db, order, "deliver", "driver", driverId, {
     delivered_at: new Date().toISOString(),
-    delivery_fee_charged: settings.flat_delivery_fee,
   });
   await db.from("proof_of_delivery").upsert(
     { order_id: orderId, photo_path: proof.photoPath, signature_path: proof.signaturePath, driver_id: driverId },

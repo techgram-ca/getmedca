@@ -1,5 +1,6 @@
 import { requireAdmin } from "@getmed/core/auth";
 import { formatCurrency } from "@getmed/core/format";
+import { DELIVERY_TYPES, deliveryTypeLabel } from "@getmed/core/pricing";
 import { Card, CardContent, CardHeader, CardTitle, PageHeader, Stat, TBody, TD, TH, THead, TR, Table } from "@getmed/ui";
 import { ReportsCharts } from "@/components/reports-charts";
 
@@ -7,7 +8,7 @@ export default async function ReportsPage() {
   const { db } = await requireAdmin();
   const since = new Date(Date.now() - 90 * 86400000).toISOString();
   const [{ data: orders }, { data: pharmacies }, { data: consults }] = await Promise.all([
-    db.from("orders_admin").select("id, pharmacy_id, status, source, created_at, delivered_at, delivery_fee_charged").gte("created_at", since),
+    db.from("orders_admin").select("id, pharmacy_id, status, source, delivery_type, created_at, delivered_at, delivery_fee_charged").gte("created_at", since),
     db.from("pharmacies").select("id, name, status, approved_at").not("submitted_at", "is", null),
     db.from("consultation_requests").select("id, created_at").gte("created_at", since).not("phone_verified_at", "is", null),
   ]);
@@ -33,6 +34,20 @@ export default async function ReportsPage() {
   const quality = Object.entries(byPh).map(([id, b]) => ({ id, name: names.get(id) ?? "—", ...b, declineRate: b.total ? (b.rejected + b.timed_out) / b.total : 0, cancelRate: b.total ? b.cancelled / b.total : 0 })).sort((a, b) => b.total - a.total);
 
   const totalRevenue = series.reduce((s, d) => s + d.revenue, 0);
+
+  // Revenue split by the delivery type chosen when the driver was assigned.
+  const byType = new Map<string, { count: number; revenue: number }>();
+  for (const o of orders ?? []) {
+    if (o.status !== "delivered") continue;
+    const key = o.delivery_type ?? "uncategorised";
+    const entry = byType.get(key) ?? { count: 0, revenue: 0 };
+    entry.count += 1;
+    entry.revenue += Number(o.delivery_fee_charged ?? 0);
+    byType.set(key, entry);
+  }
+  const typeRows = [...DELIVERY_TYPES.map((t) => t.id), "uncategorised"]
+    .filter((key) => byType.has(key))
+    .map((key) => ({ key, label: key === "uncategorised" ? "Uncategorised" : deliveryTypeLabel(key as never), ...byType.get(key)! }));
   return (
     <div>
       <PageHeader title="Reports" description="Last 90 days." />
@@ -43,6 +58,26 @@ export default async function ReportsPage() {
         <Stat label="Consultations" value={consults?.length ?? 0} />
       </div>
       <ReportsCharts series={series} growth={growthSeries} />
+      <Card className="mt-6">
+        <CardHeader><CardTitle>Revenue by delivery type</CardTitle></CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <THead><TR><TH>Delivery type</TH><TH>Deliveries</TH><TH>Share</TH><TH className="text-right">Revenue</TH></TR></THead>
+            <TBody>
+              {typeRows.map((r) => (
+                <TR key={r.key}>
+                  <TD className="font-medium">{r.label}</TD>
+                  <TD>{r.count}</TD>
+                  <TD className="text-ink-500">{totalRevenue > 0 ? `${Math.round((r.revenue / totalRevenue) * 100)}%` : "—"}</TD>
+                  <TD className="text-right font-semibold">{formatCurrency(r.revenue)}</TD>
+                </TR>
+              ))}
+              {typeRows.length === 0 ? <TR><TD colSpan={4} className="text-center text-ink-500">No deliveries in range.</TD></TR> : null}
+            </TBody>
+          </Table>
+        </CardContent>
+      </Card>
+
       <Card className="mt-6">
         <CardHeader><CardTitle>Pharmacy quality</CardTitle></CardHeader>
         <CardContent className="p-0">

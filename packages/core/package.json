@@ -13,6 +13,7 @@
     "./validation": "./src/validation/index.ts",
     "./inngest": "./src/inngest/index.ts",
     "./invoices": "./src/invoices/index.ts",
+    "./pricing": "./src/pricing/index.ts",
     "./auth": "./src/auth/index.ts",
     "./settings": "./src/settings.ts",
     "./storage": "./src/storage.ts",

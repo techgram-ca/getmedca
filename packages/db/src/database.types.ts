@@ -32,6 +32,7 @@ export type NotificationChannel = "sms" | "email";
 export type FormAppliesTo = "new_order" | "transfer" | "consultation";
 export type OtpPurpose = "order" | "consultation";
 export type OrderSource = "online" | "manual";
+export type DeliveryType = "local" | "gta" | "extended" | "custom";
 
 export type ProfileRow = { id: string; role: UserRole; full_name: string | null; created_at: string };
 
@@ -174,6 +175,8 @@ export type OrderRow = {
   escalation_resolved_at: string | null;
   reassigned_at: string | null;
   reassigned_by: string | null;
+  delivery_type: DeliveryType | null;
+  delivery_type_set_at: string | null;
   delivery_fee_charged: number | null;
   accepted_at: string | null;
   ready_at: string | null;
@@ -273,8 +276,19 @@ export type NotificationTemplateRow = {
 export type PlatformSettingsRow = {
   id: number;
   search_radius_km: number;
-  flat_delivery_fee: number;
   sla_minutes: number;
+  /** Fallback prices used when a pharmacy has no override of its own. */
+  default_local_fee: number;
+  default_gta_fee: number;
+  default_extended_fee: number;
+  updated_at: string;
+};
+
+/** A pharmacy's override of a platform default. Custom is priced per order. */
+export type PharmacyDeliveryPricingRow = {
+  pharmacy_id: string;
+  delivery_type: Exclude<DeliveryType, "custom">;
+  price: number;
   updated_at: string;
 };
 
@@ -348,6 +362,7 @@ export type OrderAdminRow = Pick<
   | "created_at"
   | "updated_at"
   | "source"
+  | "delivery_type"
 >;
 
 export type OrderDriverRow = Pick<
@@ -411,6 +426,7 @@ export type Database = {
       form_field_config: Tbl<FormFieldConfigRow>;
       notification_templates: Tbl<NotificationTemplateRow, Pick<NotificationTemplateRow, "event_type" | "channel" | "template_text"> & Partial<NotificationTemplateRow>>;
       platform_settings: Tbl<PlatformSettingsRow>;
+      pharmacy_delivery_pricing: Tbl<PharmacyDeliveryPricingRow, PharmacyDeliveryPricingRow>;
       support_messages: Tbl<SupportMessageRow, Pick<SupportMessageRow, "name" | "message"> & Partial<SupportMessageRow>>;
     };
     Views: {
@@ -442,6 +458,7 @@ export type Database = {
       form_applies_to: FormAppliesTo;
       otp_purpose: OtpPurpose;
       order_source: OrderSource;
+      delivery_type: DeliveryType;
     };
     CompositeTypes: Record<string, never>;
   };

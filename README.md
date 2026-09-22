@@ -15,7 +15,7 @@ everywhere, Supabase Postgres/PostGIS, Inngest for durable workflows, Mapbox for
 | `packages/core` | Domain layer: order state machine + service, notifications, OTP, Mapbox discovery, invoices, Inngest functions, admin PHI redaction, zod validation |
 | `packages/db` | Typed Supabase clients (browser / server / service-role / proxy) and hand-authored `Database` types |
 | `packages/ui` | Tailwind v4 design tokens and shared components (shadcn-style), the single Mapbox address autocomplete, Turnstile widget |
-| `supabase/` | Migration (`0001_init.sql`), seed, local config |
+| `supabase/` | `fresh/` for a new database, `migrations/` for an existing one — see `supabase/README.md` |
 
 ## Architecture notes
 
@@ -38,8 +38,12 @@ everywhere, Supabase Postgres/PostGIS, Inngest for durable workflows, Mapbox for
 - **30-minute SLA.** `activateOrder` (after OTP) emits `order/created`; the Inngest function
   `order-sla-timer` waits for `order/responded` and otherwise calls `timeOutOrder`. Served from the
   patient app at `/api/inngest`.
-- **Flat fee.** `deliverOrder` snapshots `platform_settings.flat_delivery_fee` onto
-  `orders.delivery_fee_charged`; invoices sum that column over delivered orders per month.
+- **Delivery pricing.** Four delivery types: Local, GTA and Extended carry a configured price;
+  Custom is priced per order. Each pharmacy may override the platform defaults in
+  `pharmacy_delivery_pricing`; without an override the default applies. The admin picks the type
+  before assigning a driver, which resolves the price and snapshots it onto
+  `orders.delivery_fee_charged`, so later pricing changes never reprice a quoted order. Invoices
+  group delivered orders by type.
 - **Admin PHI redaction.** Admin reads use the `orders_admin` view, which has no prescription /
   insurance / health-card / DOB / street-address columns, and `redactForAdmin()` exists for any
   code path that starts from a full row. Drivers use `orders_driver` (name, phone, address, notes only).

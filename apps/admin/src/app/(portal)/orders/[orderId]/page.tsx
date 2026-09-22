@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { ShieldOff } from "lucide-react";
 import { requireAdmin } from "@getmed/core/auth";
 import { formatCurrency, formatDate, shortId, statusLabel } from "@getmed/core/format";
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader, StatusBadge } from "@getmed/ui";
+import { deliveryTypeLabel, resolvePricing } from "@getmed/core/pricing";
+import { Alert, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader, StatusBadge } from "@getmed/ui";
+import { DeliveryTypePicker } from "@/components/delivery-type-picker";
 import { DriverAssign } from "@/components/driver-assign";
 import { EscalationForm } from "@/components/escalation-form";
 import { adminOrders, escalationReason, withNames } from "@/lib/queries";
@@ -21,6 +23,10 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
   ]);
   const r = escalationReason(o!);
   const canAssign = o!.status === "ready_for_delivery" || o!.status === "assigned";
+  const pricing = await resolvePricing(db, o!.pharmacy_id);
+  // The price is settled before pickup; afterwards it is final.
+  const pricingLocked = !["accepted", "ready_for_delivery", "assigned"].includes(o!.status);
+  const needsDeliveryType = !o!.delivery_type;
 
   return (
     <div>
@@ -41,9 +47,32 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
           ) : null}
 
           <Card>
-            <CardHeader><CardTitle>Driver assignment</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>1 · Delivery type &amp; price</CardTitle>
+              <CardDescription>Fixes what this pharmacy is charged for this delivery. Required before a driver can be assigned.</CardDescription>
+            </CardHeader>
             <CardContent>
-              {canAssign ? <DriverAssign orderId={o!.id} currentDriverId={o!.assigned_driver_id} drivers={drivers ?? []} /> : <p className="text-sm text-ink-500">{o!.driver ? `Assigned to ${o!.driver.name}.` : "Drivers can be assigned once the pharmacy marks the order ready for delivery."}</p>}
+              <DeliveryTypePicker
+                orderId={o!.id}
+                current={{ type: o!.delivery_type, fee: o!.delivery_fee_charged != null ? Number(o!.delivery_fee_charged) : null }}
+                pricing={pricing}
+                locked={pricingLocked}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>2 · Driver assignment</CardTitle></CardHeader>
+            <CardContent>
+              {needsDeliveryType ? (
+                <Alert tone="warning">Choose a delivery type above before assigning a driver.</Alert>
+              ) : canAssign ? (
+                <DriverAssign orderId={o!.id} currentDriverId={o!.assigned_driver_id} drivers={drivers ?? []} />
+              ) : (
+                <p className="text-sm text-ink-500">
+                  {o!.driver ? `Assigned to ${o!.driver.name}.` : "Drivers can be assigned once the pharmacy marks the order ready for delivery."}
+                </p>
+              )}
               {o!.reassigned_at ? <p className="mt-2 text-xs text-ink-500">Reassigned driver-to-driver {formatDate(o!.reassigned_at)}.</p> : null}
             </CardContent>
           </Card>
@@ -56,6 +85,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
               <Row k="Pharmacy" v={<Link href={`/pharmacies/${o!.pharmacy_id}`} className="text-brand-700 hover:underline">{o!.pharmacy?.name ?? "—"}</Link>} />
               <Row k="Delivery area" v={[o!.delivery_city, o!.delivery_postal_code].filter(Boolean).join(" ") || "—"} />
               <Row k="Driver" v={o!.driver ? <Link href={`/drivers/${o!.assigned_driver_id}`} className="text-brand-700 hover:underline">{o!.driver.name}</Link> : "—"} />
+              <Row k="Delivery type" v={o!.delivery_type ? deliveryTypeLabel(o!.delivery_type) : "Not set"} />
               <Row k="Delivery fee charged" v={o!.delivery_fee_charged != null ? formatCurrency(o!.delivery_fee_charged) : "—"} />
               <Row k="Proof of delivery" v={pod ? <Badge tone="success">Captured {formatDate(pod.created_at)}</Badge> : "—"} />
             </CardContent>
