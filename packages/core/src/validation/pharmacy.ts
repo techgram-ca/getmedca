@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { phoneSchema } from "./common";
+import { optionalNumberField, phoneSchema } from "./common";
+import { normalizeHexColor } from "../theme";
 
 export const hoursSchema = z.record(
   z.enum(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]),
@@ -28,7 +29,7 @@ export const pharmacistSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().trim().min(2).max(120),
   credentials: z.string().trim().max(200).optional().or(z.literal("")),
-  yearsExperience: z.coerce.number().int().min(0).max(70).optional().nullable(),
+  yearsExperience: optionalNumberField(z.number().int().min(0).max(70), "Enter years of experience as a number").optional(),
   bio: z.string().trim().max(1000).optional().or(z.literal("")),
   languages: z.array(z.string().trim().max(40)).max(10).default([]),
   isMain: z.boolean().default(false),
@@ -39,13 +40,13 @@ export const serviceSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().trim().min(2).max(120),
   description: z.string().trim().max(500).optional().or(z.literal("")),
-  price: z.coerce.number().min(0).max(10000).optional().nullable(),
-  durationMinutes: z.coerce.number().int().min(0).max(600).optional().nullable(),
+  price: optionalNumberField(z.number().min(0).max(10000), "Enter a price, for example 25.00").optional(),
+  durationMinutes: optionalNumberField(z.number().int().min(0).max(600), "Enter a duration in minutes").optional(),
 });
 
 export const signupStep5Schema = z.object({
   hours: hoursSchema,
-  deliveryRadiusKm: z.coerce.number().min(0).max(200).optional().nullable(),
+  deliveryRadiusKm: optionalNumberField(z.number().min(0).max(200), "Enter a delivery radius in km").optional(),
   estimatedDeliveryTime: z.string().trim().max(60).optional().or(z.literal("")),
   offersDelivery: z.boolean().default(true),
   offersTransfer: z.boolean().default(true),
@@ -55,9 +56,30 @@ export const signupStep5Schema = z.object({
   issueIds: z.array(z.string().uuid()).max(100).default([]),
 });
 
+/**
+ * The one colour a pharmacy picks for its public page. Normalised to `#rrggbb`
+ * so it matches the column's check constraint and the palette maths; blank
+ * means "no pick", and the page falls back to the GetMed teal.
+ */
+export const themeColorSchema = z
+  .string()
+  .trim()
+  .transform((v, ctx) => {
+    if (v === "") return null;
+    const hex = normalizeHexColor(v);
+    if (!hex) {
+      ctx.addIssue({ code: "custom", message: "Enter a colour as a hex code, for example #2a9d8f" });
+      return z.NEVER;
+    }
+    return hex;
+  })
+  .nullable()
+  .optional();
+
 export const signupStep6Schema = z.object({
   tagline: z.string().trim().max(120).optional().or(z.literal("")),
   bio: z.string().trim().max(2000).optional().or(z.literal("")),
   logoPath: z.string().max(300).optional().nullable(),
   coverPath: z.string().max(300).optional().nullable(),
+  themeColor: themeColorSchema,
 });

@@ -30,3 +30,37 @@ export const addressSchema = z.object({
   lng: z.number().optional().nullable(),
 });
 export type AddressInput = z.infer<typeof addressSchema>;
+
+/**
+ * Numbers typed into a form arrive as strings, and a blank field arrives as "".
+ * `z.coerce.number()` turns "" (and null) into 0, so a field the user left
+ * alone silently saved a real zero — a blank delivery price became $0.00.
+ * These helpers decide "blank" first, so blank never reaches the coercion.
+ */
+const isBlank = (v: unknown) => v == null || (typeof v === "string" && v.trim() === "");
+
+function readNumber(message: string, blankIsNull: boolean) {
+  return z.unknown().transform((v, ctx) => {
+    if (isBlank(v)) {
+      if (blankIsNull) return null;
+      ctx.addIssue({ code: "custom", message });
+      return z.NEVER;
+    }
+    const n = typeof v === "string" ? Number(v.trim()) : v;
+    if (typeof n !== "number" || !Number.isFinite(n)) {
+      ctx.addIssue({ code: "custom", message });
+      return z.NEVER;
+    }
+    return n;
+  });
+}
+
+/** Optional number field: blank (or null/undefined) means "not set", never 0. */
+export function optionalNumberField(range: z.ZodNumber, message = "Enter a number") {
+  return readNumber(message, true).pipe(range.nullable());
+}
+
+/** Required number field: blank fails with `message` instead of becoming 0. */
+export function requiredNumberField(range: z.ZodNumber, message = "Enter a number") {
+  return readNumber(message, false).pipe(range);
+}

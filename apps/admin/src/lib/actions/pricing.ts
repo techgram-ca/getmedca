@@ -5,11 +5,14 @@ import { z } from "zod";
 import { requireAdmin } from "@getmed/core/auth";
 import { AppError } from "@getmed/core/errors";
 import { savePharmacyPricing } from "@getmed/core/pricing";
+import { optionalNumberField, requiredNumberField } from "@getmed/core/validation";
 import { updatePlatformSettings } from "@getmed/core/settings";
 
 export type PricingResult = { ok: true } | { ok: false; error: string };
 
-const money = z.coerce.number().min(0, "Price cannot be negative").max(1000, "That price looks too high");
+const PRICE_HINT = "Enter a price, for example 7.50";
+const range = z.number().min(0, "Price cannot be negative").max(1000, "That price looks too high");
+const money = requiredNumberField(range, PRICE_HINT);
 
 const defaultsSchema = z.object({ local: money, gta: money, extended: money });
 
@@ -31,8 +34,10 @@ export async function savePricingDefaults(input: unknown): Promise<PricingResult
   }
 }
 
-/** Blank clears the override so the pharmacy falls back to the default. */
-const overrideValue = z.union([money, z.literal("").transform(() => null), z.null()]);
+// Blank clears the override so the pharmacy falls back to the default. It must
+// stay null all the way to the database: a blank field that coerced to 0 used
+// to overwrite the untouched delivery types with a $0.00 price.
+const overrideValue = optionalNumberField(range, PRICE_HINT);
 const overridesSchema = z.object({
   pharmacyId: z.string().uuid(),
   local: overrideValue,

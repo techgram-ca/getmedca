@@ -68,6 +68,7 @@ export type PharmacyRow = {
   tagline: string | null;
   bio: string | null;
   gallery_paths: string[];
+  theme_color: string | null;
   signup_step: number;
   submitted_at: string | null;
   approved_at: string | null;
@@ -331,6 +332,7 @@ export type PharmacyPublicRow = {
   tagline: string | null;
   bio: string | null;
   gallery_paths: string[];
+  theme_color: string | null;
 };
 
 /**
