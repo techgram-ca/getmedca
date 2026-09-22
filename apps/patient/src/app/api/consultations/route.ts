@@ -32,12 +32,40 @@ export const POST = handler(async (req: Request) => {
   }
   if (!issueId && !input.serviceId) return json({ error: "Please choose a topic", fieldErrors: { issueSlug: "Choose a topic" } }, { status: 400 });
 
+  // The pharmacist comes from a URL the patient can edit, so it is only kept
+  // when it really is one of this pharmacy's own staff.
+  let pharmacistId: string | null = null;
+  if (input.pharmacistId) {
+    const { data: pharmacist } = await db
+      .from("pharmacists")
+      .select("id")
+      .eq("id", input.pharmacistId)
+      .eq("pharmacy_id", input.pharmacyId)
+      .maybeSingle();
+    pharmacistId = pharmacist?.id ?? null;
+  }
+
+  // Price is read here, never taken from the request body, and snapshotted so a
+  // later price change does not reprice a request already made.
+  let priceQuoted: number | null = null;
+  if (issueId) {
+    const { data: pricing } = await db
+      .from("pharmacy_issues")
+      .select("price")
+      .eq("pharmacy_id", input.pharmacyId)
+      .eq("issue_id", issueId)
+      .maybeSingle();
+    priceQuoted = pricing?.price == null ? null : Number(pricing.price);
+  }
+
   const { data: request, error } = await db
     .from("consultation_requests")
     .insert({
       pharmacy_id: input.pharmacyId,
       issue_id: issueId,
       service_id: input.serviceId || null,
+      pharmacist_id: pharmacistId,
+      price_quoted: priceQuoted,
       patient_name: input.patientName,
       patient_phone: input.patientPhone,
       description: input.description || null,

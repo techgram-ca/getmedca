@@ -163,6 +163,8 @@ create table public.pharmacists (
   created_at timestamptz not null default now()
 );
 create index pharmacists_pharmacy_idx on public.pharmacists (pharmacy_id);
+-- The consultation listing filters on the languages a pharmacist speaks.
+create index pharmacists_languages_gix on public.pharmacists using gin (languages);
 
 create table public.pharmacy_services (
   id uuid primary key default gen_random_uuid(),
@@ -189,6 +191,8 @@ create table public.issues (
 create table public.pharmacy_issues (
   pharmacy_id uuid not null references public.pharmacies (id) on delete cascade,
   issue_id uuid not null references public.issues (id) on delete cascade,
+  -- What this pharmacy charges for this topic. Null means no fee.
+  price numeric(10,2) constraint pharmacy_issues_price_non_negative check (price is null or price >= 0),
   primary key (pharmacy_id, issue_id)
 );
 
@@ -324,6 +328,10 @@ create table public.consultation_requests (
   pharmacy_id uuid not null references public.pharmacies (id),
   issue_id uuid references public.issues (id),
   service_id uuid references public.pharmacy_services (id),
+  -- Who the patient picked from the listing, and what they were quoted. The
+  -- price is snapshotted so a later change never reprices an existing request.
+  pharmacist_id uuid references public.pharmacists (id) on delete set null,
+  price_quoted numeric(10,2),
   patient_name text not null,
   patient_phone text not null,
   description text,
@@ -339,6 +347,9 @@ create table public.consultation_requests (
   updated_at timestamptz not null default now()
 );
 create index consultation_requests_pharmacy_idx on public.consultation_requests (pharmacy_id, created_at desc);
+create index consultation_requests_pharmacist_idx
+  on public.consultation_requests (pharmacist_id)
+  where pharmacist_id is not null;
 
 -- ---------------------------------------------------------------------
 -- OTP + rate limiting + caches (service-role only)

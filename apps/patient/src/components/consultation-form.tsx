@@ -23,6 +23,7 @@ import {
 
 type Props = {
   pharmacyId: string;
+  pharmacistId?: string | null;
   pharmacyName: string;
   issues: { id: string; name: string; slug: string }[];
   initialIssue: string;
@@ -36,7 +37,7 @@ const WINDOWS = [
   { v: "evening", l: "Evening (5pm – 8pm)" },
 ];
 
-export function ConsultationForm({ pharmacyId, pharmacyName, issues, initialIssue, service, config }: Props) {
+export function ConsultationForm({ pharmacyId, pharmacistId, pharmacyName, issues, initialIssue, service, config }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +75,7 @@ export function ConsultationForm({ pharmacyId, pharmacyName, issues, initialIssu
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           pharmacyId,
+          pharmacistId: pharmacistId ?? "",
           issueSlug: g("issueSlug"),
           serviceId: service?.id ?? "",
           patientName: g("patientName"),

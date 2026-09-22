@@ -116,7 +116,7 @@ export type IssueRow = {
   created_at: string;
 };
 
-export type PharmacyIssueRow = { pharmacy_id: string; issue_id: string };
+export type PharmacyIssueRow = { pharmacy_id: string; issue_id: string; price: number | null };
 
 export type DriverRow = {
   id: string;
@@ -229,6 +229,8 @@ export type ConsultationRequestRow = {
   pharmacy_id: string;
   issue_id: string | null;
   service_id: string | null;
+  pharmacist_id: string | null;
+  price_quoted: number | null;
   patient_name: string;
   patient_phone: string;
   description: string | null;
@@ -428,7 +430,7 @@ export type Database = {
       pharmacists: Tbl<PharmacistRow, Pick<PharmacistRow, "pharmacy_id" | "name"> & Partial<PharmacistRow>>;
       pharmacy_services: Tbl<PharmacyServiceRow, Pick<PharmacyServiceRow, "pharmacy_id" | "name"> & Partial<PharmacyServiceRow>>;
       issues: Tbl<IssueRow, Pick<IssueRow, "name" | "slug"> & Partial<IssueRow>>;
-      pharmacy_issues: Tbl<PharmacyIssueRow, PharmacyIssueRow>;
+      pharmacy_issues: Tbl<PharmacyIssueRow, Pick<PharmacyIssueRow, "pharmacy_id" | "issue_id"> & Partial<PharmacyIssueRow>>;
       drivers: Tbl<DriverRow, Pick<DriverRow, "name" | "phone" | "email"> & Partial<DriverRow>>;
       orders: Tbl<OrderRow, OrderInsert>;
       order_events: Tbl<OrderEventRow, Pick<OrderEventRow, "order_id" | "action" | "actor_role"> & Partial<OrderEventRow>>;

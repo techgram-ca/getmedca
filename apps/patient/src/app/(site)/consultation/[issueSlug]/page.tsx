@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, Clock, MapPin, Phone, Stethoscope } from "lucide-react";
+import { ArrowRight, BadgeCheck, Clock, Languages, MapPin, Stethoscope } from "lucide-react";
 import { createServiceClient } from "@getmed/db/service";
-import { searchPharmacies } from "@getmed/core/geo";
-import { formatDistance, formatDuration } from "@getmed/core/format";
+import { listConsultationPharmacists, type PharmacistListing } from "@getmed/core/consultations";
+import { formatCurrency, formatDistance, formatDuration } from "@getmed/core/format";
 import { Avatar, Badge, Button, EmptyState, cn } from "@getmed/ui";
 import { IssueAddressSearch } from "@/components/issue-address-search";
 
 export const dynamic = "force-dynamic";
 
 type Params = { issueSlug: string };
-type Search = { address?: string; lat?: string; lng?: string };
+type Search = { address?: string; lat?: string; lng?: string; lang?: string };
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { issueSlug } = await params;
@@ -33,19 +33,28 @@ export default async function IssuePage({ params, searchParams }: { params: Prom
   const address = sp.address?.trim() ?? "";
   const lat = sp.lat ? Number(sp.lat) : undefined;
   const lng = sp.lng ? Number(sp.lng) : undefined;
+  const language = sp.lang?.trim() || null;
   const hasLocation = !!address || (Number.isFinite(lat) && Number.isFinite(lng));
-  const response = hasLocation
-    ? await searchPharmacies(db, { address, lat, lng, issueSlug }).catch(() => ({ origin: null, radiusKm: 0, results: [] }))
+
+  const listing = hasLocation
+    ? await listConsultationPharmacists(db, { address, lat, lng, issueSlug, language }).catch(() => null)
     : null;
 
   // Carry the address forward so patients are not asked for it again.
   const forward = new URLSearchParams();
   if (address) forward.set("address", address);
-  if (response?.origin) {
-    forward.set("lat", String(response.origin.lat));
-    forward.set("lng", String(response.origin.lng));
+  if (listing?.origin) {
+    forward.set("lat", String(listing.origin.lat));
+    forward.set("lng", String(listing.origin.lng));
   }
   const q = forward.size ? `?${forward}` : "";
+
+  /** The same page with one language selected, or with the filter cleared. */
+  const languageHref = (value: string | null) => {
+    const next = new URLSearchParams(forward);
+    if (value) next.set("lang", value);
+    return `/consultation/${issue.slug}${next.size ? `?${next}` : ""}`;
+  };
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
@@ -63,62 +72,145 @@ export default async function IssuePage({ params, searchParams }: { params: Prom
       </h1>
       <p className="mt-2 max-w-xl text-ink-500">
         {hasLocation
-          ? "These pharmacies offer this consultation and deliver to your area. Pick one and a pharmacist will call you back."
-          : `Enter your address and we'll show pharmacies near you that offer ${issue.name.toLowerCase()} consultations.`}
+          ? "These pharmacists take this consultation and are near you. Pick one and they'll call you back."
+          : `Enter your address and we'll show pharmacists near you who take ${issue.name.toLowerCase()} consultations.`}
       </p>
 
       <div className="surface mt-8 rounded-2xl p-5">
         <IssueAddressSearch slug={issue.slug} initial={address} />
       </div>
 
-      {response ? (
+      {listing ? (
         <div className="mt-8 space-y-3">
-          {response.results.length === 0 ? (
+          {listing.languages.length > 1 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-700">
+                <Languages className="size-4 text-brand-600" /> Speaks
+              </span>
+              <LanguageChip href={languageHref(null)} active={!language} label="Any language" />
+              {listing.languages.map((l) => (
+                <LanguageChip
+                  key={l.value}
+                  href={languageHref(l.value)}
+                  active={language?.toLowerCase() === l.value}
+                  label={l.label}
+                  count={l.count}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {listing.results.length === 0 ? (
             <EmptyState
               icon={<MapPin />}
-              title="No pharmacies offer this consultation nearby yet"
-              description="Try another address, or browse a different topic."
-              action={<Button asChild variant="outline"><Link href="/consultation">Browse topics</Link></Button>}
+              title={language ? `No pharmacist nearby speaks ${language}` : "No pharmacists offer this consultation nearby yet"}
+              description={
+                language
+                  ? `${listing.filteredOut} ${listing.filteredOut === 1 ? "pharmacist is" : "pharmacists are"} available in another language.`
+                  : "Try another address, or browse a different topic."
+              }
+              action={
+                language ? (
+                  <Button asChild variant="outline"><Link href={languageHref(null)}>Show every language</Link></Button>
+                ) : (
+                  <Button asChild variant="outline"><Link href="/consultation">Browse topics</Link></Button>
+                )
+              }
             />
           ) : (
             <>
               <p className="text-sm text-ink-500">
-                {response.results.length} {response.results.length === 1 ? "pharmacy" : "pharmacies"} within {response.radiusKm} km
+                {listing.results.length} {listing.results.length === 1 ? "pharmacist" : "pharmacists"} within {listing.radiusKm} km
+                {language ? <> speaking <span className="font-medium text-ink-950">{language}</span></> : null}
               </p>
-              {response.results.map((r) => (
-                <article key={r.id} className="surface flex gap-4 rounded-2xl p-4">
-                  <Avatar src={r.logoUrl} name={r.name} size={52} className="shrink-0 rounded-xl" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <h2 className="font-bold text-ink-950">
-                          <Link href={`/p/${r.slug}${q}`} className="no-underline hover:text-brand-700">{r.name}</Link>
-                        </h2>
-                        <p className="text-sm text-ink-500">{[r.addressLine, r.city].filter(Boolean).join(", ")}</p>
-                      </div>
-                      <Badge tone={r.open ? "success" : "neutral"}>
-                        <span className={cn("size-1.5 rounded-full", r.open ? "bg-green-600" : "bg-ink-400")} /> {r.openLabel}
-                      </Badge>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
-                      <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" /> {formatDistance(r.drivingDistanceM)}</span>
-                      {r.drivingDurationS != null ? (
-                        <span className="inline-flex items-center gap-1"><Clock className="size-3.5" /> {formatDuration(r.drivingDurationS)}</span>
-                      ) : null}
-                      {r.phone ? <span className="inline-flex items-center gap-1"><Phone className="size-3.5" /> {r.phone}</span> : null}
-                    </div>
-                    <div className="mt-3 flex justify-end">
-                      <Button asChild size="sm">
-                        <Link href={`/consultation/request?pharmacyId=${r.id}&issue=${issue.slug}`}>Request a call <ArrowRight /></Link>
-                      </Button>
-                    </div>
-                  </div>
-                </article>
+              {listing.results.map((entry) => (
+                <PharmacistCard
+                  key={`${entry.pharmacy.id}:${entry.pharmacistId ?? "pharmacy"}`}
+                  entry={entry}
+                  issueSlug={issue.slug}
+                  pharmacyHref={`/p/${entry.pharmacy.slug}${q}`}
+                />
               ))}
             </>
           )}
         </div>
       ) : null}
     </div>
+  );
+}
+
+function LanguageChip({ href, active, label, count }: { href: string; active: boolean; label: string; count?: number }) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "true" : undefined}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium no-underline transition-soft",
+        active
+          ? "border-brand-600 bg-brand-600 text-white"
+          : "border-ink-200 bg-white text-ink-700 hover:border-brand-600 hover:text-brand-700",
+      )}
+    >
+      {label}
+      {count != null ? <span className={cn("text-xs", active ? "text-white/70" : "text-ink-400")}>{count}</span> : null}
+    </Link>
+  );
+}
+
+function PharmacistCard({ entry, issueSlug, pharmacyHref }: { entry: PharmacistListing; issueSlug: string; pharmacyHref: string }) {
+  const { pharmacy } = entry;
+  const request = new URLSearchParams({ pharmacyId: pharmacy.id, issue: issueSlug });
+  if (entry.pharmacistId) request.set("pharmacist", entry.pharmacistId);
+  const credentials = [entry.credentials, entry.yearsExperience != null ? `${entry.yearsExperience} years' experience` : null]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <article className="surface flex gap-4 rounded-2xl p-4">
+      <Avatar src={entry.photoUrl} name={entry.name} size={56} className="shrink-0 rounded-xl" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="flex flex-wrap items-center gap-2 font-bold text-ink-950">
+              {entry.name}
+              {entry.isMain ? <Badge tone="brand"><BadgeCheck className="size-3" /> Pharmacist in charge</Badge> : null}
+            </h2>
+            {credentials ? <p className="text-sm text-ink-500">{credentials}</p> : null}
+            <p className="text-sm text-ink-500">
+              at <Link href={pharmacyHref} className="font-medium no-underline hover:text-brand-700">{pharmacy.name}</Link>
+              {pharmacy.city ? `, ${pharmacy.city}` : ""}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="whitespace-nowrap text-lg font-extrabold text-brand-600">
+              {entry.price != null ? formatCurrency(entry.price) : "No fee"}
+            </p>
+            <Badge tone={pharmacy.open ? "success" : "neutral"}>
+              <span className={cn("size-1.5 rounded-full", pharmacy.open ? "bg-green-600" : "bg-ink-400")} /> {pharmacy.openLabel}
+            </Badge>
+          </div>
+        </div>
+
+        {entry.languages.length ? (
+          <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-ink-500">
+            <Languages className="size-3.5 text-brand-600" />
+            Speaks {entry.languages.join(", ")}
+          </p>
+        ) : null}
+
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
+          <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" /> {formatDistance(pharmacy.drivingDistanceM)}</span>
+          {pharmacy.drivingDurationS != null ? (
+            <span className="inline-flex items-center gap-1"><Clock className="size-3.5" /> {formatDuration(pharmacy.drivingDurationS)}</span>
+          ) : null}
+        </div>
+
+        <div className="mt-3 flex justify-end">
+          <Button asChild size="sm">
+            <Link href={`/consultation/request?${request}`}>Request a call <ArrowRight /></Link>
+          </Button>
+        </div>
+      </div>
+    </article>
   );
 }

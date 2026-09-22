@@ -44,6 +44,15 @@ export const serviceSchema = z.object({
   durationMinutes: optionalNumberField(z.number().int().min(0).max(600), "Enter a duration in minutes").optional(),
 });
 
+/**
+ * What a pharmacy charges per consultation topic, keyed by issue id. A missing
+ * key or a blank value means no fee, which is what every topic was before
+ * consultations carried a price.
+ */
+export const issuePricesSchema = z
+  .record(z.string().uuid(), optionalNumberField(z.number().min(0).max(10000), "Enter a price, for example 25.00"))
+  .default({});
+
 export const signupStep5Schema = z.object({
   hours: hoursSchema,
   deliveryRadiusKm: optionalNumberField(z.number().min(0).max(200), "Enter a delivery radius in km").optional(),
@@ -54,6 +63,7 @@ export const signupStep5Schema = z.object({
   acceptedInsurance: z.array(z.string().trim().max(60)).max(30).default([]),
   accessibilityNotes: z.string().trim().max(500).optional().or(z.literal("")),
   issueIds: z.array(z.string().uuid()).max(100).default([]),
+  issuePrices: issuePricesSchema,
 });
 
 /**

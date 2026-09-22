@@ -9,7 +9,7 @@ export async function loadProfile(db: ServiceClient, pharmacyId: string) {
     db.from("pharmacists").select("*").eq("pharmacy_id", pharmacyId).order("is_main", { ascending: false }).order("created_at"),
     db.from("pharmacy_services").select("*").eq("pharmacy_id", pharmacyId).order("created_at"),
     db.from("issues").select("id, name, slug").eq("active", true).order("sort_order"),
-    db.from("pharmacy_issues").select("issue_id").eq("pharmacy_id", pharmacyId),
+    db.from("pharmacy_issues").select("issue_id, price").eq("pharmacy_id", pharmacyId),
   ]);
   if (!p) throw new Error("Pharmacy not found");
   const [logoUrl, coverUrl, licenseUrl] = await Promise.all([mediaUrl(db, p.logo_path), mediaUrl(db, p.cover_path), signedUrl(db, "licensing", p.license_doc_path, 600)]);
@@ -21,6 +21,8 @@ export async function loadProfile(db: ServiceClient, pharmacyId: string) {
     services: services ?? [],
     issues: issues ?? [],
     selectedIssueIds: (issueRows ?? []).map((r) => r.issue_id),
+    // Blank in the editor means "no fee", so a null price comes back as "".
+    issuePrices: Object.fromEntries((issueRows ?? []).map((r) => [r.issue_id, r.price == null ? "" : String(r.price)])) as Record<string, string>,
   };
 }
 

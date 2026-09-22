@@ -37,6 +37,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0002_delivery_pricing.sql` | Per-pharmacy delivery pricing |
 | `migrations/0003_delivery_distance.sql` | Stored driving distance per order, admin-visible delivery address |
 | `migrations/0004_pharmacy_theme_color.sql` | Per-pharmacy theme colour for the public page |
+| `migrations/0005_consultation_pharmacist.sql` | Consultation price per topic, and the pharmacist a patient picked |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
 After any schema change, regenerate the TypeScript types with `pnpm db:types`.
@@ -50,3 +51,8 @@ request time and cached on the order row — see `packages/core/src/orders/dista
 `pharmacies_public`. The column holds one `#rrggbb` value; the public page derives its whole
 palette from it at render time — see `packages/core/src/theme/color.ts`. Null means the page
 falls back to the GetMed teal.
+
+`migrations/0005_consultation_pharmacist.sql` adds `pharmacy_issues.price` (what a pharmacy charges
+for a consultation topic; null means no fee) and, on `consultation_requests`, `pharmacist_id` and
+`price_quoted`. The price is snapshotted at request time so a later change never reprices a request
+already made — the same rule delivery pricing follows.
