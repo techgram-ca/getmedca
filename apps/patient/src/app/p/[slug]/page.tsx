@@ -175,7 +175,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
             <ScrollReveal>
               <p className="mb-3 text-xs font-bold uppercase tracking-widest text-brand-600">About us</p>
               <h2 className="text-3xl font-extrabold tracking-tight text-ink-950">
-                {p.city ? `Caring for ${p.city}, one patient at a time` : "Caring for our community, one patient at a time"}
+                {p.tagline ?? "Caring for our community, one patient at a time"}
               </h2>
               <p className="mt-4 leading-relaxed text-ink-500">
                 {p.bio ??

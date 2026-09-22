@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { phoneSchema } from "./common";
+import { optionalNumberField, phoneSchema } from "./common";
 
 export const hoursSchema = z.record(
   z.enum(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]),
@@ -28,7 +28,7 @@ export const pharmacistSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().trim().min(2).max(120),
   credentials: z.string().trim().max(200).optional().or(z.literal("")),
-  yearsExperience: z.coerce.number().int().min(0).max(70).optional().nullable(),
+  yearsExperience: optionalNumberField(z.number().int().min(0).max(70), "Enter years of experience as a number").optional(),
   bio: z.string().trim().max(1000).optional().or(z.literal("")),
   languages: z.array(z.string().trim().max(40)).max(10).default([]),
   isMain: z.boolean().default(false),
@@ -39,13 +39,13 @@ export const serviceSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().trim().min(2).max(120),
   description: z.string().trim().max(500).optional().or(z.literal("")),
-  price: z.coerce.number().min(0).max(10000).optional().nullable(),
-  durationMinutes: z.coerce.number().int().min(0).max(600).optional().nullable(),
+  price: optionalNumberField(z.number().min(0).max(10000), "Enter a price, for example 25.00").optional(),
+  durationMinutes: optionalNumberField(z.number().int().min(0).max(600), "Enter a duration in minutes").optional(),
 });
 
 export const signupStep5Schema = z.object({
   hours: hoursSchema,
-  deliveryRadiusKm: z.coerce.number().min(0).max(200).optional().nullable(),
+  deliveryRadiusKm: optionalNumberField(z.number().min(0).max(200), "Enter a delivery radius in km").optional(),
   estimatedDeliveryTime: z.string().trim().max(60).optional().or(z.literal("")),
   offersDelivery: z.boolean().default(true),
   offersTransfer: z.boolean().default(true),

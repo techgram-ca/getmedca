@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requirePharmacy } from "@getmed/core/auth";
 import { slugify } from "@getmed/core/format";
 import type { TablesUpdate } from "@getmed/db/types";
-import { pharmacistSchema, phoneSchema, serviceSchema, signupStep1Schema, signupStep2Schema, signupStep5Schema, signupStep6Schema } from "@getmed/core/validation";
+import { optionalNumberField, pharmacistSchema, phoneSchema, serviceSchema, signupStep1Schema, signupStep2Schema, signupStep5Schema, signupStep6Schema } from "@getmed/core/validation";
 
 type R = { ok: true } | { ok: false; error: string };
 const fail = (e: unknown): R => ({ ok: false, error: e instanceof z.ZodError ? (e.issues[0]?.message ?? "Invalid input") : e instanceof Error ? e.message : "Failed" });
@@ -110,7 +110,7 @@ const profileSchema = z.object({
   bio: z.string().trim().max(2000).optional().or(z.literal("")),
   logoPath: z.string().max(300).nullable().optional(),
   coverPath: z.string().max(300).nullable().optional(),
-  deliveryRadiusKm: z.coerce.number().min(0).max(200).nullable().optional(),
+  deliveryRadiusKm: optionalNumberField(z.number().min(0).max(200), "Enter a delivery radius in km").optional(),
   estimatedDeliveryTime: z.string().trim().max(60).optional().or(z.literal("")),
   offersDelivery: z.boolean(),
   offersTransfer: z.boolean(),
