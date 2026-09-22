@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ExternalLink } from "lucide-react";
 import { AddressAutocomplete, Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Field, Input, Switch, Textarea, toast } from "@getmed/ui";
+import { DEFAULT_THEME_COLOR } from "@getmed/core/theme";
 import { saveProfile } from "@/lib/actions/profile";
 import type { ProfileData } from "@/lib/load-profile";
 import { PharmacyPreview } from "./pharmacy-preview";
 import { TagInput } from "./tag-input";
+import { ThemeColorPicker } from "./theme-color-picker";
 import { UploadField } from "./upload-field";
 
 const INSURERS = ["OHIP / ODB", "Sun Life", "Manulife", "Canada Life", "Green Shield", "Blue Cross", "Desjardins", "Express Scripts", "NIHB", "Trillium"];
@@ -19,6 +21,7 @@ export function ProfileForm({ data, patientUrl }: { data: ProfileData; patientUr
   const [f, setF] = useState({
     name: p.name ?? "", phone: p.phone ?? "", email: p.email ?? "", addressLine: p.address_line ?? "", city: p.city ?? "", postalCode: p.postal_code ?? "",
     lat: null as number | null, lng: null as number | null, tagline: p.tagline ?? "", bio: p.bio ?? "",
+    themeColor: p.theme_color ?? DEFAULT_THEME_COLOR,
     deliveryRadiusKm: p.delivery_radius_km ?? "", estimatedDeliveryTime: p.estimated_delivery_time ?? "",
     offersDelivery: p.offers_delivery, offersTransfer: p.offers_transfer, offersConsultation: p.offers_consultation,
     acceptedInsurance: p.accepted_insurance, accessibilityNotes: p.accessibility_notes ?? "", issueIds: data.selectedIssueIds,
@@ -61,6 +64,7 @@ export function ProfileForm({ data, patientUrl }: { data: ProfileData; patientUr
             </div>
             <Field label="Tagline" htmlFor="tagline" hint="One line, up to 120 characters."><Input id="tagline" maxLength={120} value={f.tagline} onChange={(e) => up("tagline", e.target.value)} /></Field>
             <Field label="About your pharmacy" htmlFor="bio"><Textarea id="bio" rows={5} maxLength={2000} value={f.bio} onChange={(e) => up("bio", e.target.value)} /></Field>
+            <ThemeColorPicker value={f.themeColor} onChange={(v) => up("themeColor", v)} />
           </CardContent>
         </Card>
 

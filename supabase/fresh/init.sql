@@ -130,6 +130,9 @@ create table public.pharmacies (
   tagline text,
   bio text,
   gallery_paths text[] not null default '{}',
+  -- One colour picked at signup; the public page derives its whole palette from
+  -- it. Null means the page uses the GetMed teal.
+  theme_color text constraint pharmacies_theme_color_hex check (theme_color ~ '^#[0-9a-f]{6}$'),
   -- signup / lifecycle
   signup_step int not null default 1,
   submitted_at timestamptz,
@@ -450,7 +453,8 @@ select
   hours, delivery_radius_km, estimated_delivery_time,
   offers_delivery, offers_transfer, offers_consultation,
   accepted_insurance, accessibility_notes,
-  logo_path, cover_path, tagline, bio, gallery_paths
+  logo_path, cover_path, tagline, bio, gallery_paths,
+  theme_color
 from public.pharmacies
 where status = 'approved';
 

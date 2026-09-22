@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ArrowLeft, ArrowRight, Check, CloudUpload, Loader2 } from "lucide-react";
 import type { WeeklyHours } from "@getmed/core/hours";
+import { DEFAULT_THEME_COLOR } from "@getmed/core/theme";
 import { AddressAutocomplete, Alert, Button, Card, CardContent, Checkbox, Field, Input, Logo, Switch, Textarea, cn, toast } from "@getmed/ui";
 import { advanceStep, saveStep1, saveStep2, saveStep5, saveStep6, submitSignup } from "@/lib/actions/profile";
 import { logout } from "@/lib/actions/auth";
@@ -12,6 +13,7 @@ import { HoursEditor } from "./hours-editor";
 import { PharmacistsEditor } from "./pharmacists-editor";
 import { ServicesEditor } from "./services-editor";
 import { TagInput } from "./tag-input";
+import { ThemeColorPicker } from "./theme-color-picker";
 import { UploadField } from "./upload-field";
 
 const STEPS = ["Business", "Licensing", "Pharmacists", "Services", "Hours & delivery", "Branding", "Review"];
@@ -33,7 +35,7 @@ export function SignupWizard({ data }: { data: ProfileData }) {
   const [s2, setS2] = useState({ licenseNumber: p.license_number ?? "", licenseCollege: p.license_college ?? "Ontario College of Pharmacists", picName: p.pic_name ?? "", picLicenseNumber: p.pic_license_number ?? "" });
   const [license, setLicense] = useState({ path: p.license_doc_path, url: p.licenseUrl });
   const [s5, setS5] = useState({ hours: p.hours as WeeklyHours, deliveryRadiusKm: p.delivery_radius_km?.toString() ?? "", estimatedDeliveryTime: p.estimated_delivery_time ?? "", offersDelivery: p.offers_delivery, offersTransfer: p.offers_transfer, offersConsultation: p.offers_consultation, acceptedInsurance: p.accepted_insurance, accessibilityNotes: p.accessibility_notes ?? "", issueIds: data.selectedIssueIds });
-  const [s6, setS6] = useState({ tagline: p.tagline ?? "", bio: p.bio ?? "" });
+  const [s6, setS6] = useState({ tagline: p.tagline ?? "", bio: p.bio ?? "", themeColor: p.theme_color ?? DEFAULT_THEME_COLOR });
   const [logo, setLogo] = useState({ path: p.logo_path, url: p.logoUrl });
   const [cover, setCover] = useState({ path: p.cover_path, url: p.coverUrl });
 
@@ -187,6 +189,7 @@ export function SignupWizard({ data }: { data: ProfileData }) {
                 </div>
                 <Field label="Tagline" htmlFor="tagline" className="mt-4"><Input id="tagline" maxLength={120} value={s6.tagline} onChange={(e) => setS6({ ...s6, tagline: e.target.value })} placeholder="Family-owned since 1998. Free delivery on every prescription." /></Field>
                 <Field label="About your pharmacy" htmlFor="bio" className="mt-4"><Textarea id="bio" rows={5} maxLength={2000} value={s6.bio} onChange={(e) => setS6({ ...s6, bio: e.target.value })} /></Field>
+                <ThemeColorPicker value={s6.themeColor} onChange={(themeColor) => setS6({ ...s6, themeColor })} />
               </StepCard>
             ) : null}
 

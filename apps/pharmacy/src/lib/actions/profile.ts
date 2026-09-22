@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requirePharmacy } from "@getmed/core/auth";
 import { slugify } from "@getmed/core/format";
 import type { TablesUpdate } from "@getmed/db/types";
-import { optionalNumberField, pharmacistSchema, phoneSchema, serviceSchema, signupStep1Schema, signupStep2Schema, signupStep5Schema, signupStep6Schema } from "@getmed/core/validation";
+import { optionalNumberField, pharmacistSchema, phoneSchema, serviceSchema, signupStep1Schema, signupStep2Schema, signupStep5Schema, signupStep6Schema, themeColorSchema } from "@getmed/core/validation";
 
 type R = { ok: true } | { ok: false; error: string };
 const fail = (e: unknown): R => ({ ok: false, error: e instanceof z.ZodError ? (e.issues[0]?.message ?? "Invalid input") : e instanceof Error ? e.message : "Failed" });
@@ -66,6 +66,7 @@ export async function saveStep6(input: unknown): Promise<R> {
     const patch: TablesUpdate<"pharmacies"> = { tagline: d.tagline || null, bio: d.bio || null, signup_step: Math.max(7, pharmacy.signup_step) };
     if (d.logoPath !== undefined) patch.logo_path = d.logoPath;
     if (d.coverPath !== undefined) patch.cover_path = d.coverPath;
+    if (d.themeColor !== undefined) patch.theme_color = d.themeColor;
     const { error } = await db.from("pharmacies").update(patch).eq("id", pharmacy.id);
     if (error) throw error;
     return { ok: true };
@@ -110,6 +111,7 @@ const profileSchema = z.object({
   bio: z.string().trim().max(2000).optional().or(z.literal("")),
   logoPath: z.string().max(300).nullable().optional(),
   coverPath: z.string().max(300).nullable().optional(),
+  themeColor: themeColorSchema,
   deliveryRadiusKm: optionalNumberField(z.number().min(0).max(200), "Enter a delivery radius in km").optional(),
   estimatedDeliveryTime: z.string().trim().max(60).optional().or(z.literal("")),
   offersDelivery: z.boolean(),
@@ -126,7 +128,7 @@ export async function saveProfile(input: unknown): Promise<R> {
     const { pharmacy, db } = await requirePharmacy();
     const patch: TablesUpdate<"pharmacies"> = {
       name: d.name, phone: d.phone, email: d.email, address_line: d.addressLine, city: d.city || null, postal_code: d.postalCode || null,
-      tagline: d.tagline || null, bio: d.bio || null, delivery_radius_km: d.deliveryRadiusKm ?? null, estimated_delivery_time: d.estimatedDeliveryTime || null,
+      tagline: d.tagline || null, bio: d.bio || null, theme_color: d.themeColor ?? null, delivery_radius_km: d.deliveryRadiusKm ?? null, estimated_delivery_time: d.estimatedDeliveryTime || null,
       offers_delivery: d.offersDelivery, offers_transfer: d.offersTransfer, offers_consultation: d.offersConsultation,
       accepted_insurance: d.acceptedInsurance, accessibility_notes: d.accessibilityNotes || null,
     };

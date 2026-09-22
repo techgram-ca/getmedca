@@ -20,6 +20,7 @@ import {
 import { distanceToPharmacy } from "@getmed/core/geo";
 import { DAY_KEYS, DAY_LABELS, formatTime, type WeeklyHours } from "@getmed/core/hours";
 import { formatCurrency, formatDistance, formatDuration } from "@getmed/core/format";
+import { DEFAULT_THEME_COLOR, themeStyle } from "@getmed/core/theme";
 import { Avatar, Badge, Button, ImageWithFallback, ScrollReveal, cn } from "@getmed/ui";
 import { PharmacyFooter, PharmacyHeader, StickyOrderBar, type ChromePharmacy } from "@/components/pharmacy/pharmacy-chrome";
 import { getPublicPharmacy } from "@/lib/pharmacy";
@@ -80,6 +81,11 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
     { href: "#visit", label: "Visit us" },
   ];
 
+  // The pharmacy's own colour, scoped to this page. These custom properties
+  // shadow the `@theme` tokens for this subtree only, so the order and
+  // consultation flows keep GetMed's palette. White is never redefined.
+  const theme = themeStyle(p.theme_color ?? DEFAULT_THEME_COLOR) as React.CSSProperties;
+
   const highlights = [
     { icon: ShieldCheck, value: "Licensed", label: `Registered with the ${p.province === "ON" ? "Ontario College of Pharmacists" : "provincial college of pharmacists"}` },
     p.offers_delivery
@@ -90,7 +96,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
   ].filter(Boolean) as { icon: typeof ShieldCheck; value: string; label: string }[];
 
   return (
-    <div className="flex min-h-screen flex-col bg-ink-50">
+    <div style={theme} className="flex min-h-screen flex-col bg-ink-50">
       <PharmacyHeader pharmacy={chrome} links={navLinks} orderHref={orderHref} />
 
       {/* ── Hero ─────────────────────────────────────────────── */}
@@ -142,7 +148,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
                 src={p.coverUrl ?? "/images/pharmacy.png"}
                 alt={p.name ?? "Our pharmacy"}
                 label="Add a cover photo from your dashboard"
-                wrapperClassName="relative h-[300px] w-full rounded-2xl shadow-hero md:h-[420px]"
+                wrapperClassName="relative h-[300px] w-full rounded-2xl shadow-hero shadow-brand-600/15 md:h-[420px]"
               />
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { optionalNumberField, phoneSchema } from "./common";
+import { normalizeHexColor } from "../theme";
 
 export const hoursSchema = z.record(
   z.enum(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]),
@@ -55,9 +56,30 @@ export const signupStep5Schema = z.object({
   issueIds: z.array(z.string().uuid()).max(100).default([]),
 });
 
+/**
+ * The one colour a pharmacy picks for its public page. Normalised to `#rrggbb`
+ * so it matches the column's check constraint and the palette maths; blank
+ * means "no pick", and the page falls back to the GetMed teal.
+ */
+export const themeColorSchema = z
+  .string()
+  .trim()
+  .transform((v, ctx) => {
+    if (v === "") return null;
+    const hex = normalizeHexColor(v);
+    if (!hex) {
+      ctx.addIssue({ code: "custom", message: "Enter a colour as a hex code, for example #2a9d8f" });
+      return z.NEVER;
+    }
+    return hex;
+  })
+  .nullable()
+  .optional();
+
 export const signupStep6Schema = z.object({
   tagline: z.string().trim().max(120).optional().or(z.literal("")),
   bio: z.string().trim().max(2000).optional().or(z.literal("")),
   logoPath: z.string().max(300).optional().nullable(),
   coverPath: z.string().max(300).optional().nullable(),
+  themeColor: themeColorSchema,
 });

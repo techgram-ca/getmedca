@@ -11,7 +11,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-brand-600 text-white hover:bg-brand-700 hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(42,157,143,0.3)]",
+        primary:
+          // shadow-brand carries the geometry; shadow-brand-600/30 re-colours it from
+          // the brand token, so pharmacy-themed pages glow in their own colour.
+          "bg-brand-600 text-white hover:bg-brand-700 hover:-translate-y-px hover:shadow-brand hover:shadow-brand-600/30",
         secondary: "bg-brand-100 text-brand-800 hover:bg-brand-200",
         outline: "border-2 border-ink-200 bg-white text-ink-700 hover:border-brand-600 hover:text-brand-700",
         ghost: "text-ink-600 hover:bg-brand-50 hover:text-brand-700",

@@ -65,6 +65,9 @@
   --shadow-card: 0 1px 2px rgb(13 31 28 / 0.04), 0 6px 20px -8px rgb(42 157 143 / 0.14);
   --shadow-pop: 0 12px 40px -12px rgb(42 157 143 / 0.25);
   --shadow-hero: 0 32px 80px rgb(42 157 143 / 0.15);
+  /* Primary-button hover glow. Pharmacy-owned pages redeclare this, and the
+     brand and ink tokens above, from the colour the pharmacy picked. */
+  --shadow-brand: 0 6px 20px rgb(42 157 143 / 0.3);
 
   --animate-pulse-ring: pulse-ring 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-fade-in: fade-in 0.25s ease-out both;
