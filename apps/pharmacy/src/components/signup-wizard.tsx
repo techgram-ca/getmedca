@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ArrowLeft, ArrowRight, Check, CloudUpload, Loader2 } from "lucide-react";
 import type { WeeklyHours } from "@getmed/core/hours";
 import { DEFAULT_THEME_COLOR } from "@getmed/core/theme";
-import { AddressAutocomplete, Alert, Button, Card, CardContent, Checkbox, Field, Input, Logo, Switch, Textarea, cn, toast } from "@getmed/ui";
+import { AddressAutocomplete, Alert, Button, Card, CardContent, Field, Input, Logo, Switch, Textarea, cn, toast } from "@getmed/ui";
 import { advanceStep, saveStep1, saveStep2, saveStep5, saveStep6, submitSignup } from "@/lib/actions/profile";
 import { logout } from "@/lib/actions/auth";
 import type { ProfileData } from "@/lib/load-profile";
@@ -13,6 +13,7 @@ import { HoursEditor } from "./hours-editor";
 import { PharmacistsEditor } from "./pharmacists-editor";
 import { ServicesEditor } from "./services-editor";
 import { TagInput } from "./tag-input";
+import { IssuePricingEditor } from "./issue-pricing-editor";
 import { ThemeColorPicker } from "./theme-color-picker";
 import { UploadField } from "./upload-field";
 
@@ -34,7 +35,7 @@ export function SignupWizard({ data }: { data: ProfileData }) {
   const [addressText, setAddressText] = useState([p.address_line, p.city, p.postal_code].filter(Boolean).join(", "));
   const [s2, setS2] = useState({ licenseNumber: p.license_number ?? "", licenseCollege: p.license_college ?? "Ontario College of Pharmacists", picName: p.pic_name ?? "", picLicenseNumber: p.pic_license_number ?? "" });
   const [license, setLicense] = useState({ path: p.license_doc_path, url: p.licenseUrl });
-  const [s5, setS5] = useState({ hours: p.hours as WeeklyHours, deliveryRadiusKm: p.delivery_radius_km?.toString() ?? "", estimatedDeliveryTime: p.estimated_delivery_time ?? "", offersDelivery: p.offers_delivery, offersTransfer: p.offers_transfer, offersConsultation: p.offers_consultation, acceptedInsurance: p.accepted_insurance, accessibilityNotes: p.accessibility_notes ?? "", issueIds: data.selectedIssueIds });
+  const [s5, setS5] = useState({ hours: p.hours as WeeklyHours, deliveryRadiusKm: p.delivery_radius_km?.toString() ?? "", estimatedDeliveryTime: p.estimated_delivery_time ?? "", offersDelivery: p.offers_delivery, offersTransfer: p.offers_transfer, offersConsultation: p.offers_consultation, acceptedInsurance: p.accepted_insurance, accessibilityNotes: p.accessibility_notes ?? "", issueIds: data.selectedIssueIds, issuePrices: data.issuePrices });
   const [s6, setS6] = useState({ tagline: p.tagline ?? "", bio: p.bio ?? "", themeColor: p.theme_color ?? DEFAULT_THEME_COLOR });
   const [logo, setLogo] = useState({ path: p.logo_path, url: p.logoUrl });
   const [cover, setCover] = useState({ path: p.cover_path, url: p.coverUrl });
@@ -171,11 +172,15 @@ export function SignupWizard({ data }: { data: ProfileData }) {
                 <Field label="Accessibility notes" htmlFor="acc" optional className="mt-4"><Input id="acc" value={s5.accessibilityNotes} onChange={(e) => setS5({ ...s5, accessibilityNotes: e.target.value })} /></Field>
                 <div className="mt-6">
                   <p className="text-sm font-medium">Consultation topics you offer</p>
-                  <p className="text-xs text-ink-500">Choose from GetMed's list — patients browse these to find you.</p>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    {data.issues.map((i) => (
-                      <label key={i.id} className="flex items-center gap-2 text-sm"><Checkbox checked={s5.issueIds.includes(i.id)} onCheckedChange={(v) => setS5({ ...s5, issueIds: v ? [...s5.issueIds, i.id] : s5.issueIds.filter((x) => x !== i.id) })} /> {i.name}</label>
-                    ))}
+                  <p className="text-xs text-ink-500">Choose from GetMed's list — patients browse these to find you. Leave a price blank to charge no fee.</p>
+                  <div className="mt-2">
+                    <IssuePricingEditor
+                      issues={data.issues}
+                      selected={s5.issueIds}
+                      prices={s5.issuePrices}
+                      onSelectedChange={(issueIds) => setS5({ ...s5, issueIds })}
+                      onPricesChange={(issuePrices) => setS5({ ...s5, issuePrices })}
+                    />
                   </div>
                 </div>
               </StepCard>

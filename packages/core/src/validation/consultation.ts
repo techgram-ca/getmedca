@@ -4,6 +4,8 @@ import { phoneSchema, uuidSchema } from "./common";
 
 export const consultationSchema = z.object({
   pharmacyId: uuidSchema,
+  /** The pharmacist the patient picked from the listing, when they picked one. */
+  pharmacistId: uuidSchema.optional().or(z.literal("")),
   issueSlug: z.string().trim().max(80).optional().or(z.literal("")),
   serviceId: uuidSchema.optional().or(z.literal("")),
   patientName: z.string().trim().min(2).max(120),

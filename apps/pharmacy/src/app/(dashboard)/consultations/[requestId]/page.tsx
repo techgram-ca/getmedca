@@ -2,16 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Phone } from "lucide-react";
 import { requirePharmacy } from "@getmed/core/auth";
-import { formatDate } from "@getmed/core/format";
+import { formatCurrency, formatDate } from "@getmed/core/format";
 import { Button, Card, CardContent, CardHeader, CardTitle, PageHeader, StatusBadge } from "@getmed/ui";
 import { ConsultationStatusForm } from "@/components/consultation-status-form";
 
 export default async function ConsultationDetail({ params }: { params: Promise<{ requestId: string }> }) {
   const { requestId } = await params;
   const { pharmacy, db } = await requirePharmacy();
-  const { data } = await db.from("consultation_requests").select("*, issues(name, description), pharmacy_services(name, price)").eq("id", requestId).eq("pharmacy_id", pharmacy.id).maybeSingle();
+  const { data } = await db.from("consultation_requests").select("*, issues(name, description), pharmacy_services(name, price), pharmacists(name, languages)").eq("id", requestId).eq("pharmacy_id", pharmacy.id).maybeSingle();
   if (!data) notFound();
-  const r = data as typeof data & { issues: { name: string; description: string | null } | null; pharmacy_services: { name: string; price: number | null } | null };
+  const r = data as typeof data & { issues: { name: string; description: string | null } | null; pharmacy_services: { name: string; price: number | null } | null; pharmacists: { name: string; languages: string[] } | null };
 
   return (
     <div className="max-w-3xl">
@@ -21,6 +21,11 @@ export default async function ConsultationDetail({ params }: { params: Promise<{
           <CardHeader><CardTitle>Request</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             <p><span className="text-ink-500">Topic:</span> {r.issues?.name ?? r.pharmacy_services?.name ?? "—"}</p>
+            <p><span className="text-ink-500">Pharmacist asked for:</span> {r.pharmacists?.name ?? "No preference"}</p>
+            {r.pharmacists?.languages?.length ? (
+              <p><span className="text-ink-500">Speaks:</span> {r.pharmacists.languages.join(", ")}</p>
+            ) : null}
+            <p><span className="text-ink-500">Quoted:</span> {r.price_quoted != null ? formatCurrency(r.price_quoted) : "No fee"}</p>
             <p><span className="text-ink-500">Preferred callback:</span> <span className="capitalize">{r.callback_window ?? "any time"}</span></p>
             <p><span className="text-ink-500">Patient's note:</span> {r.description ?? "—"}</p>
             <Button asChild size="lg" className="mt-2 w-full"><a href={`tel:${r.patient_phone}`}><Phone /> Call {r.patient_phone}</a></Button>

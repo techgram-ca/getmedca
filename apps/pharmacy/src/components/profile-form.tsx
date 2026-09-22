@@ -3,12 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ExternalLink } from "lucide-react";
-import { AddressAutocomplete, Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Field, Input, Switch, Textarea, toast } from "@getmed/ui";
+import { AddressAutocomplete, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, Switch, Textarea, toast } from "@getmed/ui";
 import { DEFAULT_THEME_COLOR } from "@getmed/core/theme";
 import { saveProfile } from "@/lib/actions/profile";
 import type { ProfileData } from "@/lib/load-profile";
 import { PharmacyPreview } from "./pharmacy-preview";
 import { TagInput } from "./tag-input";
+import { IssuePricingEditor } from "./issue-pricing-editor";
 import { ThemeColorPicker } from "./theme-color-picker";
 import { UploadField } from "./upload-field";
 
@@ -24,7 +25,7 @@ export function ProfileForm({ data, patientUrl }: { data: ProfileData; patientUr
     themeColor: p.theme_color ?? DEFAULT_THEME_COLOR,
     deliveryRadiusKm: p.delivery_radius_km ?? "", estimatedDeliveryTime: p.estimated_delivery_time ?? "",
     offersDelivery: p.offers_delivery, offersTransfer: p.offers_transfer, offersConsultation: p.offers_consultation,
-    acceptedInsurance: p.accepted_insurance, accessibilityNotes: p.accessibility_notes ?? "", issueIds: data.selectedIssueIds,
+    acceptedInsurance: p.accepted_insurance, accessibilityNotes: p.accessibility_notes ?? "", issueIds: data.selectedIssueIds, issuePrices: data.issuePrices,
   });
   const [addressText, setAddressText] = useState([p.address_line, p.city, p.postal_code].filter(Boolean).join(", "));
   const [logo, setLogo] = useState({ path: p.logo_path, url: p.logoUrl });
@@ -84,12 +85,15 @@ export function ProfileForm({ data, patientUrl }: { data: ProfileData; patientUr
             <Field label="Accessibility notes" htmlFor="access" optional><Input id="access" value={f.accessibilityNotes} onChange={(e) => up("accessibilityNotes", e.target.value)} placeholder="Step-free entrance, parking, etc." /></Field>
             <div>
               <p className="text-sm font-medium text-ink-800">Consultation topics you offer</p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {data.issues.map((i) => (
-                  <label key={i.id} className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={f.issueIds.includes(i.id)} onCheckedChange={(v) => up("issueIds", v ? [...f.issueIds, i.id] : f.issueIds.filter((x) => x !== i.id))} /> {i.name}
-                  </label>
-                ))}
+              <p className="text-xs text-ink-500">Leave a price blank to charge no fee for that topic.</p>
+              <div className="mt-2">
+                <IssuePricingEditor
+                  issues={data.issues}
+                  selected={f.issueIds}
+                  prices={f.issuePrices}
+                  onSelectedChange={(v) => up("issueIds", v)}
+                  onPricesChange={(v) => up("issuePrices", v)}
+                />
               </div>
             </div>
           </CardContent>

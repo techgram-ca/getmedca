@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requirePharmacy } from "@getmed/core/auth";
 import { slugify } from "@getmed/core/format";
 import type { TablesUpdate } from "@getmed/db/types";
-import { optionalNumberField, pharmacistSchema, phoneSchema, serviceSchema, signupStep1Schema, signupStep2Schema, signupStep5Schema, signupStep6Schema, themeColorSchema } from "@getmed/core/validation";
+import { issuePricesSchema, optionalNumberField, pharmacistSchema, phoneSchema, serviceSchema, signupStep1Schema, signupStep2Schema, signupStep5Schema, signupStep6Schema, themeColorSchema } from "@getmed/core/validation";
 
 type R = { ok: true } | { ok: false; error: string };
 const fail = (e: unknown): R => ({ ok: false, error: e instanceof z.ZodError ? (e.issues[0]?.message ?? "Invalid input") : e instanceof Error ? e.message : "Failed" });
@@ -53,10 +53,23 @@ export async function saveStep5(input: unknown): Promise<R> {
       accepted_insurance: d.acceptedInsurance, accessibility_notes: d.accessibilityNotes || null, signup_step: Math.max(6, pharmacy.signup_step),
     }).eq("id", pharmacy.id);
     if (error) throw error;
-    await db.from("pharmacy_issues").delete().eq("pharmacy_id", pharmacy.id);
-    if (d.issueIds.length) await db.from("pharmacy_issues").insert(d.issueIds.map((issue_id) => ({ pharmacy_id: pharmacy.id, issue_id })));
+    await saveIssues(db, pharmacy.id, d.issueIds, d.issuePrices);
     return { ok: true };
   } catch (e) { return fail(e); }
+}
+
+/** Replaces the pharmacy's topics and their prices. A missing price means no fee. */
+async function saveIssues(
+  db: Awaited<ReturnType<typeof requirePharmacy>>["db"],
+  pharmacyId: string,
+  issueIds: string[],
+  prices: Record<string, number | null>,
+) {
+  await db.from("pharmacy_issues").delete().eq("pharmacy_id", pharmacyId);
+  if (!issueIds.length) return;
+  const rows = issueIds.map((issue_id) => ({ pharmacy_id: pharmacyId, issue_id, price: prices[issue_id] ?? null }));
+  const { error } = await db.from("pharmacy_issues").insert(rows);
+  if (error) throw error;
 }
 
 export async function saveStep6(input: unknown): Promise<R> {
@@ -120,6 +133,7 @@ const profileSchema = z.object({
   acceptedInsurance: z.array(z.string().trim().max(60)).max(30),
   accessibilityNotes: z.string().trim().max(500).optional().or(z.literal("")),
   issueIds: z.array(z.string().uuid()).max(100),
+  issuePrices: issuePricesSchema,
 });
 
 export async function saveProfile(input: unknown): Promise<R> {
@@ -138,8 +152,7 @@ export async function saveProfile(input: unknown): Promise<R> {
     if (d.coverPath !== undefined) patch.cover_path = d.coverPath;
     const { error } = await db.from("pharmacies").update(patch).eq("id", pharmacy.id);
     if (error) throw error;
-    await db.from("pharmacy_issues").delete().eq("pharmacy_id", pharmacy.id);
-    if (d.issueIds.length) await db.from("pharmacy_issues").insert(d.issueIds.map((issue_id) => ({ pharmacy_id: pharmacy.id, issue_id })));
+    await saveIssues(db, pharmacy.id, d.issueIds, d.issuePrices);
     revalidatePath("/profile");
     return { ok: true };
   } catch (e) { return fail(e); }
