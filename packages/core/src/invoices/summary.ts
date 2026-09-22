@@ -1,6 +1,19 @@
 import type { ServiceClient } from "@getmed/db/service";
+import type { DeliveryType } from "@getmed/db/types";
+import { DELIVERY_TYPES, deliveryTypeLabel } from "../pricing";
 
-export type InvoiceLine = { orderId: string; deliveredAt: string; fee: number };
+export type InvoiceLine = { orderId: string; deliveredAt: string; fee: number; type: DeliveryType | null };
+
+/** One row per delivery type used in the period. */
+export type InvoiceBreakdownRow = {
+  type: DeliveryType | "uncategorised";
+  label: string;
+  count: number;
+  subtotal: number;
+  /** Price per delivery when every order of this type was charged the same. */
+  unitPrice: number | null;
+};
+
 export type InvoiceSummary = {
   id: string; // YYYY-MM
   pharmacyId: string;
@@ -8,9 +21,8 @@ export type InvoiceSummary = {
   periodStart: string;
   periodEnd: string;
   deliveredCount: number;
-  /** Flat fee at time of delivery. When fees changed mid-month this is the most common value. */
-  flatFee: number;
   total: number;
+  breakdown: InvoiceBreakdownRow[];
   lines: InvoiceLine[];
 };
 
@@ -27,32 +39,61 @@ export function monthId(d = new Date()): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 /**
- * FLAT FEE MODEL: total = Σ delivery_fee_charged over DELIVERED orders in the
- * month. The per-order snapshot keeps history accurate if the fee changes.
+ * Group delivered orders by delivery type. Orders delivered before delivery
+ * types existed have no type and are reported separately rather than being
+ * folded into a tier they were never priced at.
+ */
+export function buildBreakdown(lines: InvoiceLine[]): InvoiceBreakdownRow[] {
+  const order: (DeliveryType | "uncategorised")[] = [...DELIVERY_TYPES.map((t) => t.id), "uncategorised"];
+  const groups = new Map<DeliveryType | "uncategorised", InvoiceLine[]>();
+  for (const line of lines) {
+    const key = line.type ?? "uncategorised";
+    groups.set(key, [...(groups.get(key) ?? []), line]);
+  }
+  return order
+    .filter((key) => groups.has(key))
+    .map((key) => {
+      const rows = groups.get(key)!;
+      const fees = new Set(rows.map((r) => r.fee));
+      return {
+        type: key,
+        label: key === "uncategorised" ? "Uncategorised" : deliveryTypeLabel(key),
+        count: rows.length,
+        subtotal: round2(rows.reduce((sum, r) => sum + r.fee, 0)),
+        unitPrice: fees.size === 1 ? [...fees][0]! : null,
+      };
+    });
+}
+
+/**
+ * A pharmacy's monthly invoice: only DELIVERED orders are billable, each at
+ * the price snapshotted when the admin set its delivery type.
  */
 export async function buildInvoice(db: ServiceClient, pharmacyId: string, id: string): Promise<InvoiceSummary | null> {
   const bounds = monthBounds(id);
   if (!bounds) return null;
   const { data: pharmacy } = await db.from("pharmacies").select("id, name").eq("id", pharmacyId).maybeSingle();
   if (!pharmacy) return null;
+
   const { data: orders } = await db
     .from("orders")
-    .select("id, delivered_at, delivery_fee_charged")
+    .select("id, delivered_at, delivery_fee_charged, delivery_type")
     .eq("pharmacy_id", pharmacyId)
     .eq("status", "delivered")
     .gte("delivered_at", bounds.start.toISOString())
     .lt("delivered_at", bounds.end.toISOString())
     .order("delivered_at", { ascending: true });
+
   const lines: InvoiceLine[] = (orders ?? []).map((o) => ({
     orderId: o.id,
     deliveredAt: o.delivered_at!,
     fee: Number(o.delivery_fee_charged ?? 0),
+    type: o.delivery_type,
   }));
-  const total = lines.reduce((s, l) => s + l.fee, 0);
-  const feeCounts = new Map<number, number>();
-  for (const l of lines) feeCounts.set(l.fee, (feeCounts.get(l.fee) ?? 0) + 1);
-  const flatFee = [...feeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
+
   return {
     id,
     pharmacyId,
@@ -60,8 +101,8 @@ export async function buildInvoice(db: ServiceClient, pharmacyId: string, id: st
     periodStart: bounds.start.toISOString(),
     periodEnd: new Date(bounds.end.getTime() - 1).toISOString(),
     deliveredCount: lines.length,
-    flatFee,
-    total: Math.round(total * 100) / 100,
+    total: round2(lines.reduce((s, l) => s + l.fee, 0)),
+    breakdown: buildBreakdown(lines),
     lines,
   };
 }

@@ -32,6 +32,7 @@ export type NotificationChannel = "sms" | "email";
 export type FormAppliesTo = "new_order" | "transfer" | "consultation";
 export type OtpPurpose = "order" | "consultation";
 export type OrderSource = "online" | "manual";
+export type DeliveryType = "local" | "gta" | "extended" | "custom";
 
 export type ProfileRow = { id: string; role: UserRole; full_name: string | null; created_at: string };
 
@@ -149,6 +150,11 @@ export type OrderRow = {
   delivery_postal_code: string | null;
   delivery_location: unknown | null;
   delivery_notes: string | null;
+  /** Driving route pharmacy → patient, computed once and stored. */
+  delivery_distance_m: number | null;
+  delivery_duration_s: number | null;
+  delivery_route_avoids_tolls: boolean | null;
+  delivery_route_computed_at: string | null;
   allergies: string | null;
   prescription_file_path: string | null;
   insurance_provider: string | null;
@@ -174,6 +180,8 @@ export type OrderRow = {
   escalation_resolved_at: string | null;
   reassigned_at: string | null;
   reassigned_by: string | null;
+  delivery_type: DeliveryType | null;
+  delivery_type_set_at: string | null;
   delivery_fee_charged: number | null;
   accepted_at: string | null;
   ready_at: string | null;
@@ -273,8 +281,19 @@ export type NotificationTemplateRow = {
 export type PlatformSettingsRow = {
   id: number;
   search_radius_km: number;
-  flat_delivery_fee: number;
   sla_minutes: number;
+  /** Fallback prices used when a pharmacy has no override of its own. */
+  default_local_fee: number;
+  default_gta_fee: number;
+  default_extended_fee: number;
+  updated_at: string;
+};
+
+/** A pharmacy's override of a platform default. Custom is priced per order. */
+export type PharmacyDeliveryPricingRow = {
+  pharmacy_id: string;
+  delivery_type: Exclude<DeliveryType, "custom">;
+  price: number;
   updated_at: string;
 };
 
@@ -314,7 +333,11 @@ export type PharmacyPublicRow = {
   gallery_paths: string[];
 };
 
-/** Admin projection: structurally excludes prescription / insurance / health-card / address-line / DOB. */
+/**
+ * Admin projection: carries order metadata, the patient's name, phone and
+ * delivery address (needed to route drivers and resolve failed deliveries),
+ * and structurally excludes prescription, insurance, health-card and DOB.
+ */
 export type OrderAdminRow = Pick<
   OrderRow,
   | "id"
@@ -348,6 +371,13 @@ export type OrderAdminRow = Pick<
   | "created_at"
   | "updated_at"
   | "source"
+  | "delivery_type"
+  | "delivery_address_line"
+  | "delivery_notes"
+  | "delivery_distance_m"
+  | "delivery_duration_s"
+  | "delivery_route_avoids_tolls"
+  | "delivery_route_computed_at"
 >;
 
 export type OrderDriverRow = Pick<
@@ -411,6 +441,7 @@ export type Database = {
       form_field_config: Tbl<FormFieldConfigRow>;
       notification_templates: Tbl<NotificationTemplateRow, Pick<NotificationTemplateRow, "event_type" | "channel" | "template_text"> & Partial<NotificationTemplateRow>>;
       platform_settings: Tbl<PlatformSettingsRow>;
+      pharmacy_delivery_pricing: Tbl<PharmacyDeliveryPricingRow, PharmacyDeliveryPricingRow>;
       support_messages: Tbl<SupportMessageRow, Pick<SupportMessageRow, "name" | "message"> & Partial<SupportMessageRow>>;
     };
     Views: {
@@ -424,6 +455,10 @@ export type Database = {
         Returns: PharmacyNearRow[];
       };
       bump_rate_limit: { Args: { p_key: string; p_window_seconds: number }; Returns: number };
+      order_route_points: {
+        Args: { p_order_id: string };
+        Returns: { from_lat: number; from_lng: number; to_lat: number; to_lng: number }[];
+      };
       is_admin: { Args: Record<string, never>; Returns: boolean };
       current_role_name: { Args: Record<string, never>; Returns: UserRole };
       owns_pharmacy: { Args: { p_pharmacy_id: string }; Returns: boolean };
@@ -442,6 +477,7 @@ export type Database = {
       form_applies_to: FormAppliesTo;
       otp_purpose: OtpPurpose;
       order_source: OrderSource;
+      delivery_type: DeliveryType;
     };
     CompositeTypes: Record<string, never>;
   };

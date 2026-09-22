@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ClipboardList } from "lucide-react";
 import { requireAdmin } from "@getmed/core/auth";
 import { formatDate, shortId } from "@getmed/core/format";
+import { deliveryTypeLabel } from "@getmed/core/pricing";
 import type { OrderStatus } from "@getmed/db/types";
 import { Badge, Button, EmptyState, Input, PageHeader, Select, StatusBadge, TBody, TD, TH, THead, TR, Table } from "@getmed/ui";
 import { adminOrders, withNames } from "@/lib/queries";
@@ -35,13 +36,14 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       {rows.length === 0 ? <EmptyState icon={<ClipboardList />} title="No orders match" /> : (
         <div className="surface overflow-hidden">
           <Table>
-            <THead><TR><TH>Order</TH><TH>Patient</TH><TH>Pharmacy</TH><TH>Driver</TH><TH>Status</TH><TH>Created</TH><TH></TH></TR></THead>
+            <THead><TR><TH>Order</TH><TH>Patient</TH><TH>Pharmacy</TH><TH>Driver</TH><TH>Delivery</TH><TH>Status</TH><TH>Created</TH><TH></TH></TR></THead>
             <TBody>
               {rows.map((o) => (
                 <TR key={o.id}>
                   <TD className="font-mono font-medium">{shortId(o.id)}<div className="flex items-center gap-1 text-[10px] uppercase text-ink-400">{o.order_type}{o.source === "manual" ? <Badge tone="accent" className="px-1.5 py-0 text-[9px]">Manual</Badge> : null}</div></TD>
                   <TD><div>{o.patient_name}</div><div className="text-xs text-ink-500">{o.patient_phone}</div></TD>
                   <TD>{o.pharmacy?.name ?? "—"}</TD><TD>{o.driver?.name ?? "—"}</TD>
+                  <TD>{o.delivery_type ? deliveryTypeLabel(o.delivery_type) : <span className="text-ink-400">Not set</span>}</TD>
                   <TD><StatusBadge status={o.status} /></TD>
                   <TD className="text-ink-500">{formatDate(o.created_at)}</TD>
                   <TD className="text-right"><Button asChild size="sm" variant="outline"><Link href={`/orders/${o.id}`}>View</Link></Button></TD>

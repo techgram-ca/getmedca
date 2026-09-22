@@ -4,8 +4,10 @@ import type { PlatformSettingsRow } from "@getmed/db/types";
 export const DEFAULT_SETTINGS: PlatformSettingsRow = {
   id: 1,
   search_radius_km: 10,
-  flat_delivery_fee: 8,
   sla_minutes: 30,
+  default_local_fee: 5,
+  default_gta_fee: 8,
+  default_extended_fee: 12,
   updated_at: new Date(0).toISOString(),
 };
 
@@ -17,7 +19,7 @@ export async function getPlatformSettings(db: ServiceClient): Promise<PlatformSe
 
 export async function updatePlatformSettings(
   db: ServiceClient,
-  patch: Partial<Pick<PlatformSettingsRow, "search_radius_km" | "flat_delivery_fee" | "sla_minutes">>,
+  patch: Partial<Pick<PlatformSettingsRow, "search_radius_km" | "sla_minutes" | "default_local_fee" | "default_gta_fee" | "default_extended_fee">>,
 ): Promise<PlatformSettingsRow> {
   const { data, error } = await db
     .from("platform_settings")

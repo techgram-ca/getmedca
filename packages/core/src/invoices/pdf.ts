@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { formatCurrency, formatDate, shortId } from "../format";
+import { deliveryTypeLabel } from "../pricing";
 import type { InvoiceSummary } from "./summary";
 
 /** Render a monthly invoice PDF (server-side, no browser needed). */
@@ -30,15 +31,38 @@ export async function renderInvoicePdf(inv: InvoiceSummary): Promise<Uint8Array>
   text("Delivered orders", 40, 11, bold);
   text(String(inv.deliveredCount), 300, 11);
   y -= 18;
-  text("Flat delivery fee", 40, 11, bold);
-  text(formatCurrency(inv.flatFee), 300, 11);
-  y -= 18;
   text("Total owed", 40, 13, bold);
   text(formatCurrency(inv.total), 300, 13, bold, teal);
-  y -= 36;
+  y -= 32;
 
+  // Breakdown by delivery type
+  text("By delivery type", 40, 11, bold);
+  y -= 16;
+  text("Type", 40, 10, bold, gray);
+  text("Deliveries", 240, 10, bold, gray);
+  text("Rate", 350, 10, bold, gray);
+  text("Subtotal", 460, 10, bold, gray);
+  y -= 6;
+  page.drawLine({ start: { x: 40, y }, end: { x: 572, y }, thickness: 0.5, color: gray });
+  y -= 16;
+  for (const row of inv.breakdown) {
+    text(row.label, 40, 10);
+    text(String(row.count), 240, 10);
+    text(row.unitPrice != null ? formatCurrency(row.unitPrice) : "Mixed", 350, 10);
+    text(formatCurrency(row.subtotal), 460, 10);
+    y -= 16;
+  }
+  if (inv.breakdown.length === 0) {
+    text("No deliveries this month.", 40, 10, font, gray);
+    y -= 16;
+  }
+  y -= 20;
+
+  text("Every delivery", 40, 11, bold);
+  y -= 16;
   text("Order", 40, 10, bold, gray);
-  text("Delivered", 200, 10, bold, gray);
+  text("Delivered", 140, 10, bold, gray);
+  text("Type", 340, 10, bold, gray);
   text("Fee", 460, 10, bold, gray);
   y -= 6;
   page.drawLine({ start: { x: 40, y }, end: { x: 572, y }, thickness: 0.5, color: gray });
@@ -50,7 +74,8 @@ export async function renderInvoicePdf(inv: InvoiceSummary): Promise<Uint8Array>
       y = 740;
     }
     text(shortId(line.orderId), 40, 10);
-    text(formatDate(line.deliveredAt), 200, 10);
+    text(formatDate(line.deliveredAt), 140, 10);
+    text(deliveryTypeLabel(line.type), 340, 10);
     text(formatCurrency(line.fee), 460, 10);
     y -= 16;
   }

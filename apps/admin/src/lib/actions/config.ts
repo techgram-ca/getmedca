@@ -88,13 +88,13 @@ export async function setSupportResolved(id: string, resolved: boolean): Promise
 }
 
 // ---- Platform settings ----
-const settingsSchema = z.object({ searchRadiusKm: z.coerce.number().min(1).max(200), flatDeliveryFee: z.coerce.number().min(0).max(1000), slaMinutes: z.coerce.number().int().min(5).max(240) });
+const settingsSchema = z.object({ searchRadiusKm: z.coerce.number().min(1).max(200), slaMinutes: z.coerce.number().int().min(5).max(240) });
 
 export async function savePlatformSettings(input: unknown): Promise<R> {
   try {
     const d = settingsSchema.parse(input);
     const { db } = await requireAdmin();
-    await updatePlatformSettings(db, { search_radius_km: d.searchRadiusKm, flat_delivery_fee: d.flatDeliveryFee, sla_minutes: d.slaMinutes });
+    await updatePlatformSettings(db, { search_radius_km: d.searchRadiusKm, sla_minutes: d.slaMinutes });
     revalidatePath("/settings");
     return { ok: true };
   } catch (e) { return fail(e); }

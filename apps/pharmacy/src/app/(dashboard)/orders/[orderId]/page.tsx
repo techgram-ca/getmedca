@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FileText, Lock } from "lucide-react";
 import { requirePharmacy } from "@getmed/core/auth";
-import { formatDate, formatDateOnly, shortId, statusLabel } from "@getmed/core/format";
+import { formatCurrency, formatDate, formatDateOnly, shortId, statusLabel } from "@getmed/core/format";
 import { pharmacyCanModify } from "@getmed/core/orders/state-machine";
+import { deliveryTypeLabel } from "@getmed/core/pricing";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader, StatusBadge } from "@getmed/ui";
 import { OrderActions } from "@/components/order-actions";
 import { SlaCountdown } from "@/components/sla-countdown";
@@ -84,6 +85,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
               <Row k="Address" v={[o.delivery_address_line, o.delivery_city, o.delivery_postal_code].filter(Boolean).join(", ")} />
               <Row k="Notes" v={o.delivery_notes ?? "—"} />
               <Row k="Driver" v={driver ? `${driver.name} · ${driver.phone}${driver.vehicle_make ? ` · ${[driver.vehicle_color, driver.vehicle_make, driver.vehicle_model].filter(Boolean).join(" ")}` : ""}` : "Not assigned yet"} />
+              <Row k="Delivery type" v={o.delivery_type ? `${deliveryTypeLabel(o.delivery_type)}${o.delivery_fee_charged != null ? ` · ${formatCurrency(Number(o.delivery_fee_charged))}` : ""}` : "Not set yet"} />
               <Row k="Proof of delivery" v={pod ? <Badge tone="success">Captured</Badge> : "—"} />
             </CardContent>
           </Card>

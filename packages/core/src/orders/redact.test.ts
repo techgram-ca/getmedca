@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { redactForAdmin } from "./redact.ts";
 
-test("admin projection strips PHI", () => {
+test("admin projection strips clinical PHI but keeps what support needs", () => {
   const full = {
     id: "o1", pharmacy_id: "p1", order_type: "new", status: "pending",
     patient_name: "Jane", patient_phone: "+14165551234", patient_dob: "1990-01-01",
@@ -16,5 +16,6 @@ test("admin projection strips PHI", () => {
   assert.equal("prescription_file_path" in r, false);
   assert.equal("insurance_member_id" in r, false);
   assert.equal("health_card_number" in r, false);
-  assert.equal("delivery_address_line" in r, false);
+  // Support needs the address to route a driver and to help a failed delivery.
+  assert.equal(r.delivery_address_line, "1 Main St");
 });

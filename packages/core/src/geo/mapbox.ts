@@ -68,3 +68,43 @@ export async function drivingMatrix(origin: LngLat, destinations: LngLat[]): Pro
   }
   return out;
 }
+
+export type DrivingRoute = { distanceM: number; durationS: number; avoidsTolls: boolean };
+
+/**
+ * Car-drivable route between two points via the Mapbox Directions API.
+ *
+ * Toll roads are excluded by default. Where no toll-free route exists the
+ * normal driving route is returned with `avoidsTolls: false`, so a distance is
+ * still available and the caller can say the route uses a toll road rather
+ * than presenting a misleading number.
+ */
+export async function drivingRoute(origin: LngLat, destination: LngLat): Promise<DrivingRoute | null> {
+  const coords = `${origin.lng},${origin.lat};${destination.lng},${destination.lat}`;
+
+  const request = async (excludeTolls: boolean) => {
+    const params = new URLSearchParams({
+      overview: "false",
+      alternatives: "false",
+      geometries: "geojson",
+      access_token: token(),
+    });
+    if (excludeTolls) params.set("exclude", "toll");
+    const res = await fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?${params}`);
+    if (!res.ok) return null;
+    const json = (await res.json()) as { code?: string; routes?: { distance: number; duration: number }[] };
+    if (json.code !== "Ok") return null;
+    const route = json.routes?.[0];
+    return route ? { distanceM: route.distance, durationS: route.duration } : null;
+  };
+
+  try {
+    const tollFree = await request(true);
+    if (tollFree) return { ...tollFree, avoidsTolls: true };
+    const anyRoute = await request(false);
+    return anyRoute ? { ...anyRoute, avoidsTolls: false } : null;
+  } catch (err) {
+    console.error("[mapbox] directions lookup failed", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
