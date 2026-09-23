@@ -21,7 +21,10 @@ export function DialogContent({
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-950/40 backdrop-blur-[2px] data-[state=open]:animate-fade-in" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-pop focus:outline-none data-[state=open]:animate-slide-up",
+          // Vertically centred, so without a height cap tall content spills past
+          // both viewport edges with no way to scroll to it — the submit button
+          // included. Capped and scrollable instead.
+          "fixed left-1/2 top-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-white p-6 shadow-pop focus:outline-none data-[state=open]:animate-slide-up",
           className,
         )}
         {...props}
