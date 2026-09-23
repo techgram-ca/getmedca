@@ -32,7 +32,10 @@ export type NotificationChannel = "sms" | "email";
 export type FormAppliesTo = "new_order" | "transfer" | "consultation";
 export type OtpPurpose = "order" | "consultation";
 export type OrderSource = "online" | "manual";
-export type DeliveryType = "local" | "gta" | "extended" | "custom";
+/** Zones 1-4 carry a fixed price; Zone 5 (Remote) is priced per km, per order. */
+export type DeliveryZone = "zone1" | "zone2" | "zone3" | "zone4" | "zone5";
+/** How an order's zone was decided. */
+export type DeliveryPriceSource = "tagged" | "band" | "remote" | "manual";
 
 export type ProfileRow = { id: string; role: UserRole; full_name: string | null; created_at: string };
 
@@ -181,8 +184,11 @@ export type OrderRow = {
   escalation_resolved_at: string | null;
   reassigned_at: string | null;
   reassigned_by: string | null;
-  delivery_type: DeliveryType | null;
+  delivery_type: DeliveryZone | null;
   delivery_type_set_at: string | null;
+  delivery_price_source: DeliveryPriceSource | null;
+  delivery_quote_min: number | null;
+  delivery_quote_max: number | null;
   delivery_fee_charged: number | null;
   delivery_attempt: number;
   accepted_at: string | null;
@@ -236,7 +242,7 @@ export type OrderChargeRow = {
   pharmacy_id: string;
   kind: OrderChargeKind;
   amount: number;
-  delivery_type: DeliveryType | null;
+  delivery_type: DeliveryZone | null;
   attempt: number;
   created_at: string;
 };
@@ -303,18 +309,49 @@ export type PlatformSettingsRow = {
   search_radius_km: number;
   sla_minutes: number;
   /** Fallback prices used when a pharmacy has no override of its own. */
-  default_local_fee: number;
-  default_gta_fee: number;
-  default_extended_fee: number;
+  default_zone1_fee: number;
+  default_zone2_fee: number;
+  default_zone3_fee: number;
+  default_zone4_fee: number;
+  /** Zone 5 is priced per km rather than by a fixed fee. */
+  default_remote_per_km: number;
+  /** Upper bound of each band in km; lower inclusive, upper exclusive. */
+  zone1_max_km: number;
+  zone2_max_km: number;
+  zone3_max_km: number;
+  zone4_max_km: number;
+  /** How far above the computed per-km price an admin may go on a Zone 5 order. */
+  remote_quote_span: number;
   /** Share of the quoted fee a failed attempt bills. 100 = the full fee. */
   failed_delivery_fee_percent: number;
   updated_at: string;
 };
 
 /** A pharmacy's override of a platform default. Custom is priced per order. */
+export type PostalAreaRow = { fsa: string; city: string; province: string; created_at: string };
+
+/** Which zone a pharmacy charges for a postal area. Zone 5 is never tagged. */
+export type PharmacyZoneAreaRow = {
+  pharmacy_id: string;
+  fsa: string;
+  zone: Exclude<DeliveryZone, "zone5">;
+  created_at: string;
+};
+
+/** Per-pharmacy overrides for what is not a fixed zone price. Null = default. */
+export type PharmacyDeliveryConfigRow = {
+  pharmacy_id: string;
+  remote_per_km: number | null;
+  zone1_max_km: number | null;
+  zone2_max_km: number | null;
+  zone3_max_km: number | null;
+  zone4_max_km: number | null;
+  updated_at: string;
+};
+
 export type PharmacyDeliveryPricingRow = {
   pharmacy_id: string;
-  delivery_type: Exclude<DeliveryType, "custom">;
+  delivery_type: Exclude<DeliveryZone, "zone5">;
   price: number;
   updated_at: string;
 };
@@ -402,6 +439,9 @@ export type OrderAdminRow = Pick<
   | "delivery_route_avoids_tolls"
   | "delivery_route_computed_at"
   | "delivery_attempt"
+  | "delivery_price_source"
+  | "delivery_quote_min"
+  | "delivery_quote_max"
 >;
 
 export type OrderDriverRow = Pick<
@@ -467,6 +507,9 @@ export type Database = {
       notification_templates: Tbl<NotificationTemplateRow, Pick<NotificationTemplateRow, "event_type" | "channel" | "template_text"> & Partial<NotificationTemplateRow>>;
       platform_settings: Tbl<PlatformSettingsRow>;
       pharmacy_delivery_pricing: Tbl<PharmacyDeliveryPricingRow, PharmacyDeliveryPricingRow>;
+      postal_areas: Tbl<PostalAreaRow, Pick<PostalAreaRow, "fsa" | "city"> & Partial<PostalAreaRow>>;
+      pharmacy_zone_areas: Tbl<PharmacyZoneAreaRow, Pick<PharmacyZoneAreaRow, "pharmacy_id" | "fsa" | "zone"> & Partial<PharmacyZoneAreaRow>>;
+      pharmacy_delivery_config: Tbl<PharmacyDeliveryConfigRow, Pick<PharmacyDeliveryConfigRow, "pharmacy_id"> & Partial<PharmacyDeliveryConfigRow>>;
       support_messages: Tbl<SupportMessageRow, Pick<SupportMessageRow, "name" | "message"> & Partial<SupportMessageRow>>;
     };
     Views: {
@@ -502,7 +545,7 @@ export type Database = {
       form_applies_to: FormAppliesTo;
       otp_purpose: OtpPurpose;
       order_source: OrderSource;
-      delivery_type: DeliveryType;
+      delivery_type: DeliveryZone;
     };
     CompositeTypes: Record<string, never>;
   };

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@getmed/core/auth";
+import { countZoneAreas } from "@getmed/core/pricing";
 import { sendEmail } from "@getmed/core/notifications";
 
 type R = { ok: true } | { ok: false; error: string };
@@ -10,6 +11,11 @@ export async function setPharmacyStatus(pharmacyId: string, status: "approved" |
   const { db } = await requireAdmin();
   const { data: p } = await db.from("pharmacies").select("email, name").eq("id", pharmacyId).maybeSingle();
   if (!p) return { ok: false, error: "Pharmacy not found" };
+  // An approved pharmacy takes live orders, and an untagged one would have
+  // every delivery priced by distance instead of by the cities it was sold.
+  if (status === "approved" && (await countZoneAreas(db, pharmacyId)) === 0) {
+    return { ok: false, error: "Tag this pharmacy's delivery cities before approving it — without them every order is priced by distance." };
+  }
   const patch =
     status === "approved"
       ? { status: "approved" as const, approved_at: new Date().toISOString(), inactive_reason: null, rejected_reason: null }

@@ -4,10 +4,10 @@ import { ShieldOff } from "lucide-react";
 import { requireAdmin } from "@getmed/core/auth";
 import { formatCurrency, formatDate, formatDistance, formatDuration, shortId, statusLabel } from "@getmed/core/format";
 import { loadDeliveryProof, orderCharges } from "@getmed/core/orders";
-import { deliveryTypeLabel, resolvePricing } from "@getmed/core/pricing";
+import { zoneLabel, resolvePricing } from "@getmed/core/pricing";
 import { Alert, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, DeliveryProofCard, PageHeader, StatusBadge } from "@getmed/ui";
 import { DeliveryDistance } from "@/components/delivery-distance";
-import { DeliveryTypePicker } from "@/components/delivery-type-picker";
+import { DeliveryZonePicker } from "@/components/delivery-zone-picker";
 import { DriverAssign } from "@/components/driver-assign";
 import { EscalationForm } from "@/components/escalation-form";
 import { RetryDelivery } from "@/components/retry-delivery";
@@ -70,8 +70,8 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
 
           <Card>
             <CardHeader>
-              <CardTitle>1 · Delivery type &amp; price</CardTitle>
-              <CardDescription>Fixes what this pharmacy is charged for this delivery. Required before a driver can be assigned.</CardDescription>
+              <CardTitle>1 · Delivery zone &amp; price</CardTitle>
+              <CardDescription>Resolved automatically when the order arrived. Zones 1–4 are final; Zone 5 needs a price confirmed before a driver can be assigned.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <DeliveryDistance
@@ -83,10 +83,19 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
                   avoidsTolls: o!.delivery_route_avoids_tolls,
                 }}
               />
-              <DeliveryTypePicker
+              <DeliveryZonePicker
                 orderId={o!.id}
-                current={{ type: o!.delivery_type, fee: o!.delivery_fee_charged != null ? Number(o!.delivery_fee_charged) : null }}
+                current={{
+                  zone: o!.delivery_type,
+                  fee: o!.delivery_fee_charged != null ? Number(o!.delivery_fee_charged) : null,
+                  source: o!.delivery_price_source,
+                  quoteMin: o!.delivery_quote_min != null ? Number(o!.delivery_quote_min) : null,
+                  quoteMax: o!.delivery_quote_max != null ? Number(o!.delivery_quote_max) : null,
+                }}
                 pricing={pricing}
+                distanceM={o!.delivery_distance_m != null ? Number(o!.delivery_distance_m) : null}
+                city={o!.delivery_city}
+                postalCode={o!.delivery_postal_code}
                 locked={pricingLocked}
               />
             </CardContent>
@@ -96,7 +105,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
             <CardHeader><CardTitle>2 · Driver assignment</CardTitle></CardHeader>
             <CardContent>
               {needsDeliveryType ? (
-                <Alert tone="warning">Choose a delivery type above before assigning a driver.</Alert>
+                <Alert tone="warning">Set the delivery zone above before assigning a driver.</Alert>
               ) : canAssign ? (
                 <DriverAssign orderId={o!.id} currentDriverId={o!.assigned_driver_id} drivers={drivers ?? []} />
               ) : (
@@ -118,7 +127,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
               <Row k="Delivery notes" v={o!.delivery_notes ?? "—"} />
               <Row k="Distance" v={o!.delivery_distance_m != null ? `${formatDistance(Number(o!.delivery_distance_m))}${o!.delivery_duration_s != null ? ` · ${formatDuration(o!.delivery_duration_s)}` : ""}` : "—"} />
               <Row k="Driver" v={o!.driver ? <Link href={`/drivers/${o!.assigned_driver_id}`} className="text-brand-700 hover:underline">{o!.driver.name}</Link> : "—"} />
-              <Row k="Delivery type" v={o!.delivery_type ? deliveryTypeLabel(o!.delivery_type) : "Not set"} />
+              <Row k="Delivery type" v={o!.delivery_type ? zoneLabel(o!.delivery_type) : "Not set"} />
               <Row k="Quoted delivery fee" v={o!.delivery_fee_charged != null ? formatCurrency(o!.delivery_fee_charged) : "—"} />
               <Row
                 k="Billed to date"

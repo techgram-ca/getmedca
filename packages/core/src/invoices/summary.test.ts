@@ -19,23 +19,23 @@ const failedLine = (type: InvoiceLine["type"], fee: number, attempt = 1): Invoic
 });
 
 test("groups deliveries by type in a fixed order", () => {
-  const rows = buildBreakdown([line("gta", 8), line("local", 5), line("local", 5), line("custom", 20)]);
-  assert.deepEqual(rows.map((r) => r.type), ["local", "gta", "custom"]);
+  const rows = buildBreakdown([line("zone2", 8), line("zone1", 5), line("zone1", 5), line("zone5", 20)]);
+  assert.deepEqual(rows.map((r) => r.type), ["zone1", "zone2", "zone5"]);
   assert.equal(rows[0]!.count, 2);
   assert.equal(rows[0]!.subtotal, 10);
   assert.equal(rows[0]!.unitPrice, 5);
 });
 
 test("reports a unit price only when every order matched it", () => {
-  const rows = buildBreakdown([line("custom", 20), line("custom", 35)]);
+  const rows = buildBreakdown([line("zone5", 20), line("zone5", 35)]);
   assert.equal(rows[0]!.count, 2);
   assert.equal(rows[0]!.subtotal, 55);
   assert.equal(rows[0]!.unitPrice, null);
 });
 
 test("orders with no type are reported separately, never folded into a tier", () => {
-  const rows = buildBreakdown([line("local", 5), line(null, 8)]);
-  assert.deepEqual(rows.map((r) => r.type), ["local", "uncategorised"]);
+  const rows = buildBreakdown([line("zone1", 5), line(null, 8)]);
+  assert.deepEqual(rows.map((r) => r.type), ["zone1", "uncategorised"]);
   assert.equal(rows[1]!.label, "Uncategorised");
   assert.equal(rows[1]!.subtotal, 8);
 });
@@ -52,8 +52,8 @@ test("month bounds cover exactly one UTC month", () => {
 });
 
 test("failed attempts bill on their own row, not inside a delivery tier", () => {
-  const rows = buildBreakdown([line("local", 5), line("local", 5), failedLine("local", 5)]);
-  assert.deepEqual(rows.map((r) => r.type), ["local", "failed"]);
+  const rows = buildBreakdown([line("zone1", 5), line("zone1", 5), failedLine("zone1", 5)]);
+  assert.deepEqual(rows.map((r) => r.type), ["zone1", "failed"]);
   // The delivery tier keeps its clean unit price.
   assert.equal(rows[0]!.count, 2);
   assert.equal(rows[0]!.subtotal, 10);
@@ -65,13 +65,13 @@ test("failed attempts bill on their own row, not inside a delivery tier", () => 
 
 test("a retried order bills once per attempt", () => {
   // Attempt 1 failed at half the fee, attempt 2 delivered at the full fee.
-  const rows = buildBreakdown([failedLine("gta", 4, 1), { ...line("gta", 8), attempt: 2 }]);
-  assert.deepEqual(rows.map((r) => r.type), ["gta", "failed"]);
+  const rows = buildBreakdown([failedLine("zone2", 4, 1), { ...line("zone2", 8), attempt: 2 }]);
+  assert.deepEqual(rows.map((r) => r.type), ["zone2", "failed"]);
   assert.equal(rows.reduce((s, r) => s + r.subtotal, 0), 12);
 });
 
 test("failed attempts at differing rates report no unit price", () => {
-  const rows = buildBreakdown([failedLine("local", 5), failedLine("gta", 8)]);
+  const rows = buildBreakdown([failedLine("zone1", 5), failedLine("zone2", 8)]);
   assert.equal(rows[0]!.type, "failed");
   assert.equal(rows[0]!.count, 2);
   assert.equal(rows[0]!.unitPrice, null);

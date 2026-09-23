@@ -18,3 +18,4 @@ export * from "./components/toaster";
 export * from "./components/turnstile";
 export * from "./components/address-autocomplete";
 export * from "./components/delivery-proof";
+export * from "./components/delivery-price";

@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@getmed/core/auth";
 import { AppError } from "@getmed/core/errors";
-import { assignDriver, ensureOrderRoute, returnToDelivery, setDeliveryType, updateEscalation } from "@getmed/core/orders";
-import type { DeliveryType } from "@getmed/db/types";
+import { assignDriver, ensureOrderRoute, returnToDelivery, setDeliveryZone, updateEscalation } from "@getmed/core/orders";
+import type { DeliveryZone } from "@getmed/db/types";
 
 type R = { ok: true } | { ok: false; error: string };
 const wrap = async (fn: (adminId: string) => Promise<unknown>): Promise<R> => {
@@ -46,9 +46,9 @@ export async function ensureOrderRouteAction(orderId: string, force = false): Pr
   }
 }
 
-/** Fixes the order's delivery type and price. Must happen before a driver is assigned. */
-export async function setDeliveryTypeAction(orderId: string, type: DeliveryType, customPrice?: number | null) {
-  return wrap((admin) => setDeliveryType(orderId, { type, customPrice }, admin));
+/** Sets or corrects the order's zone and price. Must happen before a driver is assigned. */
+export async function setDeliveryZoneAction(orderId: string, zone: DeliveryZone, remotePrice?: number | null) {
+  return wrap((admin) => setDeliveryZone(orderId, { zone, remotePrice }, admin));
 }
 
 export async function escalationAction(orderId: string, status: "contacted" | "resolved", note: string) {

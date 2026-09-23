@@ -3,8 +3,8 @@
 -- Template defaults are mirrored in packages/core/src/notifications/defaults.ts
 -- =====================================================================
 
-insert into public.platform_settings (id, search_radius_km, sla_minutes, default_local_fee, default_gta_fee, default_extended_fee)
-values (1, 10, 30, 5.00, 8.00, 12.00)
+insert into public.platform_settings (id, search_radius_km, sla_minutes, default_zone1_fee, default_zone2_fee, default_zone3_fee, default_zone4_fee, default_remote_per_km)
+values (1, 10, 30, 5.00, 8.00, 12.00, 18.00, 1.20)
 on conflict (id) do nothing;
 
 -- Fixed, predefined field set. Admin may only toggle `required`.

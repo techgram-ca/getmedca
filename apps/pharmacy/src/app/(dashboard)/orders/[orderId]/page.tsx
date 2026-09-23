@@ -5,8 +5,8 @@ import { requirePharmacy } from "@getmed/core/auth";
 import { formatCurrency, formatDate, formatDateOnly, shortId, statusLabel } from "@getmed/core/format";
 import { loadDeliveryProof, orderCharges } from "@getmed/core/orders";
 import { pharmacyCanModify } from "@getmed/core/orders/state-machine";
-import { deliveryTypeLabel } from "@getmed/core/pricing";
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, DeliveryProofCard, PageHeader, StatusBadge } from "@getmed/ui";
+import { zoneLabel } from "@getmed/core/pricing";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, DeliveryPrice, DeliveryProofCard, PageHeader, StatusBadge } from "@getmed/ui";
 import { OrderActions } from "@/components/order-actions";
 import { RetryDelivery } from "@/components/retry-delivery";
 import { SlaCountdown } from "@/components/sla-countdown";
@@ -102,7 +102,21 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
               <Row k="Address" v={[o.delivery_address_line, o.delivery_city, o.delivery_postal_code].filter(Boolean).join(", ")} />
               <Row k="Notes" v={o.delivery_notes ?? "—"} />
               <Row k="Driver" v={driver ? `${driver.name} · ${driver.phone}${driver.vehicle_make ? ` · ${[driver.vehicle_color, driver.vehicle_make, driver.vehicle_model].filter(Boolean).join(" ")}` : ""}` : "Not assigned yet"} />
-              <Row k="Delivery type" v={o.delivery_type ? `${deliveryTypeLabel(o.delivery_type)}${o.delivery_fee_charged != null ? ` · ${formatCurrency(Number(o.delivery_fee_charged))}` : ""}` : "Not set yet"} />
+              <Row
+                k="Delivery cost"
+                v={
+                  <DeliveryPrice
+                    price={{
+                      zoneLabel: o.delivery_type ? zoneLabel(o.delivery_type) : null,
+                      fee: o.delivery_fee_charged != null ? formatCurrency(Number(o.delivery_fee_charged)) : null,
+                      quote:
+                        o.delivery_quote_min != null && o.delivery_quote_max != null
+                          ? { min: formatCurrency(Number(o.delivery_quote_min)), max: formatCurrency(Number(o.delivery_quote_max)) }
+                          : null,
+                    }}
+                  />
+                }
+              />
               <Row k="Attempt" v={o.delivery_attempt > 1 ? `Attempt ${o.delivery_attempt}` : "First attempt"} />
               <Row
                 k="Billed"

@@ -33,12 +33,12 @@ function stubDb(failedPercent: number) {
 }
 
 const order = (fee: number | null, attempt = 1) =>
-  ({ id: "o1", pharmacy_id: "p1", delivery_fee_charged: fee, delivery_type: "local", delivery_attempt: attempt }) as OrderRow;
+  ({ id: "o1", pharmacy_id: "p1", delivery_fee_charged: fee, delivery_type: "zone1", delivery_attempt: attempt }) as OrderRow;
 
 test("a completed delivery bills the full quoted fee", async () => {
   const { db, rows } = stubDb(100);
   assert.equal(await chargeDelivery(db, order(8)), 8);
-  assert.deepEqual(rows[0], { order_id: "o1", pharmacy_id: "p1", kind: "delivery", amount: 8, delivery_type: "local", attempt: 1 });
+  assert.deepEqual(rows[0], { order_id: "o1", pharmacy_id: "p1", kind: "delivery", amount: 8, delivery_type: "zone1", attempt: 1 });
 });
 
 test("a failed attempt bills the admin's share of the quoted fee", async () => {

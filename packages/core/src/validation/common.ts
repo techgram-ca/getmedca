@@ -22,12 +22,19 @@ export const postalCodeSchema = z
 
 export const uuidSchema = z.string().uuid();
 
+/**
+ * A delivery address must come from the address picker, not be typed freehand.
+ * Pricing needs the postal code (to match a tagged zone) and the coordinates
+ * (to measure the driving distance); without both, an order cannot be priced
+ * automatically and lands on an admin's desk. The picker supplies all four, so
+ * requiring them here is what keeps pricing automatic.
+ */
 export const addressSchema = z.object({
   line: z.string().trim().min(5, "Enter a street address").max(200),
   city: z.string().trim().max(100).optional().nullable(),
-  postalCode: z.string().trim().max(10).optional().nullable(),
-  lat: z.number().optional().nullable(),
-  lng: z.number().optional().nullable(),
+  postalCode: postalCodeSchema,
+  lat: z.number({ error: "Choose your address from the list of suggestions" }),
+  lng: z.number({ error: "Choose your address from the list of suggestions" }),
 });
 export type AddressInput = z.infer<typeof addressSchema>;
 

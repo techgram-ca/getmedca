@@ -1,6 +1,6 @@
 import { requireAdmin } from "@getmed/core/auth";
 import { formatCurrency } from "@getmed/core/format";
-import { DELIVERY_TYPES, deliveryTypeLabel } from "@getmed/core/pricing";
+import { DELIVERY_ZONES, zoneLabel } from "@getmed/core/pricing";
 import { Card, CardContent, CardHeader, CardTitle, PageHeader, Stat, TBody, TD, TH, THead, TR, Table } from "@getmed/ui";
 import { ReportsCharts } from "@/components/reports-charts";
 
@@ -50,11 +50,11 @@ export default async function ReportsPage() {
     entry.revenue += Number(c.amount ?? 0);
     byType.set(key, entry);
   }
-  const typeRows = [...DELIVERY_TYPES.map((t) => t.id), "uncategorised", "failed"]
+  const typeRows = [...DELIVERY_ZONES.map((t) => t.id), "uncategorised", "failed"]
     .filter((key) => byType.has(key))
     .map((key) => ({
       key,
-      label: key === "uncategorised" ? "Uncategorised" : key === "failed" ? "Failed attempts" : deliveryTypeLabel(key as never),
+      label: key === "uncategorised" ? "Uncategorised" : key === "failed" ? "Failed attempts" : zoneLabel(key as never),
       ...byType.get(key)!,
     }));
   return (

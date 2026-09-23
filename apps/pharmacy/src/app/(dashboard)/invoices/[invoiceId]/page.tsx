@@ -4,7 +4,7 @@ import { Download } from "lucide-react";
 import { requirePharmacy } from "@getmed/core/auth";
 import { formatCurrency, formatDate, shortId } from "@getmed/core/format";
 import { buildInvoice } from "@getmed/core/invoices";
-import { deliveryTypeLabel } from "@getmed/core/pricing";
+import { zoneLabel } from "@getmed/core/pricing";
 import { Button, Card, CardContent, CardHeader, CardTitle, PageHeader, Stat, TBody, TD, TH, THead, TR, Table } from "@getmed/ui";
 
 export default async function InvoiceDetail({ params }: { params: Promise<{ invoiceId: string }> }) {
@@ -57,7 +57,7 @@ export default async function InvoiceDetail({ params }: { params: Promise<{ invo
                 <TR key={l.orderId}>
                   <TD className="font-mono"><Link href={`/orders/${l.orderId}`} className="hover:text-brand-700">{shortId(l.orderId)}</Link></TD>
                   <TD>{formatDate(l.deliveredAt)}</TD>
-                  <TD>{deliveryTypeLabel(l.type)}</TD>
+                  <TD>{zoneLabel(l.type)}</TD>
                   <TD className="text-right">{formatCurrency(l.fee)}</TD>
                 </TR>
               ))}

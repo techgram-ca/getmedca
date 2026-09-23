@@ -1,13 +1,13 @@
 import type { ServiceClient } from "@getmed/db/service";
-import type { DeliveryType, OrderChargeKind } from "@getmed/db/types";
-import { DELIVERY_TYPES, deliveryTypeLabel } from "../pricing";
+import type { DeliveryZone, OrderChargeKind } from "@getmed/db/types";
+import { DELIVERY_ZONES, zoneLabel } from "../pricing";
 
 export type InvoiceLine = {
   orderId: string;
   /** When the charge was raised — the delivery, or the attempt that failed. */
   deliveredAt: string;
   fee: number;
-  type: DeliveryType | null;
+  type: DeliveryZone | null;
   kind: OrderChargeKind;
   /** Which trip this line bills. 1 unless the order was sent out again. */
   attempt: number;
@@ -15,7 +15,7 @@ export type InvoiceLine = {
 
 /** One row per delivery type used in the period. */
 export type InvoiceBreakdownRow = {
-  type: DeliveryType | "uncategorised" | "failed";
+  type: DeliveryZone | "uncategorised" | "failed";
   label: string;
   count: number;
   subtotal: number;
@@ -58,8 +58,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * folded into a tier they were never priced at.
  */
 export function buildBreakdown(lines: InvoiceLine[]): InvoiceBreakdownRow[] {
-  const order: (DeliveryType | "uncategorised")[] = [...DELIVERY_TYPES.map((t) => t.id), "uncategorised"];
-  const groups = new Map<DeliveryType | "uncategorised", InvoiceLine[]>();
+  const order: (DeliveryZone | "uncategorised")[] = [...DELIVERY_ZONES.map((t) => t.id), "uncategorised"];
+  const groups = new Map<DeliveryZone | "uncategorised", InvoiceLine[]>();
   // Failed attempts are billed at a different rate from completed deliveries,
   // so they get their own row rather than distorting a delivery tier's unit price.
   const failed = lines.filter((l) => l.kind === "failed_delivery");
@@ -74,7 +74,7 @@ export function buildBreakdown(lines: InvoiceLine[]): InvoiceBreakdownRow[] {
       const fees = new Set(group.map((r) => r.fee));
       return {
         type: key,
-        label: key === "uncategorised" ? "Uncategorised" : deliveryTypeLabel(key),
+        label: key === "uncategorised" ? "Uncategorised" : zoneLabel(key),
         count: group.length,
         subtotal: round2(group.reduce((sum, r) => sum + r.fee, 0)),
         unitPrice: fees.size === 1 ? [...fees][0]! : null,
