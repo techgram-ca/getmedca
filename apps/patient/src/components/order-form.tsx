@@ -91,6 +91,13 @@ export function OrderForm({ pharmacy, config, initialAddress, initialCoords, ini
       setTimeout(() => focusFirstError(), 0);
       return;
     }
+    // A typed address has no coordinates or postal code, so the order could not
+    // be priced or routed. The picker supplies both, so it has to be used.
+    if (address?.lat == null || address.lng == null || !address.postalCode) {
+      setFieldErrors({ deliveryAddress: "Choose your address from the list of suggestions so we can price the delivery" });
+      setTimeout(() => focusFirstError(), 0);
+      return;
+    }
     const form = e.currentTarget;
     const fd = new FormData(form);
     const g = (k: string) => String(fd.get(k) ?? "");

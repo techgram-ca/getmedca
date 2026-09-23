@@ -1,5 +1,5 @@
 import { createServiceClient, type ServiceClient } from "@getmed/db/service";
-import type { DeliveryType, OrderInsert, OrderRow, OrderStatus } from "@getmed/db/types";
+import type { DeliveryZone, OrderInsert, OrderRow, OrderStatus } from "@getmed/db/types";
 import { AppError, ForbiddenError, InvalidTransitionError, NotFoundError } from "../errors";
 import { formatCurrency, shortId, statusLabel } from "../format";
 import { inngest, orderCreated, orderResponded } from "../inngest/client";
@@ -7,7 +7,7 @@ import { chargeDelivery, chargeFailedDelivery } from "./charges";
 import { ensureOrderRoute } from "./distance";
 import { adminTarget, notify } from "../notifications/dispatch";
 import { pushToDriver } from "../notifications/push";
-import { deliveryTypeLabel, resolvePricing, type PricedDeliveryType } from "../pricing";
+import { REMOTE_ZONE, loadPricingContext, resolvePricing, resolveZone, round2, zoneLabel, zonePatch, type FixedZone } from "../pricing";
 import { getPlatformSettings } from "../settings";
 import { ESCALATION_STATUSES, TRANSITIONS, canTransition, type Actor, type OrderAction } from "./state-machine";
 
@@ -140,14 +140,21 @@ export async function activateOrder(orderId: string, ctx: Ctx = {}): Promise<Ord
   const settings = await getPlatformSettings(db);
   const pharmacy = await loadPharmacy(db, order.pharmacy_id);
 
+  // The SLA clock is independent of pricing, so it starts straight away.
+  const sla = inngest.send(orderCreated.create({ orderId, slaMinutes: settings.sla_minutes })).catch((e) => {
+    console.error("[inngest] failed to schedule SLA timer", e instanceof Error ? e.message : e);
+  });
+
+  // Distance first, because the zone is worked out from it, then price — both
+  // before the pharmacy is told, so the order never appears without its price.
+  // Neither may block the order: a failure just leaves it for an admin.
+  await ensureOrderRoute(db, orderId).catch((e) => {
+    console.error("[route] failed to compute delivery distance", e instanceof Error ? e.message : e);
+  });
+  const priced = await priceOrder(db, orderId);
+
   await Promise.all([
-    inngest.send(orderCreated.create({ orderId, slaMinutes: settings.sla_minutes })).catch((e) => {
-      console.error("[inngest] failed to schedule SLA timer", e instanceof Error ? e.message : e);
-    }),
-    // Routing must never block an order; the admin page recomputes if missing.
-    ensureOrderRoute(db, orderId).catch((e) => {
-      console.error("[route] failed to compute delivery distance", e instanceof Error ? e.message : e);
-    }),
+    sla,
     pharmacy
       ? notify(
           db,
@@ -157,7 +164,7 @@ export async function activateOrder(orderId: string, ctx: Ctx = {}): Promise<Ord
         )
       : Promise.resolve(),
   ]);
-  return data;
+  return priced ?? data;
 }
 
 export type ManualOrderInput = {
@@ -215,18 +222,20 @@ export async function createManualOrder(pharmacyId: string, userId: string, inpu
     { order_id: data.id, from_status: null, to_status: "pending", action: "create_manual", actor_role: "pharmacy", actor_id: pharmacyId },
     { order_id: data.id, from_status: "pending", to_status: "accepted", action: "accept", actor_role: "pharmacy", actor_id: pharmacyId, note: "Entered manually by pharmacy" },
   ]);
-  await Promise.all([
-    notify(db, "order.status", { phone: data.patient_phone }, {
-      orderId: shortId(data.id),
-      status: statusLabel("accepted").toLowerCase(),
-      pharmacyName: pharmacy.name,
-      estimatedTime: pharmacy.estimated_delivery_time ?? "same day",
-    }, { channels: ["sms"] }),
-    ensureOrderRoute(db, data.id).catch((e) => {
-      console.error("[route] failed to compute delivery distance", e instanceof Error ? e.message : e);
-    }),
-  ]);
-  return data;
+  // Distance then price, same order as an online order: the zone comes from the
+  // distance, and the pharmacy should see the price on its own order too.
+  await ensureOrderRoute(db, data.id).catch((e) => {
+    console.error("[route] failed to compute delivery distance", e instanceof Error ? e.message : e);
+  });
+  const priced = await priceOrder(db, data.id);
+
+  await notify(db, "order.status", { phone: data.patient_phone }, {
+    orderId: shortId(data.id),
+    status: statusLabel("accepted").toLowerCase(),
+    pharmacyName: pharmacy.name,
+    estimatedTime: pharmacy.estimated_delivery_time ?? "same day",
+  }, { channels: ["sms"] });
+  return priced ?? data;
 }
 
 export async function acceptOrder(orderId: string, pharmacyId: string, ctx: Ctx = {}) {
@@ -307,42 +316,82 @@ export async function cancelOrder(orderId: string, pharmacyId: string, reason: s
 /** Statuses at which the admin may still set or change the delivery type. */
 const PRICEABLE_STATUSES: OrderStatus[] = ["accepted", "ready_for_delivery", "assigned"];
 
-export type DeliveryTypeInput = { type: DeliveryType; customPrice?: number | null };
+export type DeliveryZoneInput = { zone: DeliveryZone; remotePrice?: number | null };
 
 /**
- * Admin sets the delivery type for an order, which fixes its price.
+ * Prices an order the moment it arrives, before the pharmacy sees it.
  *
- * Local/GTA/Extended resolve to the pharmacy's configured price (or the
- * platform default). Custom takes a price typed in for this order only. The
- * resolved price is snapshotted immediately, so later pricing changes never
+ * Zones 1-4 land on a final price with nobody touching them. Zone 5 stores the
+ * quoted span instead, for an admin to confirm within. Nothing here throws: a
+ * pricing failure must never block an order from reaching the pharmacy, it just
+ * leaves the order for an admin to price by hand.
+ */
+export async function priceOrder(db: ServiceClient, orderId: string): Promise<OrderRow | null> {
+  try {
+    // Reloaded rather than passed in: the driving distance is written moments
+    // earlier by ensureOrderRoute, and pricing depends on it.
+    const order = await loadOrder(db, orderId);
+    const ctx = await loadPricingContext(db, order.pharmacy_id);
+    const resolution = resolveZone(ctx, order);
+    const { data } = await db.from("orders").update(zonePatch(resolution)).eq("id", orderId).select("*").maybeSingle();
+    return data ?? order;
+  } catch (e) {
+    console.error("[pricing] could not price order", orderId, e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/**
+ * Admin sets or corrects an order's delivery zone.
+ *
+ * Zones 1-4 take the pharmacy's configured price (or the platform default).
+ * Zone 5 takes a price the admin confirms, which must sit inside the span the
+ * pharmacy was quoted — the pharmacy accepted on that range, so a price above
+ * its ceiling would bill them for something they never saw.
+ *
+ * The resolved price is snapshotted immediately, so later pricing changes never
  * reprice an order that has already been quoted.
  */
-export async function setDeliveryType(orderId: string, input: DeliveryTypeInput, adminId: string, ctx: Ctx = {}) {
+export async function setDeliveryZone(orderId: string, input: DeliveryZoneInput, adminId: string, ctx: Ctx = {}) {
   const db = dbOf(ctx);
   const order = await loadOrder(db, orderId);
   if (!PRICEABLE_STATUSES.includes(order.status)) {
-    throw new AppError("The delivery type can only be set before the driver picks the order up", 409);
+    throw new AppError("The delivery zone can only be set before the driver picks the order up", 409);
   }
 
   let price: number;
-  if (input.type === "custom") {
-    if (input.customPrice == null || !Number.isFinite(input.customPrice) || input.customPrice < 0) {
-      throw new AppError("Enter a price for this custom delivery");
+  if (input.zone === REMOTE_ZONE) {
+    if (input.remotePrice == null || !Number.isFinite(input.remotePrice) || input.remotePrice < 0) {
+      throw new AppError("Enter a price for this remote delivery");
     }
-    price = Math.round(input.customPrice * 100) / 100;
+    price = round2(input.remotePrice);
+    const min = order.delivery_quote_min != null ? Number(order.delivery_quote_min) : null;
+    const max = order.delivery_quote_max != null ? Number(order.delivery_quote_max) : null;
+    if (min != null && price < min) {
+      throw new AppError(`The price cannot be below the quoted ${formatCurrency(min)}`);
+    }
+    if (max != null && price > max) {
+      throw new AppError(`The pharmacy was quoted up to ${formatCurrency(max)}. Charging more needs a new quote.`);
+    }
   } else {
     const pricing = await resolvePricing(db, order.pharmacy_id);
-    price = pricing[input.type as PricedDeliveryType].price;
+    price = pricing[input.zone as FixedZone].price;
   }
 
   const { data, error } = await db
     .from("orders")
-    .update({ delivery_type: input.type, delivery_type_set_at: new Date().toISOString(), delivery_fee_charged: price })
+    .update({
+      delivery_type: input.zone,
+      delivery_type_set_at: new Date().toISOString(),
+      delivery_fee_charged: price,
+      // An admin touching the price makes it a decision, not an inference.
+      delivery_price_source: input.zone === REMOTE_ZONE ? "remote" : "manual",
+    })
     .eq("id", orderId)
     .select("*")
     .single();
   if (error) throw error;
-  await logEvent(db, order, "set_delivery_type", null, "admin", adminId, `${deliveryTypeLabel(input.type)} · $${price.toFixed(2)}`);
+  await logEvent(db, order, "set_delivery_zone", null, "admin", adminId, `${zoneLabel(input.zone)} · ${formatCurrency(price)}`);
   return data;
 }
 
@@ -351,7 +400,7 @@ export async function assignDriver(orderId: string, driverId: string, adminId: s
   const db = dbOf(ctx);
   const order = await loadOrder(db, orderId);
   if (!order.delivery_type) {
-    throw new AppError("Choose a delivery type before assigning a driver", 409, "delivery_type_required");
+    throw new AppError("Set the delivery zone before assigning a driver", 409, "delivery_zone_required");
   }
   const { data: driver } = await db.from("drivers").select("*").eq("id", driverId).eq("active", true).maybeSingle();
   if (!driver) throw new NotFoundError("Driver not found or inactive");

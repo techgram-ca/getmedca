@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ClipboardList } from "lucide-react";
 import { requirePharmacy } from "@getmed/core/auth";
-import { formatDate, shortId } from "@getmed/core/format";
+import { formatCurrency, formatDate, shortId } from "@getmed/core/format";
+import { zoneShortLabel } from "@getmed/core/pricing";
 import type { OrderSource, OrderStatus, OrderType } from "@getmed/db/types";
-import { Badge, Button, EmptyState, Input, PageHeader, Select, StatusBadge, TBody, TD, TH, THead, TR, Table } from "@getmed/ui";
+import { Badge, Button, DeliveryPrice, EmptyState, Input, PageHeader, Select, StatusBadge, TBody, TD, TH, THead, TR, Table } from "@getmed/ui";
 import { AddOrderDialog } from "@/components/add-order-dialog";
 import { listOrders } from "@/lib/queries";
 
@@ -55,7 +56,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       ) : (
         <div className="surface overflow-hidden">
           <Table>
-            <THead><TR><TH>Order</TH><TH>Patient</TH><TH>Type</TH><TH>Source</TH><TH>Status</TH><TH>Received</TH><TH></TH></TR></THead>
+            <THead><TR><TH>Order</TH><TH>Patient</TH><TH>Type</TH><TH>Source</TH><TH>Status</TH><TH>Delivery cost</TH><TH>Received</TH><TH></TH></TR></THead>
             <TBody>
               {orders.map((o) => (
                 <TR key={o.id}>
@@ -64,6 +65,19 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                   <TD className="capitalize">{o.order_type}</TD>
                   <TD><Badge tone={o.source === "manual" ? "accent" : "neutral"} className="capitalize">{o.source}</Badge></TD>
                   <TD><StatusBadge status={o.status} /></TD>
+                  <TD>
+                    <DeliveryPrice
+                      price={{
+                        zoneLabel: o.delivery_type ? zoneShortLabel(o.delivery_type) : null,
+                        fee: o.delivery_fee_charged != null ? formatCurrency(Number(o.delivery_fee_charged)) : null,
+                        quote:
+                          o.delivery_quote_min != null && o.delivery_quote_max != null
+                            ? { min: formatCurrency(Number(o.delivery_quote_min)), max: formatCurrency(Number(o.delivery_quote_max)) }
+                            : null,
+                      }}
+                      className="text-sm"
+                    />
+                  </TD>
                   <TD className="text-ink-500">{formatDate(o.phone_verified_at ?? o.created_at)}</TD>
                   <TD className="text-right"><Button asChild size="sm" variant="outline"><Link href={`/orders/${o.id}`}>View</Link></Button></TD>
                 </TR>

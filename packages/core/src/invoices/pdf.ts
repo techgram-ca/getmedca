@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { formatCurrency, formatDate, shortId } from "../format";
-import { deliveryTypeLabel } from "../pricing";
+import { zoneLabel } from "../pricing";
 import type { InvoiceSummary } from "./summary";
 
 /** Render a monthly invoice PDF (server-side, no browser needed). */
@@ -75,7 +75,7 @@ export async function renderInvoicePdf(inv: InvoiceSummary): Promise<Uint8Array>
     }
     text(shortId(line.orderId), 40, 10);
     text(formatDate(line.deliveredAt), 140, 10);
-    text(deliveryTypeLabel(line.type), 340, 10);
+    text(zoneLabel(line.type), 340, 10);
     text(formatCurrency(line.fee), 460, 10);
     y -= 16;
   }

@@ -84,6 +84,14 @@ export function AddOrderDialog() {
     start(async () => {
       setError(null);
       setErrors({});
+      // A typed address has no coordinates or postal code, so the order could
+      // not be priced or routed. The picker supplies both.
+      const unpicked = rows.findIndex((row) => row.address?.lat == null || row.address.lng == null || !row.address.postalCode);
+      if (unpicked >= 0) {
+        setErrors({ [unpicked]: { deliveryAddress: "Choose the address from the list of suggestions so we can price the delivery" } });
+        setError("Check the highlighted address");
+        return;
+      }
       const r = await createManualOrdersAction({
         orders: rows.map((row) => ({
           orderType: row.orderType,

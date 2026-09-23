@@ -39,6 +39,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0004_pharmacy_theme_color.sql` | Per-pharmacy theme colour for the public page |
 | `migrations/0005_consultation_pharmacist.sql` | Consultation price per topic, and the pharmacist a patient picked |
 | `migrations/0006_failed_delivery_charges.sql` | Billing per delivery attempt, retryable failed deliveries, delivery note |
+| `migrations/0007_delivery_zones.sql` | Five delivery zones priced by postal area, with a distance fallback |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
 After any schema change, regenerate the TypeScript types with `pnpm db:types`.
@@ -64,3 +65,14 @@ back out and each trip bills separately. It also adds `platform_settings.failed_
 (the share of the quoted fee a failed attempt bills, default 100), `orders.delivery_attempt`, and
 `proof_of_delivery.note`. Existing delivered orders are backfilled into `order_charges` so past
 invoices keep their totals.
+
+`migrations/0007_delivery_zones.sql` replaces the three named delivery tiers with five zones. The
+`delivery_type` enum becomes `delivery_zone` (`local→zone1`, `gta→zone2`, `extended→zone3`,
+`custom→zone5`, with `zone4` new) — a fresh type is created and swapped rather than renaming values
+in place, so the whole change lands in one transaction.
+
+An order is priced when it arrives: a delivery postal code tagged in `pharmacy_zone_areas` takes its
+zone's fixed price; otherwise the stored toll-free driving distance picks a band; beyond the last
+band it is Zone 5, priced from `default_remote_per_km` and quoted to the pharmacy as a span an admin
+confirms within. `postal_areas` is the FSA-to-city reference table (seeded with 218 GTA and Hamilton
+postal areas), and `pharmacy_delivery_config` holds per-pharmacy per-km rates and band overrides.
