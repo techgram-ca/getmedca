@@ -41,6 +41,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0006_failed_delivery_charges.sql` | Billing per delivery attempt, retryable failed deliveries, delivery note |
 | `migrations/0007_delivery_zones.sql` | Five delivery zones priced by postal area |
 | `migrations/0008_drop_distance_bands.sql` | Removes the distance-band fallback; untagged postal codes go to Zone 5 |
+| `migrations/0009_pharmacy_point.sql` | `pharmacy_point()`, for quoting an address before an order exists |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
 After any schema change, regenerate the TypeScript types with `pnpm db:types`.
@@ -81,3 +82,8 @@ and `pharmacy_delivery_config` holds per-pharmacy per-km rates.
 `migrations/0008_drop_distance_bands.sql` removes the distance bands 0007 introduced, so there is no
 middle path between a tagged postal code and Zone 5. Run it after 0007 — it is written to be safe
 whether or not 0007 has already been applied.
+
+`migrations/0009_pharmacy_point.sql` adds `public.pharmacy_point`, which returns a pharmacy's
+coordinates through `st_x`/`st_y`. The manual order form quotes a delivery as soon as the address is
+picked, which needs the driving distance from the pharmacy before any order row exists for
+`order_route_points` to read.

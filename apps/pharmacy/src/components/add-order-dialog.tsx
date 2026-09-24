@@ -22,6 +22,7 @@ import {
   type FieldIssue,
 } from "@getmed/ui";
 import { createManualOrdersAction } from "@/lib/actions/orders";
+import { DeliveryQuote } from "./delivery-quote";
 
 type Row = {
   key: number;
@@ -167,6 +168,7 @@ export function AddOrderDialog() {
                         placeholder="Street address, city"
                         invalid={!!fe("deliveryAddress")}
                       />
+                      <DeliveryQuote address={row.address} className="mt-2" />
                     </Field>
                     {row.orderType === "transfer" ? (
                       <>
