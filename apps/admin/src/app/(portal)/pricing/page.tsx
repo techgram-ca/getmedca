@@ -8,7 +8,8 @@ import {
 } from "@getmed/core/pricing";
 import { getPlatformSettings } from "@getmed/core/settings";
 import { MapPin } from "lucide-react";
-import { Alert, Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader } from "@getmed/ui";
+import Link from "next/link";
+import { Alert, Button, Card, CardContent, PageHeader } from "@getmed/ui";
 import { PricingDefaultsForm } from "@/components/pricing-defaults-form";
 import { PharmacyPricingTable } from "@/components/pharmacy-pricing-table";
 
@@ -48,32 +49,12 @@ export default async function PricingPage() {
       </Alert>
 
       <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Cities on file</CardTitle>
-          <CardDescription>
-            The postal areas available to tag against a pharmacy&apos;s zones, on its own page. A delivery to a postal
-            code no pharmacy has tagged is priced by driving distance instead — if one keeps appearing, add it here.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {cities.length === 0 ? (
-            <p className="text-sm text-ink-500">No postal areas loaded yet.</p>
-          ) : (
-            <>
-              <div className="flex flex-wrap gap-2">
-                {cities.map((c) => (
-                  <span key={c.city} className="inline-flex items-center gap-1.5 rounded-full border border-ink-200 bg-white px-3 py-1 text-sm">
-                    <MapPin className="size-3.5 text-brand-600" />
-                    <span className="font-medium text-ink-900">{c.city}</span>
-                    <span className="text-xs text-ink-400">{c.fsas.length}</span>
-                  </span>
-                ))}
-              </div>
-              <p className="mt-3 text-sm text-ink-500">
-                {cities.length} cities · {cities.reduce((n, c) => n + c.fsas.length, 0)} postal areas
-              </p>
-            </>
-          )}
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+          <p className="text-sm text-ink-600">
+            <span className="font-semibold text-ink-950">{cities.length} cities</span> ·{" "}
+            {cities.reduce((n, c) => n + c.fsas.length, 0)} postal areas available to tag against a pharmacy&apos;s zones.
+          </p>
+          <Button asChild size="sm" variant="outline"><Link href="/postal-areas"><MapPin /> Manage postal areas</Link></Button>
         </CardContent>
       </Card>
 
