@@ -39,7 +39,8 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0004_pharmacy_theme_color.sql` | Per-pharmacy theme colour for the public page |
 | `migrations/0005_consultation_pharmacist.sql` | Consultation price per topic, and the pharmacist a patient picked |
 | `migrations/0006_failed_delivery_charges.sql` | Billing per delivery attempt, retryable failed deliveries, delivery note |
-| `migrations/0007_delivery_zones.sql` | Five delivery zones priced by postal area, with a distance fallback |
+| `migrations/0007_delivery_zones.sql` | Five delivery zones priced by postal area |
+| `migrations/0008_drop_distance_bands.sql` | Removes the distance-band fallback; untagged postal codes go to Zone 5 |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
 After any schema change, regenerate the TypeScript types with `pnpm db:types`.
@@ -72,7 +73,11 @@ invoices keep their totals.
 in place, so the whole change lands in one transaction.
 
 An order is priced when it arrives: a delivery postal code tagged in `pharmacy_zone_areas` takes its
-zone's fixed price; otherwise the stored toll-free driving distance picks a band; beyond the last
-band it is Zone 5, priced from `default_remote_per_km` and quoted to the pharmacy as a span an admin
-confirms within. `postal_areas` is the FSA-to-city reference table (seeded with 218 GTA and Hamilton
-postal areas), and `pharmacy_delivery_config` holds per-pharmacy per-km rates and band overrides.
+zone's fixed price. Anything else is Zone 5, priced from `default_remote_per_km` against the stored
+toll-free driving distance and quoted to the pharmacy as a span an admin confirms within.
+`postal_areas` is the FSA-to-city reference table (seeded with 218 GTA and Hamilton postal areas),
+and `pharmacy_delivery_config` holds per-pharmacy per-km rates.
+
+`migrations/0008_drop_distance_bands.sql` removes the distance bands 0007 introduced, so there is no
+middle path between a tagged postal code and Zone 5. Run it after 0007 — it is written to be safe
+whether or not 0007 has already been applied.

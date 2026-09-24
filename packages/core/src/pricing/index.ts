@@ -12,14 +12,11 @@ import {
   REMOTE_ZONE,
   defaultZonePrices,
   remoteQuote,
-  resolveBands,
   resolvePerKm,
   round2,
   toFsa,
-  zoneForDistance,
   zoneLabel,
   zoneShortLabel,
-  type DistanceBands,
   type FixedZone,
   type RemoteQuote,
 } from "./zones";
@@ -101,21 +98,21 @@ export async function savePharmacyPricing(
 
 export type ZoneResolution =
   | {
-      /** The postal code is tagged, or the distance fell in a band. Final. */
-      source: Extract<DeliveryPriceSource, "tagged" | "band">;
+      /** The postal code is tagged to a zone for this pharmacy. Final. */
+      source: Extract<DeliveryPriceSource, "tagged">;
       zone: FixedZone;
       price: number;
       quote: null;
     }
   | {
-      /** Beyond the bands: priced per km, quoted as a span for an admin to confirm. */
+      /** Not tagged: priced per km, quoted as a span for an admin to confirm. */
       source: Extract<DeliveryPriceSource, "remote">;
       zone: typeof REMOTE_ZONE;
       price: null;
       quote: RemoteQuote;
     }
   | {
-      /** No route to measure and no tag — nothing can be worked out. */
+      /** Not tagged and no route to measure — nothing can be worked out. */
       source: Extract<DeliveryPriceSource, "manual">;
       zone: null;
       price: null;
@@ -125,7 +122,6 @@ export type ZoneResolution =
 export type PricingContext = {
   settings: PlatformSettingsRow;
   pricing: PharmacyPricing;
-  bands: DistanceBands;
   perKm: number;
   span: number;
   /** Postal areas this pharmacy has tagged, keyed by FSA. */
@@ -148,7 +144,6 @@ export async function loadPricingContext(
   return {
     settings: s,
     pricing,
-    bands: resolveBands(s, cfg),
     perKm: resolvePerKm(s, cfg),
     span: Number(s.remote_quote_span),
     taggedZones: new Map((areas ?? []).map((a) => [a.fsa, a.zone as FixedZone])),
@@ -156,16 +151,19 @@ export async function loadPricingContext(
 }
 
 /**
- * Prices one delivery, in the order agreed with the business:
+ * Prices one delivery. Two rules and nothing between them:
  *
  *  1. The delivery postal code is tagged to a zone for this pharmacy → that
- *     zone's fixed price. A tag always wins, because it is the price the
- *     pharmacy was promised for that city regardless of how far it is.
- *  2. Untagged → the driving distance picks a band → that zone's fixed price.
- *  3. Beyond the last band → Zone 5, per km, quoted as a span an admin confirms.
- *  4. No distance and no tag → nothing to go on; an admin sets the price.
+ *     zone's fixed price, settled with nobody touching it.
+ *  2. Anything else → Zone 5, per km, quoted as a span an admin confirms.
  *
- * Distance is the stored toll-free driving distance, never straight-line.
+ * So an untagged postal code always reaches an admin. On a nearby one the
+ * per-km price comes out conspicuously low, which is the signal that it
+ * belongs in a zone.
+ *
+ * Distance is the stored toll-free driving distance, never straight-line. With
+ * no route to measure there is no per-km price either, and the order is left
+ * for an admin to price by hand.
  */
 export function resolveZone(
   ctx: PricingContext,
@@ -182,10 +180,6 @@ export function resolveZone(
   }
 
   const km = Number(order.delivery_distance_m) / 1000;
-  const banded = zoneForDistance(km, ctx.bands);
-  if (banded) {
-    return { source: "band", zone: banded, price: ctx.pricing[banded].price, quote: null };
-  }
   return { source: "remote", zone: REMOTE_ZONE, price: null, quote: remoteQuote(km, ctx.perKm, ctx.span) };
 }
 

@@ -6,7 +6,6 @@ import {
   listPostalAreas,
   loadDeliveryConfigs,
   loadZoneAreas,
-  resolveBands,
   resolvePerKm,
   resolvePricing,
   toZoneText,
@@ -51,20 +50,10 @@ export default async function PharmacyPricingPage({ params }: { params: Promise<
               pricing[z].source === "pharmacy" ? String(pricing[z].price) : "",
             ]),
           ) as Record<"zone1" | "zone2" | "zone3" | "zone4", string>,
-          config: {
-            remotePerKm: config?.remotePerKm == null ? "" : String(config.remotePerKm),
-            zone1MaxKm: config?.zone1MaxKm == null ? "" : String(config.zone1MaxKm),
-            zone2MaxKm: config?.zone2MaxKm == null ? "" : String(config.zone2MaxKm),
-            zone3MaxKm: config?.zone3MaxKm == null ? "" : String(config.zone3MaxKm),
-            zone4MaxKm: config?.zone4MaxKm == null ? "" : String(config.zone4MaxKm),
-          },
+          config: { remotePerKm: config?.remotePerKm == null ? "" : String(config.remotePerKm) },
           areas: toZoneText(areas),
         }}
-        platform={{
-          prices: defaultZonePrices(settings),
-          bands: resolveBands(settings, null),
-          perKm: resolvePerKm(settings, null),
-        }}
+        platform={{ prices: defaultZonePrices(settings), perKm: resolvePerKm(settings, null) }}
       />
 
       <Button asChild variant="link" className="mt-6"><Link href="/pricing">← All pricing</Link></Button>

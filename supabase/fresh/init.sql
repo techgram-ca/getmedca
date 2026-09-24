@@ -29,7 +29,7 @@ create type public.order_source as enum ('online', 'manual');
 -- Zones 1-4 carry a fixed price; Zone 5 (Remote) is priced per km, per order.
 create type public.delivery_zone as enum ('zone1', 'zone2', 'zone3', 'zone4', 'zone5');
 -- How an order's zone was decided, kept so support can explain a price.
-create type public.delivery_price_source as enum ('tagged', 'band', 'remote', 'manual');
+create type public.delivery_price_source as enum ('tagged', 'remote', 'manual');
 -- A delivery bills once; a failed attempt bills its own share of the same fee.
 create type public.order_charge_kind as enum ('delivery', 'failed_delivery');
 
@@ -448,18 +448,9 @@ create table public.platform_settings (
   -- Zone 5 is priced per km rather than by a fixed fee.
   default_remote_per_km numeric(10,2) not null default 1.20
     constraint platform_settings_per_km_positive check (default_remote_per_km >= 0),
-  -- Upper bound of each band in km, lower inclusive and upper exclusive: exactly
-  -- 6.0 km is Zone 2, not Zone 1. Beyond the last band is Zone 5. Used only when
-  -- the delivery postal code is not tagged to a zone for the pharmacy.
-  zone1_max_km numeric(6,2) not null default 6,
-  zone2_max_km numeric(6,2) not null default 13,
-  zone3_max_km numeric(6,2) not null default 25,
-  zone4_max_km numeric(6,2) not null default 50,
   -- How far above the computed per-km price an admin may go on a Zone 5 order.
   remote_quote_span numeric(10,2) not null default 6.00
     constraint platform_settings_quote_span_positive check (remote_quote_span >= 0),
-  constraint platform_settings_bands_ascending
-    check (zone1_max_km < zone2_max_km and zone2_max_km < zone3_max_km and zone3_max_km < zone4_max_km),
   -- Share of the quoted fee a failed attempt bills. 100 = the full fee (the
   -- driver drove the route either way), 0 = failed attempts are free.
   failed_delivery_fee_percent numeric(5,2) not null default 100
@@ -505,15 +496,11 @@ create table public.pharmacy_zone_areas (
 );
 create index pharmacy_zone_areas_pharmacy_idx on public.pharmacy_zone_areas (pharmacy_id);
 
--- Per-pharmacy overrides for what is not a fixed zone price. Null means "use
--- the platform default", the same rule pharmacy_delivery_pricing follows.
+-- The per-km rate for Zone 5, when a pharmacy differs from the platform.
+-- Null means "use the platform default", as pharmacy_delivery_pricing does.
 create table public.pharmacy_delivery_config (
   pharmacy_id uuid primary key references public.pharmacies (id) on delete cascade,
   remote_per_km numeric(10,2) constraint pharmacy_delivery_config_per_km_positive check (remote_per_km is null or remote_per_km >= 0),
-  zone1_max_km numeric(6,2),
-  zone2_max_km numeric(6,2),
-  zone3_max_km numeric(6,2),
-  zone4_max_km numeric(6,2),
   updated_at timestamptz not null default now()
 );
 

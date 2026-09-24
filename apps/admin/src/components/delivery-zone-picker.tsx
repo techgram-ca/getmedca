@@ -28,9 +28,9 @@ type Props = {
 
 const SOURCE_NOTE: Record<DeliveryPriceSource, string> = {
   tagged: "Priced automatically — this postal code is tagged to a zone for this pharmacy.",
-  band: "Priced automatically — this postal code is not tagged, so the driving distance chose the zone.",
-  remote: "Beyond the pharmacy's zones. Confirm a price within the range the pharmacy was quoted.",
-  manual: "Could not be priced automatically. Choose a zone, or price it as remote.",
+  remote:
+    "This postal code is not tagged for this pharmacy, so it is priced per kilometre. Confirm a price within the range the pharmacy was quoted — or tag the postal code, if it belongs in a zone.",
+  manual: "Could not be priced automatically — there is no route to measure. Choose a zone, or price it by hand.",
 };
 
 export function DeliveryZonePicker({ orderId, current, pricing, distanceM, city, postalCode, locked }: Props) {

@@ -3,10 +3,9 @@ import assert from "node:assert/strict";
 import type { PlatformSettingsRow } from "@getmed/db/types";
 import { DEFAULT_SETTINGS } from "../settings.ts";
 import { resolveZone, type PricingContext } from "./index.ts";
-import { remoteQuote, resolveBands, resolvePerKm, toFsa, zoneForDistance } from "./zones.ts";
+import { remoteQuote, resolvePerKm, toFsa } from "./zones.ts";
 
 const settings: PlatformSettingsRow = { ...DEFAULT_SETTINGS };
-const bands = resolveBands(settings, null);
 
 function ctx(tagged: Record<string, "zone1" | "zone2" | "zone3" | "zone4"> = {}): PricingContext {
   return {
@@ -17,7 +16,6 @@ function ctx(tagged: Record<string, "zone1" | "zone2" | "zone3" | "zone4"> = {})
       zone3: { price: 12, source: "default" },
       zone4: { price: 18, source: "default" },
     },
-    bands,
     perKm: 1.2,
     span: 6,
     taggedZones: new Map(Object.entries(tagged) as [string, "zone1"][]),
@@ -36,44 +34,32 @@ test("a postal code is reduced to its FSA, whatever the patient typed", () => {
   for (const bad of [null, "", "M5", "5MV 3A8", "ABCDEF"]) assert.equal(toFsa(bad), null, `${bad} should not parse`);
 });
 
-test("bands are lower-inclusive and upper-exclusive", () => {
-  // Defaults are 6 / 13 / 25 / 50 km.
-  assert.equal(zoneForDistance(0, bands), "zone1");
-  assert.equal(zoneForDistance(5.99, bands), "zone1");
-  assert.equal(zoneForDistance(6, bands), "zone2", "exactly 6 km is Zone 2, not Zone 1");
-  assert.equal(zoneForDistance(12.99, bands), "zone2");
-  assert.equal(zoneForDistance(13, bands), "zone3");
-  assert.equal(zoneForDistance(24.99, bands), "zone3");
-  assert.equal(zoneForDistance(25, bands), "zone4");
-  assert.equal(zoneForDistance(49.99, bands), "zone4");
-  assert.equal(zoneForDistance(50, bands), null, "beyond the last band there is no fixed zone");
-  assert.equal(zoneForDistance(500, bands), null);
+test("a tagged postal code takes its zone's price, whatever the distance", () => {
+  // Brampton tagged Zone 2 at 22 km, and a Toronto FSA tagged Zone 1 at 3 km —
+  // the tag decides in both directions, never the distance.
+  const near = resolveZone(ctx({ M5V: "zone1" }), order("M5V 3A8", 3));
+  assert.equal(near.source, "tagged");
+  assert.equal(near.price, 5);
+
+  const far = resolveZone(ctx({ L6P: "zone2" }), order("L6P 1A1", 22));
+  assert.equal(far.source, "tagged");
+  assert.equal(far.zone, "zone2");
+  assert.equal(far.price, 8);
+  assert.equal(far.quote, null);
 });
 
-test("a tagged postal code wins over the distance it actually is", () => {
-  // Brampton tagged Zone 2 even though 22 km would band it into Zone 3. That is
-  // the whole point of tagging: the pharmacy was promised a price for that city.
-  const r = resolveZone(ctx({ L6P: "zone2" }), order("L6P 1A1", 22));
-  assert.equal(r.source, "tagged");
-  assert.equal(r.zone, "zone2");
-  assert.equal(r.price, 8);
-  assert.equal(r.quote, null);
-});
+test("an untagged postal code goes straight to Zone 5, however close it is", () => {
+  // There is no distance fallback: untagged means per km and an admin's
+  // confirmation, and a conspicuously low price is the cue to tag it.
+  const near = resolveZone(ctx({ L6P: "zone2" }), order("M5V 3A8", 3));
+  assert.equal(near.source, "remote");
+  assert.equal(near.zone, "zone5");
+  assert.equal(near.price, null, "a remote order has no price until an admin confirms one");
+  assert.deepEqual(near.quote, { computed: 3.6, min: 3.6, max: 9.6 });
 
-test("an untagged postal code falls to the distance band", () => {
-  const r = resolveZone(ctx({ L6P: "zone2" }), order("M5V 3A8", 22));
-  assert.equal(r.source, "band");
-  assert.equal(r.zone, "zone3");
-  assert.equal(r.price, 12);
-});
-
-test("beyond the last band it is Zone 5, quoted as a span", () => {
-  const r = resolveZone(ctx(), order("K1A 0A6", 60));
-  assert.equal(r.source, "remote");
-  assert.equal(r.zone, "zone5");
-  assert.equal(r.price, null, "a remote order has no price until an admin confirms one");
-  // 60 km x $1.20 = $72.00, span $72.00-$78.00.
-  assert.deepEqual(r.quote, { computed: 72, min: 72, max: 78 });
+  const far = resolveZone(ctx(), order("K1A 0A6", 60));
+  assert.equal(far.source, "remote");
+  assert.deepEqual(far.quote, { computed: 72, min: 72, max: 78 });
 });
 
 test("the bottom of a remote span is the per-km price itself", () => {
@@ -89,7 +75,7 @@ test("a remote quote never goes negative or carries fractions of a cent", () => 
   assert.equal(remoteQuote(9.99, 1.115, 6).computed, 11.14);
 });
 
-test("no distance and no tag leaves the order for an admin", () => {
+test("no tag and no distance leaves the order for an admin", () => {
   const r = resolveZone(ctx(), order("K1A 0A6", null));
   assert.equal(r.source, "manual");
   assert.equal(r.zone, null);
@@ -103,25 +89,13 @@ test("a tag still applies when the route could not be measured", () => {
   assert.equal(r.price, 5);
 });
 
-test("an unparseable postal code cannot match a tag, but distance still prices it", () => {
+test("an unparseable postal code cannot match a tag, so it is remote", () => {
   const r = resolveZone(ctx({ M5V: "zone1" }), order("not a postcode", 3));
-  assert.equal(r.source, "band");
-  assert.equal(r.zone, "zone1");
+  assert.equal(r.source, "remote");
 });
 
-test("per-pharmacy bands and rate override the platform defaults", () => {
-  const config = {
-    pharmacy_id: "p1",
-    remote_per_km: 2.5,
-    zone1_max_km: 3,
-    zone2_max_km: 8,
-    zone3_max_km: null,
-    zone4_max_km: null,
-    updated_at: "",
-  };
-  const custom = resolveBands(settings, config);
-  assert.deepEqual(custom, { zone1: 3, zone2: 8, zone3: 25, zone4: 50 }, "unset bands fall back to the defaults");
-  assert.equal(zoneForDistance(5, custom), "zone2", "5 km is Zone 2 for this pharmacy, Zone 1 by default");
+test("a pharmacy's own per-km rate overrides the platform default", () => {
+  const config = { pharmacy_id: "p1", remote_per_km: 2.5, updated_at: "" };
   assert.equal(resolvePerKm(settings, config), 2.5);
   assert.equal(resolvePerKm(settings, null), 1.2);
 });

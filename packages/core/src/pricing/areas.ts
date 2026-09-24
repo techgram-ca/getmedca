@@ -56,40 +56,26 @@ export async function countZoneAreas(db: ServiceClient, pharmacyId: string): Pro
 
 
 export type DeliveryConfigInput = {
+  /** Null means "use the platform default". */
   remotePerKm: number | null;
-  zone1MaxKm: number | null;
-  zone2MaxKm: number | null;
-  zone3MaxKm: number | null;
-  zone4MaxKm: number | null;
 };
 
 /**
- * A pharmacy's own per-km rate and distance bands. Every field is nullable and
- * a null means "use the platform default", so clearing a box restores it.
- * The whole row is deleted when nothing is overridden, keeping the table to
- * pharmacies that actually differ.
+ * A pharmacy's own Zone 5 rate. The row is deleted when nothing is overridden,
+ * keeping the table to pharmacies that actually differ from the platform.
  */
 export async function savePharmacyDeliveryConfig(
   db: ServiceClient,
   pharmacyId: string,
   input: DeliveryConfigInput,
 ): Promise<void> {
-  const allDefault = Object.values(input).every((v) => v == null);
-  if (allDefault) {
+  if (input.remotePerKm == null) {
     const { error } = await db.from("pharmacy_delivery_config").delete().eq("pharmacy_id", pharmacyId);
     if (error) throw error;
     return;
   }
   const { error } = await db.from("pharmacy_delivery_config").upsert(
-    {
-      pharmacy_id: pharmacyId,
-      remote_per_km: input.remotePerKm,
-      zone1_max_km: input.zone1MaxKm,
-      zone2_max_km: input.zone2MaxKm,
-      zone3_max_km: input.zone3MaxKm,
-      zone4_max_km: input.zone4MaxKm,
-      updated_at: new Date().toISOString(),
-    },
+    { pharmacy_id: pharmacyId, remote_per_km: input.remotePerKm, updated_at: new Date().toISOString() },
     { onConflict: "pharmacy_id" },
   );
   if (error) throw error;
@@ -102,13 +88,86 @@ export async function loadDeliveryConfigs(db: ServiceClient, pharmacyIds: string
   return new Map(
     (data ?? []).map((c) => [
       c.pharmacy_id,
-      {
-        remotePerKm: c.remote_per_km == null ? null : Number(c.remote_per_km),
-        zone1MaxKm: c.zone1_max_km == null ? null : Number(c.zone1_max_km),
-        zone2MaxKm: c.zone2_max_km == null ? null : Number(c.zone2_max_km),
-        zone3MaxKm: c.zone3_max_km == null ? null : Number(c.zone3_max_km),
-        zone4MaxKm: c.zone4_max_km == null ? null : Number(c.zone4_max_km),
-      } satisfies DeliveryConfigInput,
+      { remotePerKm: c.remote_per_km == null ? null : Number(c.remote_per_km) } satisfies DeliveryConfigInput,
     ]),
   );
+}
+
+export type PostalAreaRowView = {
+  fsa: string;
+  city: string;
+  province: string;
+  /** How many pharmacies have tagged this postal area to a zone. */
+  taggedBy: number;
+};
+
+export type PostalAreaCityView = { city: string; province: string; areas: PostalAreaRowView[] };
+
+/**
+ * Every postal area with how many pharmacies price against it.
+ *
+ * The count is what makes deletion safe to offer: `pharmacy_zone_areas.fsa`
+ * cascades, so removing a postal area silently untags it for every pharmacy
+ * using it, and their deliveries there drop to Zone 5 without an error.
+ */
+export async function listPostalAreasDetailed(db: ServiceClient): Promise<PostalAreaCityView[]> {
+  const [{ data: areas }, { data: tags }] = await Promise.all([
+    db.from("postal_areas").select("fsa, city, province").order("city").order("fsa"),
+    db.from("pharmacy_zone_areas").select("fsa"),
+  ]);
+  const usage = new Map<string, number>();
+  for (const t of tags ?? []) usage.set(t.fsa, (usage.get(t.fsa) ?? 0) + 1);
+
+  const byCity = new Map<string, PostalAreaCityView>();
+  for (const a of areas ?? []) {
+    const entry = byCity.get(a.city) ?? { city: a.city, province: a.province, areas: [] };
+    entry.areas.push({ fsa: a.fsa, city: a.city, province: a.province, taggedBy: usage.get(a.fsa) ?? 0 });
+    byCity.set(a.city, entry);
+  }
+  return [...byCity.values()];
+}
+
+/**
+ * Adds postal areas to a city, and moves any that currently sit under another
+ * city. Pharmacy tags survive a move — the zone is keyed on the FSA, and the
+ * city is only a label.
+ */
+export async function upsertPostalAreas(
+  db: ServiceClient,
+  city: string,
+  province: string,
+  fsas: string[],
+): Promise<{ added: number; moved: string[] }> {
+  const name = city.trim();
+  if (!name) throw new Error("Enter a city name");
+  const unique = [...new Set(fsas)];
+  if (unique.length === 0) return { added: 0, moved: [] };
+
+  const { data: existing } = await db.from("postal_areas").select("fsa, city").in("fsa", unique);
+  const moved = (existing ?? []).filter((e) => e.city !== name).map((e) => `${e.fsa} (was ${e.city})`);
+
+  const { error } = await db
+    .from("postal_areas")
+    .upsert(unique.map((fsa) => ({ fsa, city: name, province })), { onConflict: "fsa" });
+  if (error) throw error;
+  return { added: unique.length - (existing?.length ?? 0), moved };
+}
+
+/** Renames a city across all of its postal areas. Pricing is unaffected. */
+export async function renamePostalCity(db: ServiceClient, from: string, to: string): Promise<number> {
+  const name = to.trim();
+  if (!name) throw new Error("Enter a city name");
+  const { data, error } = await db.from("postal_areas").update({ city: name }).eq("city", from).select("fsa");
+  if (error) throw error;
+  return data?.length ?? 0;
+}
+
+/**
+ * Removes postal areas. Any pharmacy zone tag on them goes with it — the
+ * caller is responsible for having shown the count first.
+ */
+export async function deletePostalAreas(db: ServiceClient, fsas: string[]): Promise<void> {
+  if (fsas.length === 0) return;
+  const { error } = await db.from("postal_areas").delete().in("fsa", fsas);
+  if (error) throw error;
 }
