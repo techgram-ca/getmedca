@@ -1,6 +1,12 @@
 import { requireAdmin } from "@getmed/core/auth";
-import { FIXED_ZONES, defaultZonePrices, resolveBands, resolvePerKm, type FixedZone } from "@getmed/core/pricing";
-import { listPostalAreas, loadDeliveryConfigs, resolvePricingForAll } from "@getmed/core/pricing";
+import {
+  defaultZonePrices,
+  listPostalAreas,
+  loadDeliveryConfigs,
+  resolveBands,
+  resolvePerKm,
+  resolvePricingForAll,
+} from "@getmed/core/pricing";
 import { getPlatformSettings } from "@getmed/core/settings";
 import { MapPin } from "lucide-react";
 import { Alert, Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader } from "@getmed/ui";
@@ -20,20 +26,26 @@ export default async function PricingPage() {
 
   const list = pharmacies ?? [];
   const ids = list.map((p) => p.id);
-  const [pricing, configs] = await Promise.all([resolvePricingForAll(db, ids, settings), loadDeliveryConfigs(db, ids)]);
+  const [pricing, configs, { data: taggedRows }] = await Promise.all([
+    resolvePricingForAll(db, ids, settings),
+    loadDeliveryConfigs(db, ids),
+    db.from("pharmacy_zone_areas").select("pharmacy_id").in("pharmacy_id", ids.length ? ids : ["-"]),
+  ]);
+  const taggedCounts = (taggedRows ?? []).reduce<Record<string, number>>((acc, r) => {
+    acc[r.pharmacy_id] = (acc[r.pharmacy_id] ?? 0) + 1;
+    return acc;
+  }, {});
   const cities = await listPostalAreas(db);
-  const platformBands = resolveBands(settings, null);
-  const platformPerKm = resolvePerKm(settings, null);
 
   return (
     <div className="max-w-5xl">
       <PageHeader
         title="Delivery pricing"
-        description="What each pharmacy is charged per delivered order, by delivery type."
+        description="What each pharmacy is charged per delivered order, by zone."
       />
 
       <Alert tone="info" className="mb-6">
-        A pharmacy with no price of its own is charged the default. Custom deliveries have no set price — you type one in when choosing the delivery type for an order. Prices are snapshotted onto each order at that moment, so changing them here never reprices past orders. A delivery a driver marks failed is billed at the rate below, and an order sent out again is billed once per attempt.
+        An order is priced when it arrives: a postal code tagged to a zone for its pharmacy takes that zone's price, anything untagged is priced by driving distance, and beyond the last band by the kilometre. Prices are snapshotted onto each order at that moment, so changing them here never reprices past orders. A delivery a driver marks failed is billed at the rate below, and an order sent out again is billed once per attempt.
       </Alert>
 
       <Card className="mb-6">
@@ -81,8 +93,7 @@ export default async function PricingPage() {
           pricing={pricing}
           defaults={defaultZonePrices(settings)}
           configs={Object.fromEntries(configs)}
-          platformBands={platformBands}
-          platformPerKm={platformPerKm}
+          taggedCounts={taggedCounts}
         />
       </div>
     </div>

@@ -4,24 +4,22 @@ import { FileText } from "lucide-react";
 import { requireAdmin } from "@getmed/core/auth";
 import { formatCurrency, formatDate } from "@getmed/core/format";
 import { DAY_KEYS, DAY_LABELS, formatTime, type WeeklyHours } from "@getmed/core/hours";
-import { listPostalAreas, loadZoneAreas } from "@getmed/core/pricing";
+import { countZoneAreas } from "@getmed/core/pricing";
 import { mediaUrl } from "@getmed/core/storage";
-import { Avatar, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader } from "@getmed/ui";
+import { Alert, Avatar, Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader } from "@getmed/ui";
 import { PharmacyStatusActions } from "@/components/pharmacy-status-actions";
-import { ZoneAreasEditor } from "@/components/zone-areas-editor";
 
 export default async function PharmacyDetail({ params }: { params: Promise<{ pharmacyId: string }> }) {
   const { pharmacyId } = await params;
   const { db } = await requireAdmin();
   const { data: p } = await db.from("pharmacies").select("*").eq("id", pharmacyId).maybeSingle();
   if (!p) notFound();
-  const [{ data: pharmacists }, { data: services }, { data: issues }, stats, cities, zoneAreas] = await Promise.all([
+  const [{ data: pharmacists }, { data: services }, { data: issues }, stats, taggedAreas] = await Promise.all([
     db.from("pharmacists").select("*").eq("pharmacy_id", p.id).order("is_main", { ascending: false }),
     db.from("pharmacy_services").select("*").eq("pharmacy_id", p.id),
     db.from("pharmacy_issues").select("issues(name)").eq("pharmacy_id", p.id),
     db.from("orders_admin").select("status").eq("pharmacy_id", p.id),
-    listPostalAreas(db),
-    loadZoneAreas(db, p.id),
+    countZoneAreas(db, p.id),
   ]);
   const logoUrl = await mediaUrl(db, p.logo_path);
   const hours = (p.hours ?? {}) as WeeklyHours;
@@ -36,19 +34,16 @@ export default async function PharmacyDetail({ params }: { params: Promise<{ pha
         actions={<PharmacyStatusActions pharmacyId={p.id} status={p.status} />}
       />
       {p.inactive_reason ? <p className="mb-4 rounded-lg bg-warning-100 px-3 py-2 text-sm text-amber-900">Inactive reason: {p.inactive_reason}</p> : null}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Delivery cities &amp; zones</CardTitle>
-          <CardDescription>
-            Tag the postal areas this pharmacy delivers to. A tagged postal code always uses its zone&apos;s price,
-            whatever the distance. Anything untagged is priced by driving distance instead, and beyond the last band
-            by the kilometre. Required before this pharmacy can be approved.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ZoneAreasEditor pharmacyId={p.id} cities={cities} initial={zoneAreas} />
-        </CardContent>
-      </Card>
+      <Alert tone={taggedAreas === 0 ? "warning" : "info"} className="mb-6">
+        <span className="flex flex-wrap items-center justify-between gap-3">
+          <span>
+            {taggedAreas === 0
+              ? "No delivery cities tagged. Every order would be priced by driving distance, and this pharmacy cannot be approved."
+              : `${taggedAreas} postal ${taggedAreas === 1 ? "area" : "areas"} tagged across this pharmacy's delivery zones.`}
+          </span>
+          <Button asChild size="sm" variant="outline"><Link href={`/pricing/${p.id}`}>Edit pricing &amp; cities</Link></Button>
+        </span>
+      </Alert>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
