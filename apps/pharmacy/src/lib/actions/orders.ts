@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requirePharmacy } from "@getmed/core/auth";
 import { AppError } from "@getmed/core/errors";
 import { acceptOrder, cancelOrder, createManualOrder, markReady, rejectOrder, returnToDelivery } from "@getmed/core/orders";
+import { quoteAddress, type AddressQuote } from "@getmed/core/pricing";
 import { manualOrdersSchema } from "@getmed/core/validation";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -78,5 +79,27 @@ export async function createManualOrdersAction(input: unknown): Promise<ManualOr
     return { ok: true, created };
   } catch (e) {
     return { ok: false, error: e instanceof AppError ? e.message : "Something went wrong" };
+  }
+}
+
+
+export type QuoteResult = { ok: true; quote: AddressQuote } | { ok: false; error: string };
+
+/**
+ * What a delivery to this address will cost, for the manual order form. Uses
+ * the same rules the order itself will be priced by, so the figure shown is the
+ * figure charged — a tagged postal code answers from the pharmacy's zones, and
+ * only an untagged one needs a route looked up.
+ */
+export async function quoteAddressAction(address: {
+  postalCode: string | null;
+  lat: number | null;
+  lng: number | null;
+}): Promise<QuoteResult> {
+  try {
+    const { pharmacy, db } = await requirePharmacy();
+    return { ok: true, quote: await quoteAddress(db, pharmacy.id, address) };
+  } catch (e) {
+    return { ok: false, error: e instanceof AppError ? e.message : "Could not work out the delivery cost" };
   }
 }

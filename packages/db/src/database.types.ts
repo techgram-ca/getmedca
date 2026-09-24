@@ -518,6 +518,7 @@ export type Database = {
         Args: { p_order_id: string };
         Returns: { from_lat: number; from_lng: number; to_lat: number; to_lng: number }[];
       };
+      pharmacy_point: { Args: { p_pharmacy_id: string }; Returns: { lat: number; lng: number }[] };
       is_admin: { Args: Record<string, never>; Returns: boolean };
       current_role_name: { Args: Record<string, never>; Returns: UserRole };
       owns_pharmacy: { Args: { p_pharmacy_id: string }; Returns: boolean };

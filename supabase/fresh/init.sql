@@ -612,6 +612,16 @@ as $$
   limit 50;
 $$;
 
+-- A pharmacy's coordinates, for quoting an address before an order exists.
+create or replace function public.pharmacy_point(p_pharmacy_id uuid)
+returns table (lat double precision, lng double precision)
+language sql stable security definer set search_path = public
+as $$
+  select st_y(p.location::geometry), st_x(p.location::geometry)
+  from public.pharmacies p
+  where p.id = p_pharmacy_id and p.location is not null;
+$$;
+
 -- Coordinates for an order's route. PostgREST returns geography columns as WKB
 -- hex, so the app reads them through st_x/st_y here (same pattern as
 -- pharmacies_near and the orders_driver view).

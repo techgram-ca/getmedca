@@ -198,3 +198,4 @@ export function zonePatch(resolution: ZoneResolution) {
 export { DELIVERY_ZONES, zoneLabel, zoneShortLabel, round2 };
 export * from "./areas";
 export * from "./parse-areas";
+export * from "./quote";
