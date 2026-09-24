@@ -100,6 +100,9 @@ export async function quoteAddressAction(address: {
     const { pharmacy, db } = await requirePharmacy();
     return { ok: true, quote: await quoteAddress(db, pharmacy.id, address) };
   } catch (e) {
+    // Logged rather than swallowed: an address that cannot be priced usually
+    // means the pricing tables are not set up, which is invisible from the form.
+    console.error("[quote] could not price address", e instanceof Error ? e.message : e);
     return { ok: false, error: e instanceof AppError ? e.message : "Could not work out the delivery cost" };
   }
 }
