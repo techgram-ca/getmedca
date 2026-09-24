@@ -31,7 +31,7 @@ import {
 } from "@getmed/ui";
 import { savePharmacyPricingAction } from "@/lib/actions/pricing";
 
-type ConfigDraft = { remotePerKm: string; zone1MaxKm: string; zone2MaxKm: string; zone3MaxKm: string; zone4MaxKm: string };
+type ConfigDraft = { remotePerKm: string };
 
 export type PricingFormValues = {
   prices: Record<FixedZone, string>;
@@ -50,7 +50,7 @@ export function PharmacyPricingForm({
   pharmacyName: string;
   cities: PostalAreaCity[];
   initial: PricingFormValues;
-  platform: { prices: Record<FixedZone, number>; bands: Record<FixedZone, number>; perKm: number };
+  platform: { prices: Record<FixedZone, number>; perKm: number };
 }) {
   const router = useRouter();
   const [prices, setPrices] = useState(initial.prices);
@@ -152,14 +152,13 @@ export function PharmacyPricingForm({
 
       <Card>
         <CardHeader>
-          <CardTitle>Zone 5 rate &amp; distance bands</CardTitle>
+          <CardTitle>Zone 5 rate</CardTitle>
           <CardDescription>
-            Bands apply only to postal codes this pharmacy has not tagged below. Each figure is the upper limit in
-            kilometres and is exclusive. Blank uses the platform setting.
+            Charged per kilometre on every delivery whose postal code is not tagged below. Blank uses the platform rate.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Field label="Zone 5 rate" htmlFor="per-km" hint={`Default ${formatCurrency(platform.perKm)} per km`} optional className="max-w-[12rem]">
+        <CardContent>
+          <Field label="Rate" htmlFor="per-km" hint={`Default ${formatCurrency(platform.perKm)} per km`} optional className="max-w-[12rem]">
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-ink-500">$</span>
               <Input
@@ -175,28 +174,6 @@ export function PharmacyPricingForm({
               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-500">/km</span>
             </div>
           </Field>
-          <div className="grid gap-4 sm:grid-cols-4">
-            {FIXED_ZONES.map((zone) => {
-              const key = `${zone}MaxKm` as keyof ConfigDraft;
-              return (
-                <Field key={zone} label={`${zoneShortLabel(zone)} up to`} htmlFor={`band-${zone}`} hint={`Default ${platform.bands[zone]} km`} optional>
-                  <div className="relative">
-                    <Input
-                      id={`band-${zone}`}
-                      type="number"
-                      min={0}
-                      step="0.5"
-                      className="pr-11"
-                      placeholder={String(platform.bands[zone])}
-                      value={config[key]}
-                      onChange={(e) => setConfig((c) => ({ ...c, [key]: e.target.value }))}
-                    />
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-500">km</span>
-                  </div>
-                </Field>
-              );
-            })}
-          </div>
         </CardContent>
       </Card>
 
@@ -204,9 +181,9 @@ export function PharmacyPricingForm({
         <CardHeader>
           <CardTitle>Delivery cities</CardTitle>
           <CardDescription>
-            A tagged postal code always uses its zone&apos;s price, whatever the distance. Pick a city to fill a zone,
-            then move or delete individual codes — one city can be split across zones. Anything untagged is priced by
-            driving distance instead.
+            A tagged postal code uses its zone&apos;s price, whatever the distance. Anything untagged falls to Zone 5
+            and waits for an admin, so tag every city this pharmacy delivers to. Pick a city to fill a zone, then move
+            or delete individual codes — one city can be split across zones.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -10,10 +10,6 @@ export const DEFAULT_SETTINGS: PlatformSettingsRow = {
   default_zone3_fee: 12,
   default_zone4_fee: 18,
   default_remote_per_km: 1.2,
-  zone1_max_km: 6,
-  zone2_max_km: 13,
-  zone3_max_km: 25,
-  zone4_max_km: 50,
   remote_quote_span: 6,
   failed_delivery_fee_percent: 100,
   updated_at: new Date(0).toISOString(),
@@ -35,10 +31,6 @@ export async function updatePlatformSettings(
     | "default_zone3_fee"
     | "default_zone4_fee"
     | "default_remote_per_km"
-    | "zone1_max_km"
-    | "zone2_max_km"
-    | "zone3_max_km"
-    | "zone4_max_km"
     | "remote_quote_span">>,
 ): Promise<PlatformSettingsRow> {
   const { data, error } = await db

@@ -35,7 +35,7 @@ export type OrderSource = "online" | "manual";
 /** Zones 1-4 carry a fixed price; Zone 5 (Remote) is priced per km, per order. */
 export type DeliveryZone = "zone1" | "zone2" | "zone3" | "zone4" | "zone5";
 /** How an order's zone was decided. */
-export type DeliveryPriceSource = "tagged" | "band" | "remote" | "manual";
+export type DeliveryPriceSource = "tagged" | "remote" | "manual";
 
 export type ProfileRow = { id: string; role: UserRole; full_name: string | null; created_at: string };
 
@@ -315,11 +315,6 @@ export type PlatformSettingsRow = {
   default_zone4_fee: number;
   /** Zone 5 is priced per km rather than by a fixed fee. */
   default_remote_per_km: number;
-  /** Upper bound of each band in km; lower inclusive, upper exclusive. */
-  zone1_max_km: number;
-  zone2_max_km: number;
-  zone3_max_km: number;
-  zone4_max_km: number;
   /** How far above the computed per-km price an admin may go on a Zone 5 order. */
   remote_quote_span: number;
   /** Share of the quoted fee a failed attempt bills. 100 = the full fee. */
@@ -338,14 +333,10 @@ export type PharmacyZoneAreaRow = {
   created_at: string;
 };
 
-/** Per-pharmacy overrides for what is not a fixed zone price. Null = default. */
+/** A pharmacy's own Zone 5 rate. Null = use the platform default. */
 export type PharmacyDeliveryConfigRow = {
   pharmacy_id: string;
   remote_per_km: number | null;
-  zone1_max_km: number | null;
-  zone2_max_km: number | null;
-  zone3_max_km: number | null;
-  zone4_max_km: number | null;
   updated_at: string;
 };
 

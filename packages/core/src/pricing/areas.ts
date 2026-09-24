@@ -56,40 +56,26 @@ export async function countZoneAreas(db: ServiceClient, pharmacyId: string): Pro
 
 
 export type DeliveryConfigInput = {
+  /** Null means "use the platform default". */
   remotePerKm: number | null;
-  zone1MaxKm: number | null;
-  zone2MaxKm: number | null;
-  zone3MaxKm: number | null;
-  zone4MaxKm: number | null;
 };
 
 /**
- * A pharmacy's own per-km rate and distance bands. Every field is nullable and
- * a null means "use the platform default", so clearing a box restores it.
- * The whole row is deleted when nothing is overridden, keeping the table to
- * pharmacies that actually differ.
+ * A pharmacy's own Zone 5 rate. The row is deleted when nothing is overridden,
+ * keeping the table to pharmacies that actually differ from the platform.
  */
 export async function savePharmacyDeliveryConfig(
   db: ServiceClient,
   pharmacyId: string,
   input: DeliveryConfigInput,
 ): Promise<void> {
-  const allDefault = Object.values(input).every((v) => v == null);
-  if (allDefault) {
+  if (input.remotePerKm == null) {
     const { error } = await db.from("pharmacy_delivery_config").delete().eq("pharmacy_id", pharmacyId);
     if (error) throw error;
     return;
   }
   const { error } = await db.from("pharmacy_delivery_config").upsert(
-    {
-      pharmacy_id: pharmacyId,
-      remote_per_km: input.remotePerKm,
-      zone1_max_km: input.zone1MaxKm,
-      zone2_max_km: input.zone2MaxKm,
-      zone3_max_km: input.zone3MaxKm,
-      zone4_max_km: input.zone4MaxKm,
-      updated_at: new Date().toISOString(),
-    },
+    { pharmacy_id: pharmacyId, remote_per_km: input.remotePerKm, updated_at: new Date().toISOString() },
     { onConflict: "pharmacy_id" },
   );
   if (error) throw error;
@@ -102,13 +88,7 @@ export async function loadDeliveryConfigs(db: ServiceClient, pharmacyIds: string
   return new Map(
     (data ?? []).map((c) => [
       c.pharmacy_id,
-      {
-        remotePerKm: c.remote_per_km == null ? null : Number(c.remote_per_km),
-        zone1MaxKm: c.zone1_max_km == null ? null : Number(c.zone1_max_km),
-        zone2MaxKm: c.zone2_max_km == null ? null : Number(c.zone2_max_km),
-        zone3MaxKm: c.zone3_max_km == null ? null : Number(c.zone3_max_km),
-        zone4MaxKm: c.zone4_max_km == null ? null : Number(c.zone4_max_km),
-      } satisfies DeliveryConfigInput,
+      { remotePerKm: c.remote_per_km == null ? null : Number(c.remote_per_km) } satisfies DeliveryConfigInput,
     ]),
   );
 }

@@ -3,7 +3,6 @@ import {
   defaultZonePrices,
   listPostalAreas,
   loadDeliveryConfigs,
-  resolveBands,
   resolvePerKm,
   resolvePricingForAll,
 } from "@getmed/core/pricing";
@@ -45,7 +44,7 @@ export default async function PricingPage() {
       />
 
       <Alert tone="info" className="mb-6">
-        An order is priced when it arrives: a postal code tagged to a zone for its pharmacy takes that zone's price, anything untagged is priced by driving distance, and beyond the last band by the kilometre. Prices are snapshotted onto each order at that moment, so changing them here never reprices past orders. A delivery a driver marks failed is billed at the rate below, and an order sent out again is billed once per attempt.
+        An order is priced when it arrives: a postal code tagged to a zone for its pharmacy takes that zone's price. Anything untagged falls to Zone 5 and is charged per kilometre, with an admin confirming the amount. Prices are snapshotted onto each order at that moment, so changing them here never reprices past orders. A delivery a driver marks failed is billed at the rate below, and an order sent out again is billed once per attempt.
       </Alert>
 
       <Card className="mb-6">
@@ -81,7 +80,6 @@ export default async function PricingPage() {
       <PricingDefaultsForm
         defaults={{
           prices: defaultZonePrices(settings),
-          bands: resolveBands(settings, null),
           remotePerKm: resolvePerKm(settings, null),
           failedDeliveryPercent: Number(settings.failed_delivery_fee_percent),
         }}

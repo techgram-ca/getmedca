@@ -9,7 +9,6 @@ import { savePricingDefaults } from "@/lib/actions/pricing";
 export type PricingDefaults = {
   prices: Record<FixedZone, number>;
   remotePerKm: number;
-  bands: Record<FixedZone, number>;
   failedDeliveryPercent: number;
 };
 
@@ -22,9 +21,6 @@ export function PricingDefaultsForm({ defaults }: { defaults: PricingDefaults })
   const [prices, setPrices] = useState<Record<FixedZone, string>>(
     () => Object.fromEntries(FIXED_ZONES.map((z) => [z, String(defaults.prices[z])])) as Record<FixedZone, string>,
   );
-  const [bands, setBands] = useState<Record<FixedZone, string>>(
-    () => Object.fromEntries(FIXED_ZONES.map((z) => [z, String(defaults.bands[z])])) as Record<FixedZone, string>,
-  );
   const [perKm, setPerKm] = useState(String(defaults.remotePerKm));
   const [failedPercent, setFailedPercent] = useState(String(defaults.failedDeliveryPercent));
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +32,6 @@ export function PricingDefaultsForm({ defaults }: { defaults: PricingDefaults })
     start(async () => {
       const r = await savePricingDefaults({
         ...Object.fromEntries(FIXED_ZONES.map((z) => [z, prices[z]])),
-        ...Object.fromEntries(FIXED_ZONES.map((z) => [`${z}MaxKm`, bands[z]])),
         remotePerKm: perKm,
         failedDeliveryPercent: failedPercent,
       });
@@ -80,38 +75,11 @@ export function PricingDefaultsForm({ defaults }: { defaults: PricingDefaults })
             </div>
           </div>
 
-          <div className="border-t border-ink-200 pt-5">
-            <p className="text-sm font-semibold text-ink-900">Distance bands</p>
-            <p className="mt-1 text-sm text-ink-500">
-              Used only when a delivery postal code is not tagged to a zone for the pharmacy. Each figure is the upper
-              limit in kilometres and is exclusive — with a 6 km Zone 1, a delivery at exactly 6 km is Zone 2. Anything
-              beyond the last band is Zone 5, priced per kilometre.
-            </p>
-            <div className="mt-3 grid gap-4 sm:grid-cols-4">
-              {FIXED_ZONES.map((zone) => (
-                <Field key={zone} label={`${zoneLabel(zone)} up to`} htmlFor={`band-${zone}`}>
-                  <div className="relative">
-                    <Input
-                      id={`band-${zone}`}
-                      type="number"
-                      min={0}
-                      step="0.5"
-                      className="pr-11"
-                      value={bands[zone]}
-                      onChange={(e) => setBands((v) => ({ ...v, [zone]: e.target.value }))}
-                    />
-                    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-ink-500">km</span>
-                  </div>
-                </Field>
-              ))}
-            </div>
-          </div>
-
           <div className="grid gap-4 border-t border-ink-200 pt-5 sm:grid-cols-2">
             <Field
               label="Zone 5 rate"
               htmlFor="per-km"
-              hint="Charged per kilometre of driving distance. The admin confirms the final price on each remote order."
+              hint="Charged per kilometre of driving distance. Applies to every delivery whose postal code a pharmacy has not tagged; the admin confirms the final price on each one."
             >
               <div className="relative">
                 <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-ink-500">$</span>
