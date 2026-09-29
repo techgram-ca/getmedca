@@ -5,6 +5,7 @@ import { requirePharmacy } from "@getmed/core/auth";
 import { formatCurrency, formatDate, formatDateOnly, shortId, statusLabel } from "@getmed/core/format";
 import { loadDeliveryProof, orderCharges } from "@getmed/core/orders";
 import { pharmacyCanModify } from "@getmed/core/orders/state-machine";
+import { getPlatformSettings } from "@getmed/core/settings";
 import { zoneLabel } from "@getmed/core/pricing";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, DeliveryPrice, DeliveryProofCard, PageHeader, StatusBadge } from "@getmed/ui";
 import { OrderActions } from "@/components/order-actions";
@@ -14,6 +15,7 @@ import { SlaCountdown } from "@/components/sla-countdown";
 export default async function OrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
   const { orderId } = await params;
   const { pharmacy, db } = await requirePharmacy();
+  const settings = await getPlatformSettings(db);
   const { data: o } = await db.from("orders").select("*").eq("id", orderId).eq("pharmacy_id", pharmacy.id).not("phone_verified_at", "is", null).maybeSingle();
   if (!o) notFound();
   const [{ data: events }, { data: driver }, proof, charges] = await Promise.all([
@@ -30,7 +32,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
       <PageHeader
         title={<span className="flex items-center gap-3"><span className="font-mono">{shortId(o.id)}</span><StatusBadge status={o.status} />{o.source === "manual" ? <Badge tone="accent">Manual</Badge> : null}</span>}
         description={`${o.order_type === "transfer" ? "Prescription transfer" : "New prescription"} · ${o.source === "manual" ? "entered by your pharmacy" : "submitted online"} ${formatDate(o.phone_verified_at)}`}
-        actions={o.status === "pending" ? <SlaCountdown since={o.phone_verified_at ?? o.created_at} /> : null}
+        actions={o.status === "pending" ? <SlaCountdown since={o.phone_verified_at ?? o.created_at} minutes={o.sla_minutes ?? settings.sla_minutes} /> : null}
       />
       {locked && o.status === "picked_up" ? <Alert tone="info" className="mb-6"><span className="inline-flex items-center gap-2"><Lock className="size-4" /> The driver has picked up this order. It can no longer be modified or cancelled.</span></Alert> : null}
       {o.status === "rejected" || o.status === "cancelled" || o.status === "timed_out" ? (

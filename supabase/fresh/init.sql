@@ -280,6 +280,11 @@ create table public.orders (
   -- price snapshotted at that moment
   delivery_type public.delivery_zone,
   delivery_type_set_at timestamptz,
+  -- The response window this order was given, snapshotted when it was
+  -- activated: the SLA timer is scheduled on Inngest at that moment, so an
+  -- order already waiting keeps the window it started with even if an admin
+  -- changes the platform setting.
+  sla_minutes int constraint orders_sla_minutes_positive check (sla_minutes is null or sla_minutes > 0),
   -- How the zone was reached, and the span quoted to the pharmacy before an
   -- admin confirmed a Zone 5 price. Snapshots: retagging a postal area or
   -- changing a rate never reprices an order already quoted.

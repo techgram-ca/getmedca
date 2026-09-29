@@ -3,8 +3,14 @@
 import { useEffect, useState } from "react";
 import { cn } from "@getmed/ui";
 
-/** Live 30-minute SLA countdown from when the order became visible. */
-export function SlaCountdown({ since, minutes = 30 }: { since: string; minutes?: number }) {
+/**
+ * Live countdown to the order's response deadline.
+ *
+ * `minutes` is required rather than defaulted: the window is the admin's to
+ * set, and a default here is how the countdown came to show a fixed 30 minutes
+ * regardless of it. Callers pass the order's own snapshotted window.
+ */
+export function SlaCountdown({ since, minutes }: { since: string; minutes: number }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);

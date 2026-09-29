@@ -186,6 +186,8 @@ export type OrderRow = {
   reassigned_by: string | null;
   delivery_type: DeliveryZone | null;
   delivery_type_set_at: string | null;
+  /** Response window this order was given, in minutes. Null predates the column. */
+  sla_minutes: number | null;
   delivery_price_source: DeliveryPriceSource | null;
   delivery_quote_min: number | null;
   delivery_quote_max: number | null;

@@ -28,7 +28,7 @@ export function escalationReason(o: OrderAdminRow): { kind: string; text: string
   switch (o.status) {
     case "rejected": return { kind: "Rejected", text: o.rejection_reason };
     case "cancelled": return { kind: "Cancelled after accepting", text: o.cancellation_reason };
-    case "timed_out": return { kind: "No response in 30 min", text: null };
+    case "timed_out": return { kind: "No pharmacy response in time", text: null };
     case "failed": return { kind: "Delivery failed", text: o.failure_reason };
     default: return { kind: o.status, text: null };
   }
