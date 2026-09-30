@@ -66,7 +66,7 @@ export function AdminOrdersTable({
   from: string;
   to: string;
 }) {
-  const { setWindow, loading } = useDateWindow(from, to);
+  const { setWindow, refresh, loading } = useDateWindow(from, to);
   const [status, setStatus] = useState("");
   const [pharmacy, setPharmacy] = useState("");
   const [source, setSource] = useState("");
@@ -105,6 +105,7 @@ export function AdminOrdersTable({
         from={from}
         to={to}
         onWindowChange={setWindow}
+        onRefresh={refresh}
         today={today}
         onTodayChange={setToday}
         search={search}

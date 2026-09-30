@@ -315,6 +315,10 @@ create index orders_driver_idx on public.orders (assigned_driver_id);
 create index orders_source_idx on public.orders (pharmacy_id, source);
 create index orders_delivery_type_idx on public.orders (pharmacy_id, delivery_type) where delivery_type is not null;
 create index orders_escalated_idx on public.orders (escalated_at) where escalated_at is not null;
+-- Admin lists filter created_at across all pharmacies; orders_pharmacy_idx
+-- cannot serve them because pharmacy_id leads it.
+create index orders_created_at_idx on public.orders (created_at desc);
+create index orders_escalated_created_idx on public.orders (escalated_at desc, created_at desc) where escalated_at is not null;
 create index orders_delivered_idx on public.orders (pharmacy_id, delivered_at) where status = 'delivered';
 
 create table public.order_events (

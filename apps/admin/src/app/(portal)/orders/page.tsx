@@ -2,7 +2,7 @@ import { requireAdmin } from "@getmed/core/auth";
 import { dayBounds, defaultDateWindow } from "@getmed/core/format";
 import { PageHeader } from "@getmed/ui";
 import { AdminOrdersTable, type AdminOrderRow } from "@/components/orders-table";
-import { adminOrders, withNames } from "@/lib/queries";
+import { adminOrderList, withNames } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
 
   const { db } = await requireAdmin();
   const [{ data }, { data: pharmacies }, { data: drivers }] = await Promise.all([
-    adminOrders(db).gte("created_at", startIso).lt("created_at", endIso).order("created_at", { ascending: false }).limit(1000),
+    adminOrderList(db).gte("created_at", startIso).lt("created_at", endIso).order("created_at", { ascending: false }).limit(1000),
     db.from("pharmacies").select("id, name").not("submitted_at", "is", null).order("name"),
     db.from("drivers").select("id, name").eq("active", true).order("name"),
   ]);

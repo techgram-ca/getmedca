@@ -57,7 +57,7 @@ export type PharmacyOrderRow = {
 };
 
 export function PharmacyOrdersTable({ rows, from, to }: { rows: PharmacyOrderRow[]; from: string; to: string }) {
-  const { setWindow, loading } = useDateWindow(from, to);
+  const { setWindow, refresh, loading } = useDateWindow(from, to);
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
   const [source, setSource] = useState("");
@@ -88,6 +88,7 @@ export function PharmacyOrdersTable({ rows, from, to }: { rows: PharmacyOrderRow
         from={from}
         to={to}
         onWindowChange={setWindow}
+        onRefresh={refresh}
         today={today}
         onTodayChange={setToday}
         search={search}

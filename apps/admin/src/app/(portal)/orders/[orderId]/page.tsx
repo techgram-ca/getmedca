@@ -18,17 +18,21 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
   const { db } = await requireAdmin();
   const { data: row } = await adminOrders(db).eq("id", orderId).maybeSingle();
   if (!row) notFound();
-  const [o] = await withNames(db, [row]);
-  const [{ data: events }, { data: drivers }, proof, charges] = await Promise.all([
+
+  // One round trip for everything the page needs. These used to run in three
+  // waves — names, then the four below, then pricing — and each wave paid the
+  // full latency to the database before the next could start.
+  const [[o], { data: events }, { data: drivers }, proof, charges, pricing] = await Promise.all([
+    withNames(db, [row]),
     db.from("order_events").select("*").eq("order_id", orderId).order("created_at"),
     db.from("drivers").select("id, name, phone, vehicle_make, vehicle_model").eq("active", true).order("name"),
     loadDeliveryProof(db, orderId),
     orderCharges(db, orderId),
+    resolvePricing(db, row.pharmacy_id),
   ]);
   const billed = charges.reduce((sum, c) => sum + c.amount, 0);
   const r = escalationReason(o!);
   const canAssign = o!.status === "ready_for_delivery" || o!.status === "assigned";
-  const pricing = await resolvePricing(db, o!.pharmacy_id);
   // The price is settled before pickup; afterwards it is final.
   const pricingLocked = !["accepted", "ready_for_delivery", "assigned"].includes(o!.status);
   const needsDeliveryType = !o!.delivery_type;

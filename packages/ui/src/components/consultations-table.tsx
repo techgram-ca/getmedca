@@ -33,6 +33,7 @@ export function ConsultationsTable({
   from,
   to,
   onWindowChange,
+  onRefresh,
   loading,
   isToday,
   showPharmacy,
@@ -43,6 +44,7 @@ export function ConsultationsTable({
   from: string;
   to: string;
   onWindowChange: (from: string, to: string) => void;
+  onRefresh?: () => void;
   loading?: boolean;
   /** Supplied by the app so date handling stays in one place. */
   isToday: (iso: string) => boolean;
@@ -77,6 +79,7 @@ export function ConsultationsTable({
         from={from}
         to={to}
         onWindowChange={onWindowChange}
+        onRefresh={onRefresh}
         today={today}
         onTodayChange={setToday}
         search={search}

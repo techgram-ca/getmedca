@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Search } from "lucide-react";
 import { AddressAutocomplete, Button, ImageWithFallback, type AddressValue } from "@getmed/ui";
 
@@ -9,7 +9,7 @@ export function HomeHero() {
   const router = useRouter();
   const [text, setText] = useState("");
   const [place, setPlace] = useState<AddressValue | null>(null);
-  const [searching, setSearching] = useState(false);
+  const [searching, start] = useTransition();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -27,13 +27,12 @@ export function HomeHero() {
       document.getElementById("hero-address-input")?.focus();
       return;
     }
-    setSearching(true);
     const params = new URLSearchParams({ address: query });
     if (place?.lat != null && place?.lng != null) {
       params.set("lat", String(place.lat));
       params.set("lng", String(place.lng));
     }
-    router.push(`/search?${params}`);
+    start(() => router.push(`/search?${params}`));
   }
 
   return (
