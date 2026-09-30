@@ -42,6 +42,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0007_delivery_zones.sql` | Five delivery zones priced by postal area |
 | `migrations/0008_drop_distance_bands.sql` | Removes the distance-band fallback; untagged postal codes go to Zone 5 |
 | `migrations/0009_pharmacy_point.sql` | `pharmacy_point()`, for quoting an address before an order exists |
+| `migrations/0010_order_sla_minutes.sql` | Snapshots the response window on each order so the countdown follows the admin's setting |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
 After any schema change, regenerate the TypeScript types with `pnpm db:types`.
@@ -87,3 +88,10 @@ whether or not 0007 has already been applied.
 coordinates through `st_x`/`st_y`. The manual order form quotes a delivery as soon as the address is
 picked, which needs the driving distance from the pharmacy before any order row exists for
 `order_route_points` to read.
+
+`migrations/0010_order_sla_minutes.sql` adds `orders.sla_minutes`, written when the order is
+activated. The SLA timer is scheduled on Inngest at that moment, so an order already waiting keeps
+the window it started with — reading the current `platform_settings.sla_minutes` at render time
+would show a deadline the timer will not honour. It also rewrites the notification templates that
+hardcoded "30 minutes" to use a `{slaMinutes}` placeholder, matching on the exact original text so
+anything an admin has edited is left alone.

@@ -25,8 +25,8 @@ export type EventDefinition = {
 };
 
 export const EVENT_DEFINITIONS: readonly EventDefinition[] = [
-  { event: "order.new", label: "New order received", recipient: "pharmacy", placeholders: ["pharmacyName", "orderId", "orderType", "patientName"], required: ["orderId"], editable: true },
-  { event: "order.timed_out", label: "Order not accepted in 30 min", recipient: "admin", placeholders: ["orderId", "pharmacyName", "patientName", "patientPhone"], required: ["orderId", "patientPhone"], editable: true },
+  { event: "order.new", label: "New order received", recipient: "pharmacy", placeholders: ["pharmacyName", "orderId", "orderType", "patientName", "slaMinutes"], required: ["orderId"], editable: true },
+  { event: "order.timed_out", label: "Order not accepted in time", recipient: "admin", placeholders: ["orderId", "pharmacyName", "patientName", "patientPhone", "slaMinutes"], required: ["orderId", "patientPhone"], editable: true },
   { event: "order.rejected", label: "Order rejected", recipient: "admin", placeholders: ["orderId", "pharmacyName", "patientName", "patientPhone", "rejectionReason"], required: ["orderId", "patientPhone"], editable: true },
   { event: "order.cancelled", label: "Order cancelled after accepting", recipient: "admin", placeholders: ["orderId", "pharmacyName", "patientName", "patientPhone", "cancellationReason"], required: ["orderId", "patientPhone"], editable: true },
   { event: "order.status", label: "Order status update", recipient: "patient", placeholders: ["orderId", "status", "pharmacyName", "estimatedTime"], required: ["orderId", "status"], editable: true },
@@ -42,12 +42,12 @@ export type TemplateDefault = { subject: string | null; text: string; enabled: b
 /** Mirrors supabase/seed.sql. Used for "reset to default". */
 export const TEMPLATE_DEFAULTS: Record<NotificationEvent, Record<NotificationChannel, TemplateDefault | null>> = {
   "order.new": {
-    sms: { subject: null, text: "GetMed: New {orderType} order {orderId} for {pharmacyName} from {patientName}. Please respond within 30 minutes.", enabled: true },
-    email: { subject: "New order {orderId} — respond within 30 minutes", text: "Hi {pharmacyName},\n\nYou have a new {orderType} order ({orderId}) from {patientName}. Please accept or reject it within 30 minutes in your GetMed dashboard.", enabled: true },
+    sms: { subject: null, text: "GetMed: New {orderType} order {orderId} for {pharmacyName} from {patientName}. Please respond within {slaMinutes} minutes.", enabled: true },
+    email: { subject: "New order {orderId} — respond within {slaMinutes} minutes", text: "Hi {pharmacyName},\n\nYou have a new {orderType} order ({orderId}) from {patientName}. Please accept or reject it within {slaMinutes} minutes in your GetMed dashboard.", enabled: true },
   },
   "order.timed_out": {
-    sms: { subject: null, text: "GetMed ALERT: Order {orderId} at {pharmacyName} was not accepted in 30 min. Patient {patientName} {patientPhone}.", enabled: true },
-    email: { subject: "Order {orderId} timed out at {pharmacyName}", text: "Order {orderId} at {pharmacyName} was not accepted within 30 minutes.\n\nPatient: {patientName}\nPhone: {patientPhone}\n\nPlease contact the patient.", enabled: true },
+    sms: { subject: null, text: "GetMed ALERT: Order {orderId} at {pharmacyName} was not accepted in {slaMinutes} min. Patient {patientName} {patientPhone}.", enabled: true },
+    email: { subject: "Order {orderId} timed out at {pharmacyName}", text: "Order {orderId} at {pharmacyName} was not accepted within {slaMinutes} minutes.\n\nPatient: {patientName}\nPhone: {patientPhone}\n\nPlease contact the patient.", enabled: true },
   },
   "order.rejected": {
     sms: { subject: null, text: "GetMed ALERT: Order {orderId} rejected by {pharmacyName}. Reason: {rejectionReason}. Patient {patientName} {patientPhone}.", enabled: true },

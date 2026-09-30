@@ -129,15 +129,18 @@ export async function activateOrder(orderId: string, ctx: Ctx = {}): Promise<Ord
   const db = dbOf(ctx);
   const order = await loadOrder(db, orderId);
   if (order.phone_verified_at) return order;
+  const settings = await getPlatformSettings(db);
+
+  // The window is snapshotted here, not read back later: the Inngest timer
+  // below is scheduled with this value, so an admin changing the platform
+  // setting must not move a deadline that has already been committed to.
   const { data, error } = await db
     .from("orders")
-    .update({ phone_verified_at: new Date().toISOString() })
+    .update({ phone_verified_at: new Date().toISOString(), sla_minutes: settings.sla_minutes })
     .eq("id", orderId)
     .select("*")
     .single();
   if (error) throw error;
-
-  const settings = await getPlatformSettings(db);
   const pharmacy = await loadPharmacy(db, order.pharmacy_id);
 
   // The SLA clock is independent of pricing, so it starts straight away.
@@ -160,7 +163,7 @@ export async function activateOrder(orderId: string, ctx: Ctx = {}): Promise<Ord
           db,
           "order.new",
           { phone: pharmacy.notify_sms ? pharmacy.phone : null, email: pharmacy.notify_email ? pharmacy.email : null },
-          { pharmacyName: pharmacy.name, orderId: shortId(orderId), orderType: order.order_type, patientName: order.patient_name },
+          { pharmacyName: pharmacy.name, orderId: shortId(orderId), orderType: order.order_type, patientName: order.patient_name, slaMinutes: settings.sla_minutes },
         )
       : Promise.resolve(),
   ]);
@@ -559,11 +562,15 @@ export async function timeOutOrder(orderId: string, ctx: Ctx = {}) {
   let updated = await transition(db, order, "time_out", "system", null, { timed_out_at: new Date().toISOString() });
   updated = await escalate(db, updated);
   const pharmacy = await loadPharmacy(db, order.pharmacy_id);
+  // Orders activated before the window was snapshotted have none of their own;
+  // the current setting is the closest thing to the truth for them.
+  const slaMinutes = order.sla_minutes ?? (await getPlatformSettings(db)).sla_minutes;
   await notify(db, "order.timed_out", adminTarget(), {
     orderId: shortId(orderId),
     pharmacyName: pharmacy?.name,
     patientName: order.patient_name,
     patientPhone: order.patient_phone,
+    slaMinutes,
   });
   return updated;
 }

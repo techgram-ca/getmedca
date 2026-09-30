@@ -6,17 +6,18 @@ import { Button, Card, CardContent, EmptyState, PageHeader, Stat, StatusBadge } 
 import { OrderActions } from "@/components/order-actions";
 import { SlaCountdown } from "@/components/sla-countdown";
 import { AddOrderDialog } from "@/components/add-order-dialog";
+import { getPlatformSettings } from "@getmed/core/settings";
 import { dashboardStats } from "@/lib/queries";
 
 export default async function DashboardPage() {
   const { pharmacy, db } = await requirePharmacy();
-  const s = await dashboardStats(db, pharmacy.id);
+  const [s, settings] = await Promise.all([dashboardStats(db, pharmacy.id), getPlatformSettings(db)]);
 
   return (
     <div>
       <PageHeader title={`Good ${greeting()}, ${pharmacy.name ?? "there"}`} description="Here's what needs your attention." actions={<AddOrderDialog />} />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Stat label="New orders" value={s.pending.length} tone={s.pending.length ? "brand" : "neutral"} hint="Respond within 30 min" icon={<Inbox />} className={s.pending.length ? "animate-pulse-ring" : ""} />
+        <Stat label="New orders" value={s.pending.length} tone={s.pending.length ? "brand" : "neutral"} hint={`Respond within ${settings.sla_minutes} min`} icon={<Inbox />} className={s.pending.length ? "animate-pulse-ring" : ""} />
         <Stat label="Today / this week" value={`${s.todayCount} / ${s.weekCount}`} icon={<Package />} />
         <Stat label="Consultations waiting" value={s.pendingConsults} tone={s.pendingConsults ? "warning" : "neutral"} icon={<MessageSquare />} />
         <Stat label="Delivery fees this month" value={formatCurrency(s.monthOwed)} hint={`${s.monthDelivered} delivered`} icon={<DollarSign />} />
@@ -45,7 +46,7 @@ export default async function DashboardPage() {
                       <p className="mt-1 text-sm">{o.patient_name} · {o.patient_phone}</p>
                       <p className="text-xs text-ink-500">{[o.delivery_address_line, o.delivery_city].filter(Boolean).join(", ")} · received {timeAgo(o.phone_verified_at ?? o.created_at)}</p>
                     </div>
-                    <SlaCountdown since={o.phone_verified_at ?? o.created_at} />
+                    <SlaCountdown since={o.phone_verified_at ?? o.created_at} minutes={o.sla_minutes ?? settings.sla_minutes} />
                     <OrderActions orderId={o.id} status={o.status} compact />
                   </CardContent>
                 </Card>

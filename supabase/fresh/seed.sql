@@ -51,10 +51,10 @@ insert into public.issues (name, slug, description, sort_order) values
 on conflict (slug) do nothing;
 
 insert into public.notification_templates (event_type, channel, subject, template_text, enabled, template_editable) values
-  ('order.new', 'sms', null, 'GetMed: New {orderType} order {orderId} for {pharmacyName} from {patientName}. Please respond within 30 minutes.', true, true),
-  ('order.new', 'email', 'New order {orderId} — respond within 30 minutes', 'Hi {pharmacyName},\n\nYou have a new {orderType} order ({orderId}) from {patientName}. Please accept or reject it within 30 minutes in your GetMed dashboard.', true, true),
-  ('order.timed_out', 'sms', null, 'GetMed ALERT: Order {orderId} at {pharmacyName} was not accepted in 30 min. Patient {patientName} {patientPhone}.', true, true),
-  ('order.timed_out', 'email', 'Order {orderId} timed out at {pharmacyName}', 'Order {orderId} at {pharmacyName} was not accepted within 30 minutes.\n\nPatient: {patientName}\nPhone: {patientPhone}\n\nPlease contact the patient.', true, true),
+  ('order.new', 'sms', null, 'GetMed: New {orderType} order {orderId} for {pharmacyName} from {patientName}. Please respond within {slaMinutes} minutes.', true, true),
+  ('order.new', 'email', 'New order {orderId} — respond within {slaMinutes} minutes', 'Hi {pharmacyName},\n\nYou have a new {orderType} order ({orderId}) from {patientName}. Please accept or reject it within {slaMinutes} minutes in your GetMed dashboard.', true, true),
+  ('order.timed_out', 'sms', null, 'GetMed ALERT: Order {orderId} at {pharmacyName} was not accepted in {slaMinutes} min. Patient {patientName} {patientPhone}.', true, true),
+  ('order.timed_out', 'email', 'Order {orderId} timed out at {pharmacyName}', 'Order {orderId} at {pharmacyName} was not accepted within {slaMinutes} minutes.\n\nPatient: {patientName}\nPhone: {patientPhone}\n\nPlease contact the patient.', true, true),
   ('order.rejected', 'sms', null, 'GetMed ALERT: Order {orderId} rejected by {pharmacyName}. Reason: {rejectionReason}. Patient {patientName} {patientPhone}.', true, true),
   ('order.rejected', 'email', 'Order {orderId} rejected by {pharmacyName}', 'Order {orderId} was rejected by {pharmacyName}.\n\nReason: {rejectionReason}\nPatient: {patientName}\nPhone: {patientPhone}\n\nPlease contact the patient.', true, true),
   ('order.cancelled', 'sms', null, 'GetMed ALERT: Order {orderId} cancelled by {pharmacyName} after accepting. Reason: {cancellationReason}. Patient {patientName} {patientPhone}.', true, true),

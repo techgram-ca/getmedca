@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requirePharmacy } from "@getmed/core/auth";
+import { getPlatformSettings } from "@getmed/core/settings";
 import { Alert } from "@getmed/ui";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { RealtimeOrders } from "@/components/realtime-orders";
@@ -15,11 +16,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
   const { pharmacy, db } = ctx;
   if (!pharmacy.submitted_at) redirect("/signup");
-  const { data: full } = await db.from("pharmacies").select("notify_sound, inactive_reason").eq("id", pharmacy.id).maybeSingle();
+  const [{ data: full }, settings] = await Promise.all([
+    db.from("pharmacies").select("notify_sound, inactive_reason").eq("id", pharmacy.id).maybeSingle(),
+    getPlatformSettings(db),
+  ]);
 
   return (
     <DashboardShell pharmacyName={pharmacy.name ?? "Your pharmacy"} status={pharmacy.status}>
-      <RealtimeOrders pharmacyId={pharmacy.id} sound={full?.notify_sound ?? true} />
+      <RealtimeOrders pharmacyId={pharmacy.id} sound={full?.notify_sound ?? true} slaMinutes={settings.sla_minutes} />
       {pharmacy.status === "pending" ? (
         <Alert tone="info" title="Your profile is under review" className="mb-6">
           Our team is verifying your licence. You'll be visible to patients as soon as you're approved — usually within one business day.

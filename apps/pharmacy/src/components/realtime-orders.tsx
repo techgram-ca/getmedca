@@ -32,7 +32,7 @@ function chime() {
  * current server-rendered page on any change; plays a chime + toast when a
  * verified order becomes visible (phone_verified_at set or new pending row).
  */
-export function RealtimeOrders({ pharmacyId, sound }: { pharmacyId: string; sound: boolean }) {
+export function RealtimeOrders({ pharmacyId, sound, slaMinutes }: { pharmacyId: string; sound: boolean; slaMinutes: number }) {
   const router = useRouter();
   const seen = useRef<Set<string>>(new Set());
 
@@ -48,7 +48,7 @@ export function RealtimeOrders({ pharmacyId, sound }: { pharmacyId: string; soun
           if (row?.id && row.status === "pending" && row.phone_verified_at && !seen.current.has(row.id)) {
             seen.current.add(row.id);
             if (sound) chime();
-            toast("New order received", { description: "Respond within 30 minutes.", action: { label: "View", onClick: () => router.push(`/orders/${row.id}`) } });
+            toast("New order received", { description: `Respond within ${slaMinutes} minutes.`, action: { label: "View", onClick: () => router.push(`/orders/${row.id}`) } });
             document.dispatchEvent(new CustomEvent("getmed:new-order"));
           }
           router.refresh();
