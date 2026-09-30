@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { Check, ClipboardList, Pencil, X } from "lucide-react";
 import { availableActions, type OrderAction } from "@getmed/core/orders/state-machine";
-import { zoneShortLabel } from "@getmed/core/pricing";
+import { REMOTE_ZONE } from "@getmed/core/pricing";
 import { dateInputValue, formatCurrency, formatDate, isOnLocalDay, shortId, statusLabel } from "@getmed/core/format";
 import type { OrderStatus } from "@getmed/db/types";
 import {
@@ -232,7 +232,7 @@ function OrderRow({ order }: { order: PharmacyOrderRow }) {
       <TD>
         <DeliveryPrice
           price={{
-            zoneLabel: order.delivery_type ? zoneShortLabel(order.delivery_type as never) : null,
+            remote: order.delivery_type === REMOTE_ZONE,
             fee: order.delivery_fee_charged != null ? formatCurrency(order.delivery_fee_charged) : null,
             quote:
               order.delivery_quote_min != null && order.delivery_quote_max != null

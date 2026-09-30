@@ -364,17 +364,23 @@ export async function setDeliveryZone(orderId: string, input: DeliveryZoneInput,
 
   let price: number;
   if (input.zone === REMOTE_ZONE) {
-    if (input.remotePrice == null || !Number.isFinite(input.remotePrice) || input.remotePrice < 0) {
-      throw new AppError("Enter a price for this remote delivery");
-    }
-    price = round2(input.remotePrice);
-    const min = order.delivery_quote_min != null ? Number(order.delivery_quote_min) : null;
-    const max = order.delivery_quote_max != null ? Number(order.delivery_quote_max) : null;
-    if (min != null && price < min) {
-      throw new AppError(`The price cannot be below the quoted ${formatCurrency(min)}`);
-    }
-    if (max != null && price > max) {
-      throw new AppError(`The pharmacy was quoted up to ${formatCurrency(max)}. Charging more needs a new quote.`);
+    // Zone 5 prices itself from the distance. An amount is only read when an
+    // admin deliberately types one over it, for a run the distance misjudges.
+    if (input.remotePrice != null) {
+      if (!Number.isFinite(input.remotePrice) || input.remotePrice < 0) {
+        throw new AppError("Enter a valid price for this remote delivery");
+      }
+      price = round2(input.remotePrice);
+    } else {
+      const ctx = await loadPricingContext(db, order.pharmacy_id);
+      const resolution = resolveZone(ctx, {
+        delivery_postal_code: order.delivery_postal_code,
+        delivery_distance_m: order.delivery_distance_m,
+      });
+      if (resolution.source !== "remote") {
+        throw new AppError("This delivery has no measured distance, so a price has to be entered");
+      }
+      price = resolution.price;
     }
   } else {
     const pricing = await resolvePricing(db, order.pharmacy_id);
@@ -404,11 +410,6 @@ export async function assignDriver(orderId: string, driverId: string, adminId: s
   const order = await loadOrder(db, orderId);
   if (!order.delivery_type) {
     throw new AppError("Set the delivery zone before assigning a driver", 409, "delivery_zone_required");
-  }
-  // Zone 5 carries no configured price, so having a zone is not enough — an
-  // admin has to have confirmed an amount, or the delivery goes out unpriced.
-  if (order.delivery_type === REMOTE_ZONE && order.delivery_fee_charged == null) {
-    throw new AppError("Confirm the Zone 5 price before assigning a driver", 409, "delivery_price_required");
   }
   const { data: driver } = await db.from("drivers").select("*").eq("id", driverId).eq("active", true).maybeSingle();
   if (!driver) throw new NotFoundError("Driver not found or inactive");

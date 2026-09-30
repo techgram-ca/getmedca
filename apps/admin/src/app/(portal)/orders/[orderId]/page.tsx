@@ -93,8 +93,6 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
                   zone: o!.delivery_type,
                   fee: o!.delivery_fee_charged != null ? Number(o!.delivery_fee_charged) : null,
                   source: o!.delivery_price_source,
-                  quoteMin: o!.delivery_quote_min != null ? Number(o!.delivery_quote_min) : null,
-                  quoteMax: o!.delivery_quote_max != null ? Number(o!.delivery_quote_max) : null,
                 }}
                 pricing={pricing}
                 distanceM={o!.delivery_distance_m != null ? Number(o!.delivery_distance_m) : null}

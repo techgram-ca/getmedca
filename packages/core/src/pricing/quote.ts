@@ -1,11 +1,11 @@
 import type { ServiceClient } from "@getmed/db/service";
 import { drivingRoute } from "../geo/mapbox";
 import { loadPricingContext, resolveZone } from "./index";
-import { REMOTE_ZONE, toFsa, type FixedZone, type RemoteQuote } from "./zones";
+import { REMOTE_ZONE, toFsa, type FixedZone } from "./zones";
 
 export type AddressQuote =
   | { kind: "tagged"; zone: FixedZone; price: number }
-  | { kind: "remote"; zone: typeof REMOTE_ZONE; quote: RemoteQuote; distanceM: number }
+  | { kind: "remote"; zone: typeof REMOTE_ZONE; price: number; distanceM: number }
   /** Nothing could be worked out. `reason` says which step gave up. */
   | { kind: "unknown"; reason: "no-coordinates" | "no-pharmacy-location" | "no-route" };
 
@@ -48,5 +48,5 @@ export async function quoteAddress(
   const distanceM = Math.round(route.distanceM * 10) / 10;
   const resolution = resolveZone(ctx, { delivery_postal_code: address.postalCode, delivery_distance_m: distanceM });
   if (resolution.source !== "remote") return { kind: "unknown", reason: "no-route" };
-  return { kind: "remote", zone: REMOTE_ZONE, quote: resolution.quote, distanceM };
+  return { kind: "remote", zone: REMOTE_ZONE, price: resolution.price, distanceM };
 }
