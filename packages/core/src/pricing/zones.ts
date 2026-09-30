@@ -46,17 +46,16 @@ export function resolvePerKm(settings: PlatformSettingsRow, config?: PharmacyDel
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export type RemoteQuote = { computed: number; min: number; max: number };
-
 /**
- * A Zone 5 quote. The bottom of the span is the per-km price itself, so an
- * admin who simply confirms charges exactly the configured rate; the span only
- * gives room to go *up* for a run that turns out to be harder than the distance
- * suggests. Floored at zero so a very short remote run cannot quote negative.
+ * What a Zone 5 delivery costs: the driving distance at this pharmacy's per-km
+ * rate, and nothing else. It used to be quoted as a span for an admin to
+ * confirm, which left every remote order waiting on someone before it could go
+ * out. The rate is already the answer, so the order prices itself.
+ *
+ * Floored at zero so a rate or distance of nothing cannot come out negative.
  */
-export function remoteQuote(distanceKm: number, perKm: number, span: number): RemoteQuote {
-  const computed = Math.max(0, round2(distanceKm * perKm));
-  return { computed, min: computed, max: round2(computed + Math.max(0, span)) };
+export function remotePrice(distanceKm: number, perKm: number): number {
+  return Math.max(0, round2(distanceKm * perKm));
 }
 
 /** Normalises a postal code to its forward sortation area: "m5v 3a8" → "M5V". */

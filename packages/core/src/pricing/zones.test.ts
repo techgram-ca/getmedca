@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { PlatformSettingsRow } from "@getmed/db/types";
 import { DEFAULT_SETTINGS } from "../settings.ts";
 import { resolveZone, type PricingContext } from "./index.ts";
-import { remoteQuote, resolvePerKm, toFsa } from "./zones.ts";
+import { remotePrice, resolvePerKm, toFsa } from "./zones.ts";
 
 const settings: PlatformSettingsRow = { ...DEFAULT_SETTINGS };
 
@@ -45,34 +45,33 @@ test("a tagged postal code takes its zone's price, whatever the distance", () =>
   assert.equal(far.source, "tagged");
   assert.equal(far.zone, "zone2");
   assert.equal(far.price, 8);
-  assert.equal(far.quote, null);
 });
 
 test("an untagged postal code goes straight to Zone 5, however close it is", () => {
-  // There is no distance fallback: untagged means per km and an admin's
-  // confirmation, and a conspicuously low price is the cue to tag it.
+  // There is no distance fallback: untagged means per km, and a conspicuously
+  // low price is the cue to tag it.
   const near = resolveZone(ctx({ L6P: "zone2" }), order("M5V 3A8", 3));
   assert.equal(near.source, "remote");
   assert.equal(near.zone, "zone5");
-  assert.equal(near.price, null, "a remote order has no price until an admin confirms one");
-  assert.deepEqual(near.quote, { computed: 3.6, min: 3.6, max: 9.6 });
+  assert.equal(near.price, 3.6, "3 km at $1.20/km");
 
   const far = resolveZone(ctx(), order("K1A 0A6", 60));
   assert.equal(far.source, "remote");
-  assert.deepEqual(far.quote, { computed: 72, min: 72, max: 78 });
+  assert.equal(far.price, 72);
 });
 
-test("the bottom of a remote span is the per-km price itself", () => {
-  // Confirming without touching the box charges exactly the configured rate.
-  const q = remoteQuote(14, 1.2, 6);
-  assert.equal(q.computed, 16.8);
-  assert.equal(q.min, 16.8, "confirming the default must not undercharge");
-  assert.equal(q.max, 22.8);
+test("a remote order settles its own price, with nobody to confirm it", () => {
+  // The whole point of the change: a Zone 5 order is priced on arrival, so it
+  // can be assigned and delivered without waiting on an admin.
+  const r = resolveZone(ctx(), order("K1A 0A6", 14));
+  assert.equal(r.price, 16.8);
+  assert.notEqual(r.price, null, "a remote order must never leave here unpriced");
 });
 
-test("a remote quote never goes negative or carries fractions of a cent", () => {
-  assert.deepEqual(remoteQuote(0, 1.2, 6), { computed: 0, min: 0, max: 6 });
-  assert.equal(remoteQuote(9.99, 1.115, 6).computed, 11.14);
+test("a remote price never goes negative or carries fractions of a cent", () => {
+  assert.equal(remotePrice(0, 1.2), 0);
+  assert.equal(remotePrice(-5, 1.2), 0, "a nonsense distance cannot pay the pharmacy");
+  assert.equal(remotePrice(9.99, 1.115), 11.14);
 });
 
 test("no tag and no distance leaves the order for an admin", () => {
@@ -80,7 +79,6 @@ test("no tag and no distance leaves the order for an admin", () => {
   assert.equal(r.source, "manual");
   assert.equal(r.zone, null);
   assert.equal(r.price, null);
-  assert.equal(r.quote, null);
 });
 
 test("a tag still applies when the route could not be measured", () => {
@@ -98,4 +96,22 @@ test("a pharmacy's own per-km rate overrides the platform default", () => {
   const config = { pharmacy_id: "p1", remote_per_km: 2.5, updated_at: "" };
   assert.equal(resolvePerKm(settings, config), 2.5);
   assert.equal(resolvePerKm(settings, null), 1.2);
+});
+
+test("every resolvable delivery carries a price, so nothing waits on an admin", () => {
+  // The change this file exists to protect: before, a remote order came back
+  // priceless and could not be assigned until someone typed an amount.
+  const cases = [
+    resolveZone(ctx({ M5V: "zone1" }), order("M5V 3A8", 3)),
+    resolveZone(ctx(), order("M5V 3A8", 3)),
+    resolveZone(ctx(), order("K1A 0A6", 140)),
+    resolveZone(ctx(), order(null, 8)),
+  ];
+  for (const r of cases) {
+    assert.notEqual(r.price, null, `${r.source} left the order unpriced`);
+  }
+
+  // The one exception, and it is a genuine dead end rather than a handoff:
+  // no distance means there is nothing to multiply.
+  assert.equal(resolveZone(ctx(), order(null, null)).price, null);
 });

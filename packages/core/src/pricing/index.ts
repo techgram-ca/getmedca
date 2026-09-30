@@ -11,14 +11,13 @@ import {
   FIXED_ZONES,
   REMOTE_ZONE,
   defaultZonePrices,
-  remoteQuote,
+  remotePrice,
   resolvePerKm,
   round2,
   toFsa,
   zoneLabel,
   zoneShortLabel,
   type FixedZone,
-  type RemoteQuote,
 } from "./zones";
 
 export * from "./zones";
@@ -102,21 +101,18 @@ export type ZoneResolution =
       source: Extract<DeliveryPriceSource, "tagged">;
       zone: FixedZone;
       price: number;
-      quote: null;
     }
   | {
-      /** Not tagged: priced per km, quoted as a span for an admin to confirm. */
+      /** Not tagged: priced per km from the driving distance. Final. */
       source: Extract<DeliveryPriceSource, "remote">;
       zone: typeof REMOTE_ZONE;
-      price: null;
-      quote: RemoteQuote;
+      price: number;
     }
   | {
       /** Not tagged and no route to measure — nothing can be worked out. */
       source: Extract<DeliveryPriceSource, "manual">;
       zone: null;
       price: null;
-      quote: null;
     };
 
 export type PricingContext = {
@@ -154,16 +150,17 @@ export async function loadPricingContext(
  * Prices one delivery. Two rules and nothing between them:
  *
  *  1. The delivery postal code is tagged to a zone for this pharmacy → that
- *     zone's fixed price, settled with nobody touching it.
- *  2. Anything else → Zone 5, per km, quoted as a span an admin confirms.
+ *     zone's fixed price.
+ *  2. Anything else → Zone 5, the driving distance at this pharmacy's per-km
+ *     rate.
  *
- * So an untagged postal code always reaches an admin. On a nearby one the
- * per-km price comes out conspicuously low, which is the signal that it
- * belongs in a zone.
+ * Both settle without anyone touching them. Zone 5 used to be quoted as a span
+ * an admin confirmed, which made every untagged postal code a piece of manual
+ * work before the order could move; the rate already decides the price.
  *
  * Distance is the stored toll-free driving distance, never straight-line. With
- * no route to measure there is no per-km price either, and the order is left
- * for an admin to price by hand.
+ * no route to measure there is no per-km price either, and only then is the
+ * order left for an admin to price by hand.
  */
 export function resolveZone(
   ctx: PricingContext,
@@ -172,15 +169,15 @@ export function resolveZone(
   const fsa = toFsa(order.delivery_postal_code);
   const tagged = fsa ? ctx.taggedZones.get(fsa) : undefined;
   if (tagged) {
-    return { source: "tagged", zone: tagged, price: ctx.pricing[tagged].price, quote: null };
+    return { source: "tagged", zone: tagged, price: ctx.pricing[tagged].price };
   }
 
   if (order.delivery_distance_m == null) {
-    return { source: "manual", zone: null, price: null, quote: null };
+    return { source: "manual", zone: null, price: null };
   }
 
   const km = Number(order.delivery_distance_m) / 1000;
-  return { source: "remote", zone: REMOTE_ZONE, price: null, quote: remoteQuote(km, ctx.perKm, ctx.span) };
+  return { source: "remote", zone: REMOTE_ZONE, price: remotePrice(km, ctx.perKm) };
 }
 
 /** The row patch a resolution writes onto an order. */
@@ -189,8 +186,10 @@ export function zonePatch(resolution: ZoneResolution) {
     delivery_type: resolution.zone as DeliveryZone | null,
     delivery_price_source: resolution.source,
     delivery_fee_charged: resolution.price,
-    delivery_quote_min: resolution.quote?.min ?? null,
-    delivery_quote_max: resolution.quote?.max ?? null,
+    // Zone 5 no longer quotes a span; clearing these drops any left by a
+    // re-price of an order created under the old rule.
+    delivery_quote_min: null,
+    delivery_quote_max: null,
     delivery_type_set_at: resolution.price != null ? new Date().toISOString() : null,
   };
 }

@@ -15,8 +15,6 @@ type Props = {
     zone: DeliveryZone | null;
     fee: number | null;
     source: DeliveryPriceSource | null;
-    quoteMin: number | null;
-    quoteMax: number | null;
   };
   pricing: PharmacyPricing;
   distanceM: number | null;
@@ -29,40 +27,39 @@ type Props = {
 /**
  * The zone and price for one order.
  *
- * A zone with a configured price needs nothing from an admin — it was settled
- * when the order arrived, so it is shown rather than asked. Only Zone 5, which
- * has no fixed price, and an order that could not be resolved at all put a
- * control on screen. Changing a settled zone is possible but deliberate.
+ * Nothing here is normally asked. Every zone settles when the order arrives —
+ * a tagged postal code at its zone's price, anything else at the distance
+ * times the pharmacy's per-km rate — so the price is shown, not requested.
+ *
+ * A control appears only for an order that arrived with no price at all: one
+ * whose address never produced a route, or one created before Zone 5 priced
+ * itself. Changing a settled zone is possible but deliberate.
  */
 export function DeliveryZonePicker({ orderId, current, pricing, distanceM, city, postalCode, locked }: Props) {
   const router = useRouter();
   const isRemote = current.zone === REMOTE_ZONE;
   const unresolved = current.zone == null;
-  const needsPrice = isRemote && current.fee == null;
+  const needsPrice = current.fee == null;
 
   const [override, setOverride] = useState(false);
   const [zone, setZone] = useState<DeliveryZone | null>(current.zone);
-  // Pre-filled with the bottom of the quoted span, which is the per-km price
-  // itself — confirming without touching it charges exactly the configured rate.
-  const [remotePrice, setRemotePrice] = useState(
-    current.fee != null && isRemote ? String(current.fee) : current.quoteMin != null ? String(current.quoteMin) : "",
-  );
+  // Blank unless the order already carries a price. Leaving it empty on a Zone 5
+  // order re-prices from the distance rather than charging nothing.
+  const [remotePrice, setRemotePrice] = useState(current.fee != null && isRemote ? String(current.fee) : "");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   const editing = override || unresolved || needsPrice;
   const editingRemote = zone === REMOTE_ZONE;
   const typed = Number(remotePrice);
-  const outOfRange =
-    editingRemote &&
-    remotePrice.trim() !== "" &&
-    ((current.quoteMin != null && typed < current.quoteMin) || (current.quoteMax != null && typed > current.quoteMax));
+  // Blank means "work it out from the distance", so only a typed value is checked.
+  const badPrice = editingRemote && remotePrice.trim() !== "" && (!Number.isFinite(typed) || typed < 0);
 
   const save = () =>
     start(async () => {
       if (!zone) return;
       setError(null);
-      const r = await setDeliveryZoneAction(orderId, zone, editingRemote ? typed : null);
+      const r = await setDeliveryZoneAction(orderId, zone, editingRemote && remotePrice.trim() !== "" ? typed : null);
       if (r.ok) {
         toast.success("Delivery zone saved");
         setOverride(false);
@@ -170,11 +167,12 @@ export function DeliveryZonePicker({ orderId, current, pricing, distanceM, city,
         <Field
           label="Price for this delivery"
           htmlFor="delivery-price"
-          error={outOfRange ? `Must be between ${formatCurrency(current.quoteMin ?? 0)} and ${formatCurrency(current.quoteMax ?? 0)}` : null}
+          optional
+          error={badPrice ? "Enter an amount of zero or more" : null}
           hint={
-            current.quoteMin != null && current.quoteMax != null
-              ? `The pharmacy was quoted ${formatCurrency(current.quoteMin)} – ${formatCurrency(current.quoteMax)}. Charging more than the top of that range needs a new quote.`
-              : "No quote was calculated for this order, so set the price by hand."
+            distanceM != null
+              ? `Leave this empty to charge the measured ${formatDistance(distanceM)} at the pharmacy's per-km rate. Fill it in only to override that.`
+              : "This delivery has no measured distance, so it cannot price itself — set the amount here."
           }
         >
           <div className="relative max-w-[12rem]">
@@ -182,11 +180,11 @@ export function DeliveryZonePicker({ orderId, current, pricing, distanceM, city,
             <Input
               id="delivery-price"
               type="number"
-              min={current.quoteMin ?? 0}
-              max={current.quoteMax ?? undefined}
+              min={0}
               step="0.01"
               className="pl-7"
-              invalid={outOfRange}
+              invalid={badPrice}
+              placeholder={distanceM != null ? "From distance" : ""}
               value={remotePrice}
               onChange={(e) => setRemotePrice(e.target.value)}
             />
@@ -204,7 +202,7 @@ export function DeliveryZonePicker({ orderId, current, pricing, distanceM, city,
           onClick={save}
           loading={pending}
           loadingText="Saving…"
-          disabled={!zone || outOfRange || (editingRemote && !(typed >= 0 && remotePrice.trim() !== ""))}
+          disabled={!zone || badPrice}
         >
           {editingRemote ? "Confirm price" : "Save zone"}
         </Button>

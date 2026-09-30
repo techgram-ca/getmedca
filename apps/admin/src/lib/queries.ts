@@ -10,9 +10,24 @@ export function adminOrders(db: ServiceClient) {
   return db.from("orders_admin").select("*");
 }
 
+/**
+ * Just the columns the orders list renders. The view has forty, and a window
+ * of a thousand rows carried every one of them across two hops — Postgres to
+ * the server, then the server to the browser as props — to render fourteen.
+ */
+export const ORDER_LIST_COLUMNS =
+  "id, created_at, status, order_type, source, patient_name, patient_phone, pharmacy_id, assigned_driver_id, delivery_type, delivery_fee_charged, delivery_quote_min, delivery_quote_max";
+
+export function adminOrderList(db: ServiceClient) {
+  return db.from("orders_admin").select(ORDER_LIST_COLUMNS);
+}
+
 export type AdminOrder = OrderAdminRow & { pharmacy?: { name: string | null } | null; driver?: { name: string } | null };
 
-export async function withNames(db: ServiceClient, rows: OrderAdminRow[]): Promise<AdminOrder[]> {
+export async function withNames<T extends { pharmacy_id: string; assigned_driver_id: string | null }>(
+  db: ServiceClient,
+  rows: T[],
+): Promise<(T & { pharmacy?: { name: string | null } | null; driver?: { name: string } | null })[]> {
   const pharmacyIds = [...new Set(rows.map((r) => r.pharmacy_id))];
   const driverIds = [...new Set(rows.map((r) => r.assigned_driver_id).filter((x): x is string => !!x))];
   const [{ data: ph }, { data: dr }] = await Promise.all([

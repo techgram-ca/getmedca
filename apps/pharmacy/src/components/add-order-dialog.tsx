@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Truck } from "lucide-react";
+import { formatCurrency } from "@getmed/core/format";
 import {
   AddressAutocomplete,
   Button,
@@ -23,6 +24,7 @@ import {
 } from "@getmed/ui";
 import { createManualOrdersAction } from "@/lib/actions/orders";
 import { DeliveryQuote } from "./delivery-quote";
+import { useAddressQuotes } from "@/lib/use-address-quotes";
 
 type Row = {
   key: number;
@@ -58,6 +60,8 @@ export function AddOrderDialog() {
   const [errors, setErrors] = useState<Record<number, Record<string, string>>>({});
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+
+  const quotes = useAddressQuotes(rows.map((r) => r.address));
 
   const update = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
@@ -168,7 +172,7 @@ export function AddOrderDialog() {
                         placeholder="Street address, city"
                         invalid={!!fe("deliveryAddress")}
                       />
-                      <DeliveryQuote address={row.address} className="mt-2" />
+                      <DeliveryQuote {...quotes.stateFor(row.address)} className="mt-2" />
                     </Field>
                     {row.orderType === "transfer" ? (
                       <>
@@ -195,13 +199,39 @@ export function AddOrderDialog() {
           </div>
           <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Button type="button" variant="outline" disabled={rows.length >= 20} onClick={() => setRows((rs) => [...rs, blank()])}><Plus /> Add another order</Button>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="button" loading={pending} loadingText="Creating…" onClick={submit}>{rows.length > 1 ? `Create ${rows.length} orders` : "Create order"}</Button>
+            <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+              <DeliveryTotal count={rows.length} {...quotes.total} />
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button type="button" loading={pending} loadingText="Creating…" onClick={submit}>{rows.length > 1 ? `Create ${rows.length} orders` : "Create order"}</Button>
+              </div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/**
+ * What the whole submission costs in delivery, beside the button that commits
+ * it. A pharmacy adding twenty orders was reading twenty separate prices and
+ * adding them up by hand to know what the run came to.
+ *
+ * Addresses still being priced are counted rather than hidden, so a total that
+ * is not yet the whole total never reads as one.
+ */
+function DeliveryTotal({ count, sum, priced, unpriced }: { count: number; sum: number; priced: number; unpriced: number }) {
+  if (count < 2 || priced === 0) return null;
+  return (
+    <p className="text-sm text-ink-700">
+      <Truck className="mr-1.5 inline size-4 text-brand-600" aria-hidden />
+      Delivery total <span className="font-semibold text-ink-950">{formatCurrency(sum)}</span>
+      <span className="text-ink-500">
+        {" "}
+        for {priced} of {count}
+        {unpriced > 0 ? " — the rest are not priced yet" : ""}
+      </span>
+    </p>
   );
 }

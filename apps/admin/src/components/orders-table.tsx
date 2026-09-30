@@ -66,7 +66,7 @@ export function AdminOrdersTable({
   from: string;
   to: string;
 }) {
-  const { setWindow, loading } = useDateWindow(from, to);
+  const { setWindow, refresh, loading } = useDateWindow(from, to);
   const [status, setStatus] = useState("");
   const [pharmacy, setPharmacy] = useState("");
   const [source, setSource] = useState("");
@@ -105,6 +105,7 @@ export function AdminOrdersTable({
         from={from}
         to={to}
         onWindowChange={setWindow}
+        onRefresh={refresh}
         today={today}
         onTodayChange={setToday}
         search={search}
@@ -166,21 +167,19 @@ function OrderRow({ order, drivers }: { order: AdminOrderRow; drivers: DriverOpt
   const [pending, start] = useTransition();
 
   const isRemote = order.delivery_type === REMOTE_ZONE;
-  // Zone 5 has no configured price, so it must be settled before a driver goes.
-  const needsPrice = isRemote && order.delivery_fee_charged == null;
+  // Zone 5 prices itself from the distance now, so this only catches an order
+  // that reached here with no price at all — one created before that rule, or
+  // one whose address never produced a route.
+  const needsPrice = order.delivery_fee_charged == null;
   const typed = Number(price);
-  const priceOk =
-    !needsPrice ||
-    (price.trim() !== "" &&
-      Number.isFinite(typed) &&
-      (order.delivery_quote_min == null || typed >= order.delivery_quote_min) &&
-      (order.delivery_quote_max == null || typed <= order.delivery_quote_max));
+  const priceOk = !needsPrice || price.trim() === "" || Number.isFinite(typed);
   const canAssign = ASSIGNABLE.includes(order.status) && order.delivery_type != null;
 
   const save = () =>
     start(async () => {
-      // Price first: assigning a driver is refused while Zone 5 is unpriced.
-      if (needsPrice) {
+      // Only when an amount was actually typed — an unpriced order can still be
+      // assigned, and a blank box is not a decision to charge nothing.
+      if (needsPrice && price.trim() !== "") {
         const priced = await setDeliveryZoneAction(order.id, REMOTE_ZONE, typed);
         if (!priced.ok) {
           toast.error(priced.error);
@@ -238,12 +237,12 @@ function OrderRow({ order, drivers }: { order: AdminOrderRow; drivers: DriverOpt
                 <Input
                   type="number"
                   step="0.01"
-                  min={order.delivery_quote_min ?? 0}
-                  max={order.delivery_quote_max ?? undefined}
+                  min={0}
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   invalid={!priceOk}
-                  aria-label="Zone 5 price"
+                  aria-label="Delivery price"
+                  placeholder="Price"
                   className="h-8 pl-5 text-sm"
                 />
               </div>
@@ -263,7 +262,7 @@ function OrderRow({ order, drivers }: { order: AdminOrderRow; drivers: DriverOpt
                 className="size-7"
                 aria-label="Save"
                 loading={pending}
-                disabled={!priceOk || (!driverId && !needsPrice)}
+                disabled={!priceOk || (!driverId && !(needsPrice && price.trim() !== ""))}
                 onClick={save}
               >
                 {pending ? null : <Check className="size-3.5" />}

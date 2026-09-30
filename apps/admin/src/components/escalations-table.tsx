@@ -34,7 +34,7 @@ export type EscalationRow = {
 };
 
 export function EscalationsTable({ rows, from, to }: { rows: EscalationRow[]; from: string; to: string }) {
-  const { setWindow, loading } = useDateWindow(from, to);
+  const { setWindow, refresh, loading } = useDateWindow(from, to);
   const [handling, setHandling] = useState("open");
   const [kind, setKind] = useState("");
   const [search, setSearch] = useState("");
@@ -69,6 +69,7 @@ export function EscalationsTable({ rows, from, to }: { rows: EscalationRow[]; fr
         from={from}
         to={to}
         onWindowChange={setWindow}
+        onRefresh={refresh}
         today={today}
         onTodayChange={setToday}
         search={search}

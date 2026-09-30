@@ -315,6 +315,10 @@ create index orders_driver_idx on public.orders (assigned_driver_id);
 create index orders_source_idx on public.orders (pharmacy_id, source);
 create index orders_delivery_type_idx on public.orders (pharmacy_id, delivery_type) where delivery_type is not null;
 create index orders_escalated_idx on public.orders (escalated_at) where escalated_at is not null;
+-- Admin lists filter created_at across all pharmacies; orders_pharmacy_idx
+-- cannot serve them because pharmacy_id leads it.
+create index orders_created_at_idx on public.orders (created_at desc);
+create index orders_escalated_created_idx on public.orders (escalated_at desc, created_at desc) where escalated_at is not null;
 create index orders_delivered_idx on public.orders (pharmacy_id, delivered_at) where status = 'delivered';
 
 create table public.order_events (
@@ -1115,3 +1119,24 @@ insert into public.postal_areas (fsa, city, province) values
   ('L9H', 'Hamilton', 'ON'),
   ('L9K', 'Hamilton', 'ON')
 on conflict (fsa) do update set city = excluded.city;
+
+-- ---------------------------------------------------------------------
+-- Role privileges
+-- ---------------------------------------------------------------------
+-- Supabase used to grant these automatically on every new table in public.
+-- Newer projects do not, and without them PostgREST answers every request
+-- with "42501: permission denied" while the SQL editor -- a superuser
+-- connection that skips grants and RLS -- works normally.
+--
+-- RLS is enabled on all 23 tables, so these decide who may ask, not what
+-- comes back. Runs last, once every table, view and function exists.
+
+grant usage on schema public to anon, authenticated, service_role;
+
+grant all on all tables    in schema public to anon, authenticated, service_role;
+grant all on all sequences in schema public to anon, authenticated, service_role;
+grant all on all routines  in schema public to anon, authenticated, service_role;
+
+alter default privileges in schema public grant all on tables    to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public grant all on routines  to anon, authenticated, service_role;
