@@ -57,3 +57,12 @@ test("a re-queued order picks the normal flow back up", () => {
   // return_to_delivery lands on ready_for_delivery, where admin assigns again.
   assert.equal(canTransition("assign_driver", "ready_for_delivery", "admin"), true);
 });
+
+test("the pharmacy's row actions are exactly what it may do", () => {
+  // The quick-update select is built from availableActions, so these are what a
+  // pharmacy can move an order to without opening it.
+  assert.deepEqual(availableActions("pending", "pharmacy"), ["accept", "reject"]);
+  assert.deepEqual(availableActions("accepted", "pharmacy"), ["mark_ready", "cancel"]);
+  assert.deepEqual(availableActions("ready_for_delivery", "pharmacy"), ["cancel"]);
+  assert.deepEqual(availableActions("delivered", "pharmacy"), [], "a delivered order offers nothing");
+});

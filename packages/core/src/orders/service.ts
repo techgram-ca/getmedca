@@ -405,6 +405,11 @@ export async function assignDriver(orderId: string, driverId: string, adminId: s
   if (!order.delivery_type) {
     throw new AppError("Set the delivery zone before assigning a driver", 409, "delivery_zone_required");
   }
+  // Zone 5 carries no configured price, so having a zone is not enough — an
+  // admin has to have confirmed an amount, or the delivery goes out unpriced.
+  if (order.delivery_type === REMOTE_ZONE && order.delivery_fee_charged == null) {
+    throw new AppError("Confirm the Zone 5 price before assigning a driver", 409, "delivery_price_required");
+  }
   const { data: driver } = await db.from("drivers").select("*").eq("id", driverId).eq("active", true).maybeSingle();
   if (!driver) throw new NotFoundError("Driver not found or inactive");
   const updated = await transition(db, order, "assign_driver", "admin", adminId, {

@@ -19,3 +19,5 @@ export * from "./components/turnstile";
 export * from "./components/address-autocomplete";
 export * from "./components/delivery-proof";
 export * from "./components/delivery-price";
+export * from "./components/table-filters";
+export * from "./components/consultations-table";
