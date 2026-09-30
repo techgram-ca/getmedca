@@ -89,3 +89,40 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
 export function statusLabel(status: string): string {
   return ORDER_STATUS_LABELS[status] ?? status;
 }
+
+// ---------------------------------------------------------------------
+// Date windows for list pages
+// ---------------------------------------------------------------------
+
+/** `YYYY-MM-DD` in local time, the format an `<input type="date">` expects. */
+export function dateInputValue(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** How many days a list page loads before the user asks for more. */
+export const DEFAULT_WINDOW_DAYS = 5;
+
+/**
+ * The window a list page loads by default: today and the previous four days,
+ * inclusive. Lists filter inside what is loaded, so this is the only thing that
+ * decides how much comes back from the server.
+ */
+export function defaultDateWindow(days = DEFAULT_WINDOW_DAYS, now = new Date()): { from: string; to: string } {
+  const start = new Date(now);
+  start.setDate(start.getDate() - (days - 1));
+  return { from: dateInputValue(start), to: dateInputValue(now) };
+}
+
+/** Start of a `YYYY-MM-DD` day and start of the day after it, as ISO strings. */
+export function dayBounds(from: string, to: string): { startIso: string; endIso: string } {
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  end.setDate(end.getDate() + 1);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+/** True when a timestamp falls on the given local calendar day. */
+export function isOnLocalDay(iso: string | null | undefined, day: string): boolean {
+  if (!iso) return false;
+  return dateInputValue(new Date(iso)) === day;
+}

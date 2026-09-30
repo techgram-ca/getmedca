@@ -1,58 +1,44 @@
-import Link from "next/link";
-import { MessageSquare } from "lucide-react";
 import { requirePharmacy } from "@getmed/core/auth";
-import { formatDate, timeAgo } from "@getmed/core/format";
-import { Badge, Button, EmptyState, PageHeader, StatusBadge, TBody, TD, TH, THead, TR, Table } from "@getmed/ui";
+import { dayBounds, defaultDateWindow } from "@getmed/core/format";
+import { PageHeader } from "@getmed/ui";
+import type { ConsultationRow } from "@getmed/ui";
+import { ConsultationsView } from "@/components/consultations-view";
 
-export default async function ConsultationsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
-  const { status } = await searchParams;
+export const dynamic = "force-dynamic";
+
+export default async function ConsultationsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
+  const sp = await searchParams;
+  const fallback = defaultDateWindow();
+  const from = sp.from ?? fallback.from;
+  const to = sp.to ?? fallback.to;
+  const { startIso, endIso } = dayBounds(from, to);
+
   const { pharmacy, db } = await requirePharmacy();
-  let q = db
+  const { data } = await db
     .from("consultation_requests")
-    .select("*, issues(name), pharmacy_services(name)")
+    .select("id, patient_name, patient_phone, status, created_at, callback_window, issues(name), pharmacy_services(name)")
     .eq("pharmacy_id", pharmacy.id)
     .not("phone_verified_at", "is", null)
+    .gte("created_at", startIso)
+    .lt("created_at", endIso)
     .order("created_at", { ascending: false })
-    .limit(200);
-  if (status) q = q.eq("status", status as "new");
-  const { data: rows } = await q;
-  type Row = NonNullable<typeof rows>[number] & { issues: { name: string } | null; pharmacy_services: { name: string } | null };
-  const list = (rows ?? []) as Row[];
+    .limit(1000);
+
+  type Joined = NonNullable<typeof data>[number] & { issues: { name: string } | null; pharmacy_services: { name: string } | null };
+  const rows: ConsultationRow[] = ((data ?? []) as Joined[]).map((r) => ({
+    id: r.id,
+    created_at: r.created_at,
+    status: r.status,
+    patient_name: r.patient_name,
+    patient_phone: r.patient_phone,
+    topic: r.issues?.name ?? r.pharmacy_services?.name ?? null,
+    callbackWindow: r.callback_window,
+  }));
 
   return (
     <div>
-      <PageHeader
-        title="Consultation requests"
-        description="Patients expecting a call from a pharmacist."
-        actions={
-          <div className="flex gap-1">
-            {["", "new", "contacted", "resolved"].map((s) => (
-              <Button key={s} asChild size="sm" variant={(status ?? "") === s ? "secondary" : "ghost"}><Link href={s ? `/consultations?status=${s}` : "/consultations"}>{s || "All"}</Link></Button>
-            ))}
-          </div>
-        }
-      />
-      {list.length === 0 ? (
-        <EmptyState icon={<MessageSquare />} title="No consultation requests" description="Requests from patients will appear here." />
-      ) : (
-        <div className="surface overflow-hidden">
-          <Table>
-            <THead><TR><TH>Patient</TH><TH>Topic</TH><TH>Callback</TH><TH>Status</TH><TH>Received</TH><TH></TH></TR></THead>
-            <TBody>
-              {list.map((r) => (
-                <TR key={r.id}>
-                  <TD><div>{r.patient_name}</div><div className="text-xs text-ink-500">{r.patient_phone}</div></TD>
-                  <TD>{r.issues?.name ?? r.pharmacy_services?.name ?? "—"}</TD>
-                  <TD className="capitalize">{r.callback_window ? <Badge>{r.callback_window}</Badge> : "Any"}</TD>
-                  <TD><StatusBadge status={r.status} /></TD>
-                  <TD className="text-ink-500" title={formatDate(r.created_at)}>{timeAgo(r.created_at)}</TD>
-                  <TD className="text-right"><Button asChild size="sm" variant="outline"><Link href={`/consultations/${r.id}`}>Open</Link></Button></TD>
-                </TR>
-              ))}
-            </TBody>
-          </Table>
-        </div>
-      )}
+      <PageHeader title="Consultation requests" description="Patients expecting a call from a pharmacist." />
+      <ConsultationsView rows={rows} from={from} to={to} />
     </div>
   );
 }

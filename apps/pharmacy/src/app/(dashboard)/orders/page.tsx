@@ -1,91 +1,45 @@
-import Link from "next/link";
-import { ClipboardList } from "lucide-react";
 import { requirePharmacy } from "@getmed/core/auth";
-import { formatCurrency, formatDate, shortId } from "@getmed/core/format";
-import { zoneShortLabel } from "@getmed/core/pricing";
-import type { OrderSource, OrderStatus, OrderType } from "@getmed/db/types";
-import { Badge, Button, DeliveryPrice, EmptyState, Input, PageHeader, Select, StatusBadge, TBody, TD, TH, THead, TR, Table } from "@getmed/ui";
+import { dayBounds, defaultDateWindow } from "@getmed/core/format";
+import { PageHeader } from "@getmed/ui";
 import { AddOrderDialog } from "@/components/add-order-dialog";
-import { listOrders } from "@/lib/queries";
+import { PharmacyOrdersTable, type PharmacyOrderRow } from "@/components/orders-table";
+import { visibleOrders } from "@/lib/queries";
 
-const STATUSES: OrderStatus[] = ["pending", "accepted", "ready_for_delivery", "assigned", "picked_up", "delivered", "failed", "rejected", "cancelled", "timed_out"];
+export const dynamic = "force-dynamic";
 
-type Search = { status?: string; type?: string; source?: string; from?: string; to?: string; q?: string };
-
-export default async function OrdersPage({ searchParams }: { searchParams: Promise<Search> }) {
+export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const sp = await searchParams;
+  const fallback = defaultDateWindow();
+  const from = sp.from ?? fallback.from;
+  const to = sp.to ?? fallback.to;
+  const { startIso, endIso } = dayBounds(from, to);
+
   const { pharmacy, db } = await requirePharmacy();
-  const orders = await listOrders(db, pharmacy.id, {
-    status: (sp.status as OrderStatus) || "",
-    type: (sp.type as OrderType) || "",
-    source: (sp.source as OrderSource) || "",
-    from: sp.from,
-    to: sp.to,
-    q: sp.q,
-  });
+  const { data } = await visibleOrders(db, pharmacy.id)
+    .gte("created_at", startIso)
+    .lt("created_at", endIso)
+    .order("created_at", { ascending: false })
+    .limit(1000);
+
+  const rows: PharmacyOrderRow[] = (data ?? []).map((o) => ({
+    id: o.id,
+    created_at: o.created_at,
+    received_at: o.phone_verified_at ?? o.created_at,
+    status: o.status,
+    order_type: o.order_type,
+    source: o.source,
+    patient_name: o.patient_name,
+    patient_phone: o.patient_phone,
+    delivery_type: o.delivery_type,
+    delivery_fee_charged: o.delivery_fee_charged != null ? Number(o.delivery_fee_charged) : null,
+    delivery_quote_min: o.delivery_quote_min != null ? Number(o.delivery_quote_min) : null,
+    delivery_quote_max: o.delivery_quote_max != null ? Number(o.delivery_quote_max) : null,
+  }));
 
   return (
     <div>
-      <PageHeader title="Orders" description={`${orders.length} orders`} actions={<AddOrderDialog />} />
-      <form className="surface mb-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-7" method="get">
-        <Select name="status" defaultValue={sp.status ?? ""} aria-label="Status">
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
-        </Select>
-        <Select name="type" defaultValue={sp.type ?? ""} aria-label="Order type">
-          <option value="">All types</option>
-          <option value="new">New prescription</option>
-          <option value="transfer">Transfer</option>
-        </Select>
-        <Select name="source" defaultValue={sp.source ?? ""} aria-label="Source">
-          <option value="">Online + manual</option>
-          <option value="online">Online (patient)</option>
-          <option value="manual">Manual (entered here)</option>
-        </Select>
-        <Input type="date" name="from" defaultValue={sp.from} aria-label="From" />
-        <Input type="date" name="to" defaultValue={sp.to} aria-label="To" />
-        <Input name="q" defaultValue={sp.q} placeholder="Patient name or phone" aria-label="Search" />
-        <div className="flex gap-2">
-          <Button type="submit" className="flex-1">Filter</Button>
-          <Button asChild variant="ghost"><Link href="/orders">Clear</Link></Button>
-        </div>
-      </form>
-
-      {orders.length === 0 ? (
-        <EmptyState icon={<ClipboardList />} title="No orders match" />
-      ) : (
-        <div className="surface overflow-hidden">
-          <Table>
-            <THead><TR><TH>Order</TH><TH>Patient</TH><TH>Type</TH><TH>Source</TH><TH>Status</TH><TH>Delivery cost</TH><TH>Received</TH><TH></TH></TR></THead>
-            <TBody>
-              {orders.map((o) => (
-                <TR key={o.id}>
-                  <TD className="font-mono font-medium">{shortId(o.id)}</TD>
-                  <TD><div>{o.patient_name}</div><div className="text-xs text-ink-500">{o.patient_phone}</div></TD>
-                  <TD className="capitalize">{o.order_type}</TD>
-                  <TD><Badge tone={o.source === "manual" ? "accent" : "neutral"} className="capitalize">{o.source}</Badge></TD>
-                  <TD><StatusBadge status={o.status} /></TD>
-                  <TD>
-                    <DeliveryPrice
-                      price={{
-                        zoneLabel: o.delivery_type ? zoneShortLabel(o.delivery_type) : null,
-                        fee: o.delivery_fee_charged != null ? formatCurrency(Number(o.delivery_fee_charged)) : null,
-                        quote:
-                          o.delivery_quote_min != null && o.delivery_quote_max != null
-                            ? { min: formatCurrency(Number(o.delivery_quote_min)), max: formatCurrency(Number(o.delivery_quote_max)) }
-                            : null,
-                      }}
-                      className="text-sm"
-                    />
-                  </TD>
-                  <TD className="text-ink-500">{formatDate(o.phone_verified_at ?? o.created_at)}</TD>
-                  <TD className="text-right"><Button asChild size="sm" variant="outline"><Link href={`/orders/${o.id}`}>View</Link></Button></TD>
-                </TR>
-              ))}
-            </TBody>
-          </Table>
-        </div>
-      )}
+      <PageHeader title="Orders" actions={<AddOrderDialog />} />
+      <PharmacyOrdersTable rows={rows} from={from} to={to} />
     </div>
   );
 }
