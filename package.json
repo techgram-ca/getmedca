@@ -15,7 +15,8 @@
     "test": "turbo run test",
     "db:reset": "supabase db reset",
     "db:push": "supabase db push",
-    "db:types": "supabase gen types typescript --local > packages/db/src/database.types.ts"
+    "db:types": "supabase gen types typescript --local > packages/db/src/database.types.ts",
+    "env:sync": "node scripts/sync-env.mjs"
   },
   "devDependencies": {
     "turbo": "^2.10.13",
