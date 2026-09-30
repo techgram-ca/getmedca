@@ -1115,3 +1115,24 @@ insert into public.postal_areas (fsa, city, province) values
   ('L9H', 'Hamilton', 'ON'),
   ('L9K', 'Hamilton', 'ON')
 on conflict (fsa) do update set city = excluded.city;
+
+-- ---------------------------------------------------------------------
+-- Role privileges
+-- ---------------------------------------------------------------------
+-- Supabase used to grant these automatically on every new table in public.
+-- Newer projects do not, and without them PostgREST answers every request
+-- with "42501: permission denied" while the SQL editor -- a superuser
+-- connection that skips grants and RLS -- works normally.
+--
+-- RLS is enabled on all 23 tables, so these decide who may ask, not what
+-- comes back. Runs last, once every table, view and function exists.
+
+grant usage on schema public to anon, authenticated, service_role;
+
+grant all on all tables    in schema public to anon, authenticated, service_role;
+grant all on all sequences in schema public to anon, authenticated, service_role;
+grant all on all routines  in schema public to anon, authenticated, service_role;
+
+alter default privileges in schema public grant all on tables    to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public grant all on routines  to anon, authenticated, service_role;
