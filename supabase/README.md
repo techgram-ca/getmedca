@@ -43,6 +43,8 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0008_drop_distance_bands.sql` | Removes the distance-band fallback; untagged postal codes go to Zone 5 |
 | `migrations/0009_pharmacy_point.sql` | `pharmacy_point()`, for quoting an address before an order exists |
 | `migrations/0010_order_sla_minutes.sql` | Snapshots the response window on each order so the countdown follows the admin's setting |
+| `migrations/0011_role_grants.sql` | Grants the PostgREST roles access to `public`; newer Supabase projects do not do this automatically |
+| `migrations/0012_orders_created_at_idx.sql` | Indexes `orders.created_at` for the admin lists, which filter by date across all pharmacies |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
 After any schema change, regenerate the TypeScript types with `pnpm db:types`.
@@ -88,6 +90,19 @@ whether or not 0007 has already been applied.
 coordinates through `st_x`/`st_y`. The manual order form quotes a delivery as soon as the address is
 picked, which needs the driving distance from the pharmacy before any order row exists for
 `order_route_points` to read.
+
+`migrations/0012_orders_created_at_idx.sql` indexes `orders (created_at desc)`. `orders_pharmacy_idx`
+leads with `pharmacy_id`, so it serves the pharmacy portal but not the admin orders and escalations
+lists, which filter on `created_at` across every pharmacy — those were a sequential scan of `orders`
+plus a sort on every load, on pages that only ever show a few days.
+
+`migrations/0011_role_grants.sql` grants `anon`, `authenticated` and `service_role` access to the
+`public` schema. Neither `0001_init.sql` nor `fresh/init.sql` did this, because Supabase used to
+apply those grants to every new table itself — so a database built on an older project inherited
+them and the gap never showed. A project created more recently does not, and every PostgREST
+request fails with `42501: permission denied for table …` while the SQL editor keeps working,
+since it connects as a superuser and skips both grants and RLS. RLS is enabled on all 23 tables,
+so the grants govern who may ask, not what comes back.
 
 `migrations/0010_order_sla_minutes.sql` adds `orders.sla_minutes`, written when the order is
 activated. The SLA timer is scheduled on Inngest at that moment, so an order already waiting keeps

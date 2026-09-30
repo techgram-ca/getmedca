@@ -5,6 +5,19 @@ export function visibleOrders(db: ServiceClient, pharmacyId: string) {
   return db.from("orders").select("*").eq("pharmacy_id", pharmacyId).not("phone_verified_at", "is", null);
 }
 
+/**
+ * Just the columns the orders list renders. `orders` is the widest table in
+ * the schema — prescription, insurance and health-card fields included — and a
+ * window of a thousand rows carried all of it to render eleven, twice: once
+ * out of Postgres and again to the browser as props.
+ */
+const ORDER_LIST_COLUMNS =
+  "id, created_at, phone_verified_at, status, order_type, source, patient_name, patient_phone, delivery_type, delivery_fee_charged, delivery_quote_min, delivery_quote_max";
+
+export function visibleOrderList(db: ServiceClient, pharmacyId: string) {
+  return db.from("orders").select(ORDER_LIST_COLUMNS).eq("pharmacy_id", pharmacyId).not("phone_verified_at", "is", null);
+}
+
 export async function dashboardStats(db: ServiceClient, pharmacyId: string) {
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();

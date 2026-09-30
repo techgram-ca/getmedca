@@ -72,6 +72,10 @@ export function AddressAutocomplete({
   const [active, setActive] = React.useState(-1);
   const session = React.useRef<SessionToken>(new SessionToken());
   const skipNext = React.useRef(false);
+  // Only a value the person typed should search. A form that loads with a saved
+  // address would otherwise call Mapbox on mount and open its own dropdown over
+  // the page, with nothing touched.
+  const typed = React.useRef(false);
   const debounced = useDebounce(value, 280);
   const listId = React.useId();
 
@@ -80,6 +84,7 @@ export function AddressAutocomplete({
       skipNext.current = false;
       return;
     }
+    if (!typed.current) return;
     const q = debounced.trim();
     if (q.length < 3 || !process.env.NEXT_PUBLIC_MAPBOX_TOKEN) {
       setSuggestions([]);
@@ -161,6 +166,7 @@ export function AddressAutocomplete({
         value={value}
         placeholder={placeholder}
         onChange={(e) => {
+          typed.current = true;
           onChange(e.target.value);
           setOpen(true);
         }}

@@ -3,7 +3,7 @@ import { dayBounds, defaultDateWindow } from "@getmed/core/format";
 import { PageHeader } from "@getmed/ui";
 import { AddOrderDialog } from "@/components/add-order-dialog";
 import { PharmacyOrdersTable, type PharmacyOrderRow } from "@/components/orders-table";
-import { visibleOrders } from "@/lib/queries";
+import { visibleOrderList } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const { startIso, endIso } = dayBounds(from, to);
 
   const { pharmacy, db } = await requirePharmacy();
-  const { data } = await visibleOrders(db, pharmacy.id)
+  const { data } = await visibleOrderList(db, pharmacy.id)
     .gte("created_at", startIso)
     .lt("created_at", endIso)
     .order("created_at", { ascending: false })

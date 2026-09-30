@@ -23,5 +23,9 @@ export function useDateWindow(from: string, to: string) {
     start(() => router.push(`?${next}`, { scroll: false }));
   };
 
-  return { setWindow, loading };
+  // Re-runs the server component for the window already on screen. The same
+  // transition drives the spinner, so a refresh looks like a date change.
+  const refresh = () => start(() => router.refresh());
+
+  return { setWindow, refresh, loading };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Search } from "lucide-react";
 import { AddressAutocomplete, Button, type AddressValue } from "@getmed/ui";
 
@@ -9,7 +9,7 @@ export function IssueAddressSearch({ slug, initial }: { slug: string; initial: s
   const router = useRouter();
   const [text, setText] = useState(initial);
   const [picked, setPicked] = useState<AddressValue | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, start] = useTransition();
 
   function go(selected?: AddressValue | null) {
     const chosen = selected ?? picked;
@@ -18,13 +18,15 @@ export function IssueAddressSearch({ slug, initial }: { slug: string; initial: s
       document.getElementById("issue-address")?.focus();
       return;
     }
-    setBusy(true);
     const p = new URLSearchParams({ address: query });
     if (chosen?.lat != null && chosen?.lng != null) {
       p.set("lat", String(chosen.lat));
       p.set("lng", String(chosen.lng));
     }
-    router.push(`/consultation/${slug}?${p}`);
+    // A transition tracks the navigation, so the button stops spinning when the
+    // results actually arrive. This page pushes to itself with new params, so
+    // the component is never unmounted to clear a plain boolean.
+    start(() => router.push(`/consultation/${slug}?${p}`));
   }
 
   return (

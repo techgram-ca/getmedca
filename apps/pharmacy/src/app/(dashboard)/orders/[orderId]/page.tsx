@@ -2,11 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FileText, Lock } from "lucide-react";
 import { requirePharmacy } from "@getmed/core/auth";
-import { formatCurrency, formatDate, formatDateOnly, shortId, statusLabel } from "@getmed/core/format";
+import { formatCurrency, formatDate, formatDateOnly, formatDistance, shortId, statusLabel } from "@getmed/core/format";
 import { loadDeliveryProof, orderCharges } from "@getmed/core/orders";
 import { pharmacyCanModify } from "@getmed/core/orders/state-machine";
 import { getPlatformSettings } from "@getmed/core/settings";
-import { zoneLabel } from "@getmed/core/pricing";
+import { REMOTE_ZONE } from "@getmed/core/pricing";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, DeliveryPrice, DeliveryProofCard, PageHeader, StatusBadge } from "@getmed/ui";
 import { OrderActions } from "@/components/order-actions";
 import { RetryDelivery } from "@/components/retry-delivery";
@@ -15,8 +15,12 @@ import { SlaCountdown } from "@/components/sla-countdown";
 export default async function OrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
   const { orderId } = await params;
   const { pharmacy, db } = await requirePharmacy();
-  const settings = await getPlatformSettings(db);
-  const { data: o } = await db.from("orders").select("*").eq("id", orderId).eq("pharmacy_id", pharmacy.id).not("phone_verified_at", "is", null).maybeSingle();
+  // Settings do not depend on the order, so they load alongside it rather than
+  // holding it up for a round trip.
+  const [settings, { data: o }] = await Promise.all([
+    getPlatformSettings(db),
+    db.from("orders").select("*").eq("id", orderId).eq("pharmacy_id", pharmacy.id).not("phone_verified_at", "is", null).maybeSingle(),
+  ]);
   if (!o) notFound();
   const [{ data: events }, { data: driver }, proof, charges] = await Promise.all([
     db.from("order_events").select("*").eq("order_id", o.id).order("created_at"),
@@ -109,7 +113,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
                 v={
                   <DeliveryPrice
                     price={{
-                      zoneLabel: o.delivery_type ? zoneLabel(o.delivery_type) : null,
+                      remote: o.delivery_type === REMOTE_ZONE,
+                      distance: o.delivery_distance_m != null ? formatDistance(Number(o.delivery_distance_m)) : null,
                       fee: o.delivery_fee_charged != null ? formatCurrency(Number(o.delivery_fee_charged)) : null,
                       quote:
                         o.delivery_quote_min != null && o.delivery_quote_max != null

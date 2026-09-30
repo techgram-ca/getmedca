@@ -14,14 +14,15 @@ export default async function PharmacyDetail({ params }: { params: Promise<{ pha
   const { db } = await requireAdmin();
   const { data: p } = await db.from("pharmacies").select("*").eq("id", pharmacyId).maybeSingle();
   if (!p) notFound();
-  const [{ data: pharmacists }, { data: services }, { data: issues }, stats, taggedAreas] = await Promise.all([
+  const [{ data: pharmacists }, { data: services }, { data: issues }, stats, taggedAreas, logoUrl] = await Promise.all([
     db.from("pharmacists").select("*").eq("pharmacy_id", p.id).order("is_main", { ascending: false }),
     db.from("pharmacy_services").select("*").eq("pharmacy_id", p.id),
     db.from("pharmacy_issues").select("issues(name)").eq("pharmacy_id", p.id),
     db.from("orders_admin").select("status").eq("pharmacy_id", p.id),
     countZoneAreas(db, p.id),
+    // Only needs the path, which the row above already carried.
+    mediaUrl(db, p.logo_path),
   ]);
-  const logoUrl = await mediaUrl(db, p.logo_path);
   const hours = (p.hours ?? {}) as WeeklyHours;
   const counts = (stats.data ?? []).reduce<Record<string, number>>((acc, o) => ({ ...acc, [o.status]: (acc[o.status] ?? 0) + 1 }), {});
   const total = stats.data?.length ?? 0;
