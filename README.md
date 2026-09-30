@@ -65,12 +65,17 @@ everywhere, Supabase Postgres/PostGIS, Inngest for durable workflows, Mapbox for
 
 ```bash
 pnpm install
-cp .env.example .env            # fill in keys (see below)
+cp .env.example .env.dev        # fill in keys (see below)
+pnpm env:sync                   # copies .env.dev into each app as .env.local
 supabase start                  # local Postgres + Auth + Storage (Supabase CLI)
 supabase db reset               # applies supabase/migrations + supabase/seed.sql
 pnpm dev                        # all four apps via Turborepo, or pnpm dev:patient etc.
 npx inngest-cli@latest dev -u http://localhost:3000/api/inngest   # local Inngest dev server
 ```
+
+Next.js reads `.env` files from each app's own directory, not from the repo root, so the four
+apps each need their own copy. `pnpm env:sync` writes `apps/*/.env.local` from a single
+`.env.dev`; re-run it whenever `.env.dev` changes. All of these are gitignored.
 
 Create the single admin user: sign up any account through the pharmacy app (or the Supabase
 dashboard), then promote it:
