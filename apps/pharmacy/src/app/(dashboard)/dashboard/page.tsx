@@ -7,15 +7,20 @@ import { OrderActions } from "@/components/order-actions";
 import { SlaCountdown } from "@/components/sla-countdown";
 import { AddOrderDialog } from "@/components/add-order-dialog";
 import { getPlatformSettings } from "@getmed/core/settings";
+import { loadPricingContext } from "@getmed/core/pricing";
 import { dashboardStats } from "@/lib/queries";
 
 export default async function DashboardPage() {
   const { pharmacy, db } = await requirePharmacy();
-  const [s, settings] = await Promise.all([dashboardStats(db, pharmacy.id), getPlatformSettings(db)]);
+  const [s, settings, pricing] = await Promise.all([
+    dashboardStats(db, pharmacy.id),
+    getPlatformSettings(db),
+    loadPricingContext(db, pharmacy.id),
+  ]);
 
   return (
     <div>
-      <PageHeader title={`Good ${greeting()}, ${pharmacy.name ?? "there"}`} description="Here's what needs your attention." actions={<AddOrderDialog />} />
+      <PageHeader title={`Good ${greeting()}, ${pharmacy.name ?? "there"}`} description="Here's what needs your attention." actions={<AddOrderDialog refrigerationFee={pricing.refrigerationFee} />} />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Stat label="New orders" value={s.pending.length} tone={s.pending.length ? "brand" : "neutral"} hint={`Respond within ${settings.sla_minutes} min`} icon={<Inbox />} className={s.pending.length ? "animate-pulse-ring" : ""} />
         <Stat label="Today / this week" value={`${s.todayCount} / ${s.weekCount}`} icon={<Package />} />
@@ -47,7 +52,7 @@ export default async function DashboardPage() {
                       <p className="text-xs text-ink-500">{[o.delivery_address_line, o.delivery_city].filter(Boolean).join(", ")} · received {timeAgo(o.phone_verified_at ?? o.created_at)}</p>
                     </div>
                     <SlaCountdown since={o.phone_verified_at ?? o.created_at} minutes={o.sla_minutes ?? settings.sla_minutes} />
-                    <OrderActions orderId={o.id} status={o.status} compact />
+                    <OrderActions orderId={o.id} status={o.status} compact refrigerationFee={pricing.refrigerationFee} />
                   </CardContent>
                 </Card>
               </li>

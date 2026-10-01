@@ -58,6 +58,8 @@ export async function countZoneAreas(db: ServiceClient, pharmacyId: string): Pro
 export type DeliveryConfigInput = {
   /** Null means "use the platform default". */
   remotePerKm: number | null;
+  /** This pharmacy's cold-chain fee. Null means "use the platform default". */
+  refrigerationFee: number | null;
 };
 
 /**
@@ -69,13 +71,20 @@ export async function savePharmacyDeliveryConfig(
   pharmacyId: string,
   input: DeliveryConfigInput,
 ): Promise<void> {
-  if (input.remotePerKm == null) {
+  // The row exists only while something is actually overridden, keeping the
+  // table to pharmacies that differ from the platform.
+  if (input.remotePerKm == null && input.refrigerationFee == null) {
     const { error } = await db.from("pharmacy_delivery_config").delete().eq("pharmacy_id", pharmacyId);
     if (error) throw error;
     return;
   }
   const { error } = await db.from("pharmacy_delivery_config").upsert(
-    { pharmacy_id: pharmacyId, remote_per_km: input.remotePerKm, updated_at: new Date().toISOString() },
+    {
+      pharmacy_id: pharmacyId,
+      remote_per_km: input.remotePerKm,
+      refrigeration_fee: input.refrigerationFee,
+      updated_at: new Date().toISOString(),
+    },
     { onConflict: "pharmacy_id" },
   );
   if (error) throw error;
@@ -88,7 +97,10 @@ export async function loadDeliveryConfigs(db: ServiceClient, pharmacyIds: string
   return new Map(
     (data ?? []).map((c) => [
       c.pharmacy_id,
-      { remotePerKm: c.remote_per_km == null ? null : Number(c.remote_per_km) } satisfies DeliveryConfigInput,
+      {
+        remotePerKm: c.remote_per_km == null ? null : Number(c.remote_per_km),
+        refrigerationFee: c.refrigeration_fee == null ? null : Number(c.refrigeration_fee),
+      } satisfies DeliveryConfigInput,
     ]),
   );
 }

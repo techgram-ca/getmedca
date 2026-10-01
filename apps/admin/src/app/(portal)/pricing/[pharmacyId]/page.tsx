@@ -7,6 +7,7 @@ import {
   loadDeliveryConfigs,
   loadZoneAreas,
   resolvePerKm,
+  resolveRefrigerationFee,
   resolvePricing,
   toZoneText,
 } from "@getmed/core/pricing";
@@ -50,10 +51,13 @@ export default async function PharmacyPricingPage({ params }: { params: Promise<
               pricing[z].source === "pharmacy" ? String(pricing[z].price) : "",
             ]),
           ) as Record<"zone1" | "zone2" | "zone3" | "zone4", string>,
-          config: { remotePerKm: config?.remotePerKm == null ? "" : String(config.remotePerKm) },
+          config: {
+            remotePerKm: config?.remotePerKm == null ? "" : String(config.remotePerKm),
+            refrigerationFee: config?.refrigerationFee == null ? "" : String(config.refrigerationFee),
+          },
           areas: toZoneText(areas),
         }}
-        platform={{ prices: defaultZonePrices(settings), perKm: resolvePerKm(settings, null) }}
+        platform={{ prices: defaultZonePrices(settings), perKm: resolvePerKm(settings, null), refrigerationFee: resolveRefrigerationFee(settings, null) }}
       />
 
       <Button asChild variant="link" className="mt-6"><Link href="/pricing">← All pricing</Link></Button>

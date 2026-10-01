@@ -25,6 +25,9 @@ const defaultsSchema = z.object({
   zone3: money,
   zone4: money,
   remotePerKm: requiredNumberField(z.number().min(0, "Cannot be negative").max(100, "That rate looks too high"), "Enter a rate per kilometre, for example 1.20"),
+  // Zero is a real setting: the pharmacy is still asked whether a delivery
+  // needs refrigeration, because the driver has to know, it just does not bill.
+  refrigerationFee: requiredNumberField(z.number().min(0, "Cannot be negative").max(1000, "That fee looks too high"), "Enter a refrigeration fee, or 0 for none"),
   failedDeliveryPercent: percent,
 });
 
@@ -40,6 +43,7 @@ export async function savePricingDefaults(input: unknown): Promise<PricingResult
       default_zone3_fee: parsed.data.zone3,
       default_zone4_fee: parsed.data.zone4,
       default_remote_per_km: parsed.data.remotePerKm,
+      default_refrigeration_fee: parsed.data.refrigerationFee,
       failed_delivery_fee_percent: parsed.data.failedDeliveryPercent,
     });
     revalidatePath("/pricing");
@@ -52,6 +56,7 @@ export async function savePricingDefaults(input: unknown): Promise<PricingResult
 /** Blank means "use the platform default". */
 const configSchema = z.object({
   remotePerKm: optionalNumberField(z.number().min(0, "Cannot be negative").max(100, "That rate looks too high"), "Enter a rate per kilometre"),
+  refrigerationFee: optionalNumberField(z.number().min(0, "Cannot be negative").max(1000, "That fee looks too high"), "Enter a refrigeration fee"),
 });
 
 // Blank clears the override so the pharmacy falls back to the default. It must
@@ -94,7 +99,7 @@ export async function savePharmacyPricingAction(input: unknown): Promise<Pricing
 
     await savePharmacyPricing(db, pharmacyId, prices);
     await saveZoneAreas(db, pharmacyId, check.assignments);
-    await savePharmacyDeliveryConfig(db, pharmacyId, { remotePerKm: config.remotePerKm });
+    await savePharmacyDeliveryConfig(db, pharmacyId, { remotePerKm: config.remotePerKm, refrigerationFee: config.refrigerationFee });
     revalidatePath("/pricing");
     revalidatePath(`/pricing/${pharmacyId}`);
     revalidatePath(`/pharmacies/${pharmacyId}`);

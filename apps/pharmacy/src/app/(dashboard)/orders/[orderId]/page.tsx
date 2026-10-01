@@ -6,8 +6,8 @@ import { formatCurrency, formatDate, formatDateOnly, formatDistance, shortId, st
 import { loadDeliveryProof, orderCharges } from "@getmed/core/orders";
 import { pharmacyCanModify } from "@getmed/core/orders/state-machine";
 import { getPlatformSettings } from "@getmed/core/settings";
-import { REMOTE_ZONE } from "@getmed/core/pricing";
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, DeliveryPrice, DeliveryProofCard, PageHeader, StatusBadge } from "@getmed/ui";
+import { REMOTE_ZONE, loadPricingContext } from "@getmed/core/pricing";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, DeliveryPrice, DeliveryProofCard, HandlingBadges, PageHeader, StatusBadge } from "@getmed/ui";
 import { OrderActions } from "@/components/order-actions";
 import { RetryDelivery } from "@/components/retry-delivery";
 import { SlaCountdown } from "@/components/sla-countdown";
@@ -17,11 +17,13 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
   const { pharmacy, db } = await requirePharmacy();
   // Settings do not depend on the order, so they load alongside it rather than
   // holding it up for a round trip.
-  const [settings, { data: o }] = await Promise.all([
+  const [settings, { data: o }, pricingCtx] = await Promise.all([
     getPlatformSettings(db),
     db.from("orders").select("*").eq("id", orderId).eq("pharmacy_id", pharmacy.id).not("phone_verified_at", "is", null).maybeSingle(),
+    loadPricingContext(db, pharmacy.id),
   ]);
   if (!o) notFound();
+  const refrigerationFee = pricingCtx.refrigerationFee;
   const [{ data: events }, { data: driver }, proof, charges] = await Promise.all([
     db.from("order_events").select("*").eq("order_id", o.id).order("created_at"),
     o.assigned_driver_id ? db.from("drivers").select("name, phone, vehicle_make, vehicle_model, vehicle_color").eq("id", o.assigned_driver_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -34,7 +36,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
   return (
     <div>
       <PageHeader
-        title={<span className="flex items-center gap-3"><span className="font-mono">{shortId(o.id)}</span><StatusBadge status={o.status} />{o.source === "manual" ? <Badge tone="accent">Manual</Badge> : null}</span>}
+        title={<span className="flex items-center gap-3"><span className="font-mono">{shortId(o.id)}</span><StatusBadge status={o.status} />
+      <HandlingBadges
+        className="mb-4"
+        handling={{
+          requiresRefrigeration: o.requires_refrigeration,
+          hasNarcotics: o.has_narcotics,
+          cashToCollect: o.cash_to_collect != null ? formatCurrency(Number(o.cash_to_collect)) : null,
+        }}
+      />{o.source === "manual" ? <Badge tone="accent">Manual</Badge> : null}</span>}
         description={`${o.order_type === "transfer" ? "Prescription transfer" : "New prescription"} · ${o.source === "manual" ? "entered by your pharmacy" : "submitted online"} ${formatDate(o.phone_verified_at)}`}
         actions={o.status === "pending" ? <SlaCountdown since={o.phone_verified_at ?? o.created_at} minutes={o.sla_minutes ?? settings.sla_minutes} /> : null}
       />
@@ -58,7 +68,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
               {o.status === "failed" ? (
                 <RetryDelivery orderId={o.id} attempt={o.delivery_attempt} />
               ) : (
-                <OrderActions orderId={o.id} status={o.status} />
+                <OrderActions orderId={o.id} status={o.status} refrigerationFee={refrigerationFee} />
               )}
             </CardContent>
           </Card>

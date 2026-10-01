@@ -5,7 +5,7 @@ import { requireAdmin } from "@getmed/core/auth";
 import { formatCurrency, formatDate, formatDistance, formatDuration, shortId, statusLabel } from "@getmed/core/format";
 import { loadDeliveryProof, orderCharges } from "@getmed/core/orders";
 import { zoneLabel, resolvePricing } from "@getmed/core/pricing";
-import { Alert, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, DeliveryProofCard, PageHeader, StatusBadge } from "@getmed/ui";
+import { Alert, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, DeliveryProofCard, HandlingBadges, PageHeader, StatusBadge } from "@getmed/ui";
 import { DeliveryDistance } from "@/components/delivery-distance";
 import { DeliveryZonePicker } from "@/components/delivery-zone-picker";
 import { DriverAssign } from "@/components/driver-assign";
@@ -40,6 +40,14 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ o
   return (
     <div>
       <PageHeader title={<span className="flex items-center gap-3"><span className="font-mono">{shortId(o!.id)}</span><StatusBadge status={o!.status} />{o!.source === "manual" ? <Badge tone="accent">Manual</Badge> : null}</span>} description={`${o!.order_type === "transfer" ? "Transfer" : "New prescription"} · ${o!.pharmacy?.name ?? "—"} · created ${formatDate(o!.created_at)}`} />
+      <HandlingBadges
+        className="mb-4"
+        handling={{
+          requiresRefrigeration: o!.requires_refrigeration,
+          hasNarcotics: o!.has_narcotics,
+          cashToCollect: o!.cash_to_collect != null ? formatCurrency(Number(o!.cash_to_collect)) : null,
+        }}
+      />
       <Alert tone="info" className="mb-6">
         <span className="inline-flex items-center gap-2">
           <ShieldOff className="size-4" />

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { addressSchema, phoneSchema } from "./common";
+import { addressSchema, optionalNumberField, phoneSchema } from "./common";
 
 /** One row of the pharmacy's "Add order" form. Several rows may be submitted at once. */
 export const manualOrderRowSchema = z.object({
@@ -15,6 +15,11 @@ export const manualOrderRowSchema = z.object({
   transferPrescriptionNumber: z.string().trim().max(60).optional().or(z.literal("")),
   /** Pharmacy attests the patient consented (by phone / in person) to delivery via GetMed. */
   consentConfirmed: z.literal(true, { error: "Confirm the patient consented" }),
+  /** How the bag has to be handled — the same three answers marking an order ready asks. */
+  requiresRefrigeration: z.boolean().optional().default(false),
+  hasNarcotics: z.boolean().optional().default(false),
+  /** Blank means nothing is collected, which is not the same as collecting $0. */
+  cashToCollect: optionalNumberField(z.number().min(0, "Enter zero or more").max(100000), "Enter the amount to collect").optional(),
 });
 export type ManualOrderRow = z.infer<typeof manualOrderRowSchema>;
 

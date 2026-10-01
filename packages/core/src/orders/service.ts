@@ -3,7 +3,7 @@ import type { DeliveryZone, OrderInsert, OrderRow, OrderStatus } from "@getmed/d
 import { AppError, ForbiddenError, InvalidTransitionError, NotFoundError } from "../errors";
 import { formatCurrency, shortId, statusLabel } from "../format";
 import { inngest, orderCreated, orderResponded } from "../inngest/client";
-import { chargeDelivery, chargeFailedDelivery } from "./charges";
+import { chargeDelivery, chargeFailedDelivery, chargeRefrigeration } from "./charges";
 import { ensureOrderRoute } from "./distance";
 import { adminTarget, notify } from "../notifications/dispatch";
 import { pushToDriver } from "../notifications/push";
@@ -181,6 +181,10 @@ export type ManualOrderInput = {
   transferFromPharmacyName?: string | null;
   transferFromPhone?: string | null;
   transferPrescriptionNumber?: string | null;
+  /** The same three handling answers marking an order ready asks for. */
+  requiresRefrigeration?: boolean;
+  hasNarcotics?: boolean;
+  cashToCollect?: number | null;
 };
 
 /**
@@ -214,6 +218,9 @@ export async function createManualOrder(pharmacyId: string, userId: string, inpu
       delivery_location: a.lat != null && a.lng != null ? `SRID=4326;POINT(${a.lng} ${a.lat})` : null,
       delivery_notes: input.deliveryNotes || null,
       allergies: input.allergies || null,
+      requires_refrigeration: input.requiresRefrigeration ?? false,
+      has_narcotics: input.hasNarcotics ?? false,
+      cash_to_collect: input.cashToCollect ?? null,
       transfer_from_pharmacy_name: input.transferFromPharmacyName || null,
       transfer_from_phone: input.transferFromPhone || null,
       transfer_prescription_number: input.transferPrescriptionNumber || null,
@@ -280,11 +287,27 @@ export async function rejectOrder(orderId: string, pharmacyId: string, reason: s
   return updated;
 }
 
-export async function markReady(orderId: string, pharmacyId: string, ctx: Ctx = {}) {
+/** What the pharmacy tells us about the bag as it hands it over. */
+export type HandlingInput = {
+  requiresRefrigeration: boolean;
+  hasNarcotics: boolean;
+  /** Null when nothing is collected at the door. */
+  cashToCollect: number | null;
+};
+
+export async function markReady(orderId: string, pharmacyId: string, handling: HandlingInput, ctx: Ctx = {}) {
   const db = dbOf(ctx);
   const order = await loadOrder(db, orderId);
   assertPharmacyOwns(order, pharmacyId);
-  const updated = await transition(db, order, "mark_ready", "pharmacy", pharmacyId, { ready_at: new Date().toISOString() });
+  if (handling.cashToCollect != null && (!Number.isFinite(handling.cashToCollect) || handling.cashToCollect < 0)) {
+    throw new AppError("Enter the amount to collect, or clear it if nothing is owed");
+  }
+  const updated = await transition(db, order, "mark_ready", "pharmacy", pharmacyId, {
+    ready_at: new Date().toISOString(),
+    requires_refrigeration: handling.requiresRefrigeration,
+    has_narcotics: handling.hasNarcotics,
+    cash_to_collect: handling.cashToCollect == null ? null : round2(handling.cashToCollect),
+  });
   const pharmacy = await loadPharmacy(db, pharmacyId);
   await notify(db, "order.status", { phone: order.patient_phone }, {
     orderId: shortId(orderId),
@@ -472,7 +495,9 @@ export async function deliverOrder(
     },
     { onConflict: "order_id" },
   );
-  await chargeDelivery(db, updated);
+  // Both bill on the same completion; the surcharge records nothing unless the
+  // order was marked cold and the pharmacy's fee is above zero.
+  await Promise.all([chargeDelivery(db, updated), chargeRefrigeration(db, updated)]);
   const pharmacy = await loadPharmacy(db, order.pharmacy_id);
   await Promise.all([
     notify(db, "order.status", { phone: order.patient_phone }, {

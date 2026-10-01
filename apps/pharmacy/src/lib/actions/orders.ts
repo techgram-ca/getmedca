@@ -27,8 +27,11 @@ export async function acceptOrderAction(orderId: string) {
 export async function rejectOrderAction(orderId: string, reason: string) {
   return run((pid) => rejectOrder(orderId, pid, reason));
 }
-export async function markReadyAction(orderId: string) {
-  return run((pid) => markReady(orderId, pid));
+export async function markReadyAction(
+  orderId: string,
+  handling: { requiresRefrigeration: boolean; hasNarcotics: boolean; cashToCollect: number | null },
+) {
+  return run((pid) => markReady(orderId, pid, handling));
 }
 export async function cancelOrderAction(orderId: string, reason: string) {
   return run((pid) => cancelOrder(orderId, pid, reason));
