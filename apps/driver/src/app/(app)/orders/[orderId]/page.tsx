@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Camera, Navigation, Phone, Users, XCircle } from "lucide-react";
 import { requireDriver } from "@getmed/core/auth";
-import { shortId } from "@getmed/core/format";
-import { Button, Card, CardContent, StatusBadge } from "@getmed/ui";
+import { formatCurrency, shortId } from "@getmed/core/format";
+import { Button, Card, CardContent, HandlingBadges, StatusBadge } from "@getmed/ui";
 import { PickupButton } from "@/components/pickup-button";
 import { directionsUrl, staticMap } from "@/lib/maps";
 
@@ -41,6 +41,14 @@ export default async function DriverOrderPage({ params }: { params: Promise<{ or
           <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">2 · Deliver</p>
           <p className="mt-1 font-medium">{o.patient_name}</p>
           <p className="text-sm text-ink-600">{deliveryAddr}</p>
+          <HandlingBadges
+            className="mt-3"
+            handling={{
+              requiresRefrigeration: o.requires_refrigeration,
+              hasNarcotics: o.has_narcotics,
+              cashToCollect: o.cash_to_collect != null ? formatCurrency(Number(o.cash_to_collect)) : null,
+            }}
+          />
           {o.delivery_notes ? <p className="mt-2 rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{o.delivery_notes}</p> : null}
           <div className="mt-3 flex gap-2">
             <Button asChild size="sm" variant="outline" className="flex-1"><a href={directionsUrl(deliveryAddr, o.delivery_lat, o.delivery_lng)} target="_blank" rel="noreferrer"><Navigation /> Navigate</a></Button>

@@ -29,6 +29,7 @@ test("defaults are read as numbers even when the driver returns strings", () => 
     default_remote_per_km: 1.2,
     remote_quote_span: 6,
     failed_delivery_fee_percent: 100,
+    default_refrigeration_fee: 0,
     updated_at: "",
   });
   assert.deepEqual(prices, { zone1: 4.5, zone2: 8, zone3: 12, zone4: 18 });

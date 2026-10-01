@@ -7,13 +7,15 @@ import type { OrderStatus } from "@getmed/db/types";
 import { availableActions } from "@getmed/core/orders/state-machine";
 import { Button, Dialog, DialogContent, Field, Textarea, toast } from "@getmed/ui";
 import { acceptOrderAction, cancelOrderAction, markReadyAction, rejectOrderAction } from "@/lib/actions/orders";
+import { ReadyDialog, type Handling } from "./ready-dialog";
 
-type Props = { orderId: string; status: OrderStatus; compact?: boolean };
+type Props = { orderId: string; status: OrderStatus; compact?: boolean; refrigerationFee: number };
 
-export function OrderActions({ orderId, status, compact }: Props) {
+export function OrderActions({ orderId, status, compact, refrigerationFee }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [dialog, setDialog] = useState<"reject" | "cancel" | null>(null);
+  const [readyOpen, setReadyOpen] = useState(false);
   const [reason, setReason] = useState("");
   const actions = availableActions(status, "pharmacy");
   if (actions.length === 0) return compact ? null : <p className="text-sm text-ink-500">No actions available — the order is past your control.</p>;
@@ -24,6 +26,7 @@ export function OrderActions({ orderId, status, compact }: Props) {
       if (r.ok) {
         toast.success(success);
         setDialog(null);
+        setReadyOpen(false);
         setReason("");
         router.refresh();
       } else toast.error(r.error ?? "Failed");
@@ -34,8 +37,16 @@ export function OrderActions({ orderId, status, compact }: Props) {
     <div className="flex flex-wrap gap-2">
       {actions.includes("accept") ? <Button size={size} loading={pending} loadingText="Accepting…" onClick={() => exec(() => acceptOrderAction(orderId), "Order accepted")}><Check /> Accept</Button> : null}
       {actions.includes("reject") ? <Button size={size} variant="outline" disabled={pending} onClick={() => setDialog("reject")}><X /> Reject</Button> : null}
-      {actions.includes("mark_ready") ? <Button size={size} loading={pending} loadingText="Updating…" onClick={() => exec(() => markReadyAction(orderId), "Marked ready for delivery")}><PackageCheck /> Ready for delivery</Button> : null}
+      {actions.includes("mark_ready") ? <Button size={size} disabled={pending} onClick={() => setReadyOpen(true)}><PackageCheck /> Ready for delivery</Button> : null}
       {actions.includes("cancel") ? <Button size={size} variant="ghost" className="text-danger-500" disabled={pending} onClick={() => setDialog("cancel")}><Ban /> Cancel</Button> : null}
+
+      <ReadyDialog
+        open={readyOpen}
+        onOpenChange={setReadyOpen}
+        refrigerationFee={refrigerationFee}
+        pending={pending}
+        onConfirm={(h: Handling) => exec(() => markReadyAction(orderId, h), "Marked ready for delivery")}
+      />
 
       <Dialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)}>
         <DialogContent

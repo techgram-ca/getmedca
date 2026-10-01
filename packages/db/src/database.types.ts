@@ -193,6 +193,11 @@ export type OrderRow = {
   delivery_quote_max: number | null;
   delivery_fee_charged: number | null;
   delivery_attempt: number;
+  /** Cold-chain delivery; bills the refrigeration fee in effect for the pharmacy. */
+  requires_refrigeration: boolean;
+  has_narcotics: boolean;
+  /** What the driver collects at the door. Null when nothing is owed. */
+  cash_to_collect: number | null;
   accepted_at: string | null;
   ready_at: string | null;
   assigned_at: string | null;
@@ -235,7 +240,7 @@ export type ProofOfDeliveryRow = {
   created_at: string;
 };
 
-export type OrderChargeKind = "delivery" | "failed_delivery";
+export type OrderChargeKind = "delivery" | "failed_delivery" | "refrigeration";
 
 /** One billable event. A retried order has a row per attempt. */
 export type OrderChargeRow = {
@@ -321,6 +326,8 @@ export type PlatformSettingsRow = {
   remote_quote_span: number;
   /** Share of the quoted fee a failed attempt bills. 100 = the full fee. */
   failed_delivery_fee_percent: number;
+  /** Added when a delivery has to stay cold. Zero asks the question without pricing it. */
+  default_refrigeration_fee: number;
   updated_at: string;
 };
 
@@ -339,6 +346,8 @@ export type PharmacyZoneAreaRow = {
 export type PharmacyDeliveryConfigRow = {
   pharmacy_id: string;
   remote_per_km: number | null;
+  /** This pharmacy's cold-chain fee. Null = use the platform default. */
+  refrigeration_fee: number | null;
   updated_at: string;
 };
 
@@ -435,6 +444,9 @@ export type OrderAdminRow = Pick<
   | "delivery_price_source"
   | "delivery_quote_min"
   | "delivery_quote_max"
+  | "requires_refrigeration"
+  | "has_narcotics"
+  | "cash_to_collect"
 >;
 
 export type OrderDriverRow = Pick<
@@ -443,6 +455,7 @@ export type OrderDriverRow = Pick<
   | "delivery_address_line" | "delivery_city" | "delivery_postal_code" | "delivery_notes"
   | "assigned_driver_id" | "failure_reason" | "reassigned_at" | "reassigned_by"
   | "assigned_at" | "picked_up_at" | "delivered_at" | "failed_at" | "created_at" | "updated_at"
+  | "requires_refrigeration" | "has_narcotics" | "cash_to_collect"
 > & {
   delivery_lat: number | null;
   delivery_lng: number | null;

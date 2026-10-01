@@ -31,7 +31,7 @@ import {
 } from "@getmed/ui";
 import { savePharmacyPricingAction } from "@/lib/actions/pricing";
 
-type ConfigDraft = { remotePerKm: string };
+type ConfigDraft = { remotePerKm: string; refrigerationFee: string };
 
 export type PricingFormValues = {
   prices: Record<FixedZone, string>;
@@ -50,7 +50,7 @@ export function PharmacyPricingForm({
   pharmacyName: string;
   cities: PostalAreaCity[];
   initial: PricingFormValues;
-  platform: { prices: Record<FixedZone, number>; perKm: number };
+  platform: { prices: Record<FixedZone, number>; perKm: number; refrigerationFee: number };
 }) {
   const router = useRouter();
   const [prices, setPrices] = useState(initial.prices);
@@ -158,22 +158,45 @@ export function PharmacyPricingForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Field label="Rate" htmlFor="per-km" hint={`Default ${formatCurrency(platform.perKm)} per km`} optional className="max-w-[12rem]">
-            <div className="relative">
-              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-ink-500">$</span>
-              <Input
-                id="per-km"
-                type="number"
-                min={0}
-                step="0.01"
-                className="pl-7 pr-12"
-                placeholder={String(platform.perKm)}
-                value={config.remotePerKm}
-                onChange={(e) => setConfig((c) => ({ ...c, remotePerKm: e.target.value }))}
-              />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-500">/km</span>
-            </div>
-          </Field>
+          <div className="flex flex-wrap gap-6">
+            <Field label="Rate" htmlFor="per-km" hint={`Default ${formatCurrency(platform.perKm)} per km`} optional className="max-w-[12rem]">
+              <div className="relative">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-ink-500">$</span>
+                <Input
+                  id="per-km"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="pl-7 pr-12"
+                  placeholder={String(platform.perKm)}
+                  value={config.remotePerKm}
+                  onChange={(e) => setConfig((c) => ({ ...c, remotePerKm: e.target.value }))}
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-500">/km</span>
+              </div>
+            </Field>
+            <Field
+              label="Refrigeration fee"
+              htmlFor="fridge-fee"
+              hint={`Default ${formatCurrency(platform.refrigerationFee)}. Added when this pharmacy marks a delivery cold-chain.`}
+              optional
+              className="max-w-[12rem]"
+            >
+              <div className="relative">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-ink-500">$</span>
+                <Input
+                  id="fridge-fee"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="pl-7"
+                  placeholder={String(platform.refrigerationFee)}
+                  value={config.refrigerationFee}
+                  onChange={(e) => setConfig((c) => ({ ...c, refrigerationFee: e.target.value }))}
+                />
+              </div>
+            </Field>
+          </div>
         </CardContent>
       </Card>
 

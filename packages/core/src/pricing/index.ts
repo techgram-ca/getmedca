@@ -13,6 +13,7 @@ import {
   defaultZonePrices,
   remotePrice,
   resolvePerKm,
+  resolveRefrigerationFee,
   round2,
   toFsa,
   zoneLabel,
@@ -122,6 +123,8 @@ export type PricingContext = {
   span: number;
   /** Postal areas this pharmacy has tagged, keyed by FSA. */
   taggedZones: Map<string, FixedZone>;
+  /** Added to a delivery that has to stay cold. Zero means it is not billed. */
+  refrigerationFee: number;
 };
 
 /** Everything needed to price this pharmacy's orders, read once. */
@@ -142,6 +145,7 @@ export async function loadPricingContext(
     pricing,
     perKm: resolvePerKm(s, cfg),
     span: Number(s.remote_quote_span),
+    refrigerationFee: resolveRefrigerationFee(s, cfg),
     taggedZones: new Map((areas ?? []).map((a) => [a.fsa, a.zone as FixedZone])),
   };
 }

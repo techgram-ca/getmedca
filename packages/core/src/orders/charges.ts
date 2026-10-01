@@ -1,5 +1,6 @@
 import type { ServiceClient } from "@getmed/db/service";
 import type { OrderChargeKind, OrderRow } from "@getmed/db/types";
+import { loadPricingContext } from "../pricing";
 import { getPlatformSettings } from "../settings";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -47,6 +48,21 @@ export async function chargeFailedDelivery(db: ServiceClient, order: OrderRow): 
   if (amount <= 0) return 0;
   await record(db, order, "failed_delivery", amount);
   return amount;
+}
+
+/**
+ * The cold-chain surcharge, billed alongside the delivery it belongs to.
+ *
+ * Its own line rather than folded into the delivery price, so the invoice says
+ * what the pharmacy paid for. A fee of zero records nothing — the handling is
+ * still on the order and still reaches the driver, it just does not bill.
+ */
+export async function chargeRefrigeration(db: ServiceClient, order: OrderRow): Promise<number> {
+  if (!order.requires_refrigeration) return 0;
+  const ctx = await loadPricingContext(db, order.pharmacy_id);
+  if (ctx.refrigerationFee <= 0) return 0;
+  await record(db, order, "refrigeration", ctx.refrigerationFee);
+  return ctx.refrigerationFee;
 }
 
 export type OrderChargeSummary = { kind: OrderChargeKind; amount: number; attempt: number; createdAt: string };

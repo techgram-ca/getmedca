@@ -3,6 +3,7 @@ import { dayBounds, defaultDateWindow } from "@getmed/core/format";
 import { PageHeader } from "@getmed/ui";
 import { AddOrderDialog } from "@/components/add-order-dialog";
 import { PharmacyOrdersTable, type PharmacyOrderRow } from "@/components/orders-table";
+import { loadPricingContext } from "@getmed/core/pricing";
 import { visibleOrderList } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -15,11 +16,14 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const { startIso, endIso } = dayBounds(from, to);
 
   const { pharmacy, db } = await requirePharmacy();
-  const { data } = await visibleOrderList(db, pharmacy.id)
-    .gte("created_at", startIso)
-    .lt("created_at", endIso)
-    .order("created_at", { ascending: false })
-    .limit(1000);
+  const [pricing, { data }] = await Promise.all([
+    loadPricingContext(db, pharmacy.id),
+    visibleOrderList(db, pharmacy.id)
+      .gte("created_at", startIso)
+      .lt("created_at", endIso)
+      .order("created_at", { ascending: false })
+      .limit(1000),
+  ]);
 
   const rows: PharmacyOrderRow[] = (data ?? []).map((o) => ({
     id: o.id,
@@ -38,8 +42,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
 
   return (
     <div>
-      <PageHeader title="Orders" actions={<AddOrderDialog />} />
-      <PharmacyOrdersTable rows={rows} from={from} to={to} />
+      <PageHeader title="Orders" actions={<AddOrderDialog refrigerationFee={pricing.refrigerationFee} />} />
+      <PharmacyOrdersTable rows={rows} from={from} to={to} refrigerationFee={pricing.refrigerationFee} />
     </div>
   );
 }

@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS: PlatformSettingsRow = {
   default_remote_per_km: 1.2,
   remote_quote_span: 6,
   failed_delivery_fee_percent: 100,
+  default_refrigeration_fee: 0,
   updated_at: new Date(0).toISOString(),
 };
 
@@ -31,6 +32,7 @@ export async function updatePlatformSettings(
     | "default_zone3_fee"
     | "default_zone4_fee"
     | "default_remote_per_km"
+    | "default_refrigeration_fee"
     | "remote_quote_span">>,
 ): Promise<PlatformSettingsRow> {
   const { data, error } = await db

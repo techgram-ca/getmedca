@@ -4,6 +4,7 @@ import {
   listPostalAreas,
   loadDeliveryConfigs,
   resolvePerKm,
+  resolveRefrigerationFee,
   resolvePricingForAll,
 } from "@getmed/core/pricing";
 import { getPlatformSettings } from "@getmed/core/settings";
@@ -62,6 +63,7 @@ export default async function PricingPage() {
         defaults={{
           prices: defaultZonePrices(settings),
           remotePerKm: resolvePerKm(settings, null),
+          refrigerationFee: resolveRefrigerationFee(settings, null),
           failedDeliveryPercent: Number(settings.failed_delivery_fee_percent),
         }}
       />

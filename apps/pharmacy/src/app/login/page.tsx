@@ -8,9 +8,9 @@ export const metadata: Metadata = { title: "Sign in" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; confirmed?: string; error?: string }>;
+  searchParams: Promise<{ next?: string; confirmed?: string; error?: string; reset?: string }>;
 }) {
-  const { next, confirmed, error } = await searchParams;
+  const { next, confirmed, error, reset } = await searchParams;
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-brand-50 to-ink-50 px-4 py-10">
       <div className="w-full max-w-sm">
@@ -19,6 +19,11 @@ export default async function LoginPage({
         {confirmed ? (
           <Alert tone="success" title="Email confirmed" className="mb-4">
             Sign in to continue setting up your pharmacy.
+          </Alert>
+        ) : null}
+        {reset ? (
+          <Alert tone="success" title="Password changed" className="mb-4">
+            Sign in with your new password.
           </Alert>
         ) : null}
         {error ? (
