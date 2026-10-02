@@ -46,6 +46,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0011_role_grants.sql` | Grants the PostgREST roles access to `public`; newer Supabase projects do not do this automatically |
 | `migrations/0012_orders_created_at_idx.sql` | Indexes `orders.created_at` for the admin lists, which filter by date across all pharmacies |
 | `migrations/0013_handling_requirements.sql` | Refrigeration, narcotics and cash-to-collect on an order, and the refrigeration fee that bills |
+| `migrations/0014_pharmacy_slug_postal_code.sql` | Rebuilds public pharmacy slugs as `name-postalcode`, so one chain can have many branches |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
 After any schema change, regenerate the TypeScript types with `pnpm db:types`.
@@ -91,6 +92,16 @@ whether or not 0007 has already been applied.
 coordinates through `st_x`/`st_y`. The manual order form quotes a delivery as soon as the address is
 picked, which needs the driving distance from the pharmacy before any order row exists for
 `order_route_points` to read.
+
+`migrations/0014_pharmacy_slug_postal_code.sql` rebuilds `pharmacies.slug` as the name followed by
+the postal code. A chain repeats its name in every city, so a name-only slug collided and the second
+branch to submit got four characters of its UUID appended — unique, but meaningless to a patient.
+New slugs come from `pharmacySlug()` in `packages/core/src/format.ts`, set once at signup and never
+regenerated, since a public URL that moves when an address is edited is a dead link everywhere it
+was shared. The migration and the TypeScript were diffed against the same nine inputs and agree
+exactly; they can only differ on accented names, which the app folds to the base letter and SQL
+replaces with a separator. A pharmacy with no usable postal code keeps a name-only slug, and any
+rebuild that would collide is skipped rather than renamed.
 
 `migrations/0013_handling_requirements.sql` records what a delivery needs handled —
 `requires_refrigeration`, `has_narcotics` and `cash_to_collect` on `orders` — captured when the

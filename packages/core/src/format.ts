@@ -73,6 +73,31 @@ export function slugify(input: string): string {
     .slice(0, 60);
 }
 
+/**
+ * A pharmacy's public URL slug: its name followed by its postal code.
+ *
+ * Chains repeat a name in every city they are in, so the name alone collides —
+ * three Toronto branches of the same chain all wanted `/p/shoppers-drug-mart`
+ * and the loser got four characters of its UUID bolted on, which tells a
+ * patient nothing. A postal code is unique to the address, so it both breaks
+ * the tie and says which branch this is.
+ *
+ * Takes the full code when there is one, the forward sortation area when only
+ * that parses, and nothing when the pharmacy has no usable postal code — a
+ * name-only slug beats one ending in a stray fragment of an address.
+ */
+export function pharmacySlug(name: string, postalCode: string | null | undefined): string {
+  const base = slugify(name).slice(0, 50).replace(/-+$/, "");
+  const cleaned = (postalCode ?? "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const suffix = /^[a-z]\d[a-z]\d[a-z]\d$/.test(cleaned)
+    ? cleaned
+    : /^[a-z]\d[a-z]$/.test(cleaned.slice(0, 3))
+      ? cleaned.slice(0, 3)
+      : "";
+  if (!base) return suffix;
+  return suffix ? `${base}-${suffix}` : base;
+}
+
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
   accepted: "Accepted",
