@@ -33,6 +33,30 @@ Replace that content before putting any of it in front of the pharmacies
 themselves — a page that says the wrong opening hours over a real name is
 worse than an obviously empty one.
 
+## Searchable and orderable
+
+Discovery needs `status = 'approved'` and a non-null `location`, both of which
+these have, so they appear in `pharmacies_near` and can take orders —
+`createOrder` asks for nothing else.
+
+Search works on **real driving distance** against the admin's
+`search_radius_km` (default 10 km), not on the pharmacy's own
+`delivery_radius_km`. The eight Bolton pharmacies sit within about two
+kilometres of each other, so a Bolton address finds all eight. Caledon East is
+roughly ten kilometres further out and may fall outside the default radius —
+raise `search_radius_km` in admin settings if you want all nine in one result.
+
+Delivery areas are tagged, so an order to a Bolton address quotes a fixed
+Zone 1 price rather than falling to Zone 5 and pricing per kilometre. The
+Bolton pharmacies tag nineteen postal areas each and Caledon East eleven,
+every one of them already present in `postal_areas`.
+
+An order placed against these will try to notify the pharmacy by SMS and
+email. The numbers are unroutable and the domain is `.invalid`, so those sends
+fail and log — harmless, and it means nobody real is paged by a demo. Nobody
+accepts either, so the SLA timer eventually escalates the order into the admin
+escalations list, which is itself worth showing.
+
 ## No accounts
 
 `owner_user_id` is left null, which the schema allows. The pages exist and

@@ -178,6 +178,7 @@ create temporary table demo_pharmacies on commit drop as
 delete from public.pharmacists where pharmacy_id in (select id from demo_pharmacies);
 delete from public.pharmacy_services where pharmacy_id in (select id from demo_pharmacies);
 delete from public.pharmacy_issues where pharmacy_id in (select id from demo_pharmacies);
+delete from public.pharmacy_zone_areas where pharmacy_id in (select id from demo_pharmacies);
 
 -- One named pharmacist per pharmacy, plus a second for the larger ones, so the
 -- staff section has something to show. Photos are null: the page renders the
@@ -234,13 +235,50 @@ where i.slug in (
 )
   and not (d.slug like 'bolton-compounding%' and i.slug in ('cold-flu', 'pink-eye', 'uti'));
 
+-- Delivery zones.
+--
+-- Without these every delivery falls to Zone 5 and prices per kilometre, which
+-- is the fallback for an area a pharmacy has not told us about — not what a
+-- working pharmacy looks like. Tagging the postal areas around Bolton means a
+-- demo order to a Bolton address quotes a fixed Zone 1 price, the way it would
+-- in production.
+--
+-- Every FSA below is already in postal_areas (seeded with the GTA and Hamilton),
+-- so these join rather than invent anything. Zone 5 is never tagged: it is what
+-- an untagged postal code falls to.
+insert into public.pharmacy_zone_areas (pharmacy_id, fsa, zone)
+select d.id, v.fsa, v.zone::public.delivery_zone
+from demo_pharmacies d
+join (values
+  -- Bolton pharmacies, working outwards from their own postal area.
+  ('bolton', 'L7E', 'zone1'),                                   -- Bolton itself
+  ('bolton', 'L7C', 'zone2'), ('bolton', 'L6P', 'zone2'), ('bolton', 'L4H', 'zone2'),
+  ('bolton', 'L7K', 'zone3'), ('bolton', 'L6Z', 'zone3'), ('bolton', 'L6R', 'zone3'),
+  ('bolton', 'L7A', 'zone3'), ('bolton', 'L4L', 'zone3'),
+  ('bolton', 'L6S', 'zone4'), ('bolton', 'L6T', 'zone4'), ('bolton', 'L6V', 'zone4'),
+  ('bolton', 'L6W', 'zone4'), ('bolton', 'L6X', 'zone4'), ('bolton', 'L6Y', 'zone4'),
+  ('bolton', 'L4K', 'zone4'), ('bolton', 'L4J', 'zone4'), ('bolton', 'L7B', 'zone4'),
+  ('bolton', 'L7G', 'zone4'),
+  -- Caledon East sits further west, so the same places fall differently.
+  ('caledon', 'L7C', 'zone1'),
+  ('caledon', 'L7E', 'zone2'), ('caledon', 'L7K', 'zone2'),
+  ('caledon', 'L6P', 'zone3'), ('caledon', 'L7A', 'zone3'), ('caledon', 'L6Z', 'zone3'),
+  ('caledon', 'L7B', 'zone3'),
+  ('caledon', 'L6R', 'zone4'), ('caledon', 'L6S', 'zone4'), ('caledon', 'L4H', 'zone4'),
+  ('caledon', 'L7G', 'zone4')
+) as v(area, fsa, zone)
+  on v.area = case when d.slug like '%-l7c%' then 'caledon' else 'bolton' end
+join public.postal_areas pa on pa.fsa = v.fsa
+on conflict (pharmacy_id, fsa) do update set zone = excluded.zone;
+
 commit;
 
 -- What you just created.
 select p.slug, p.name, p.city, p.postal_code,
   (select count(*) from public.pharmacists s where s.pharmacy_id = p.id) as pharmacists,
   (select count(*) from public.pharmacy_services s where s.pharmacy_id = p.id) as services,
-  (select count(*) from public.pharmacy_issues s where s.pharmacy_id = p.id) as topics
+  (select count(*) from public.pharmacy_issues s where s.pharmacy_id = p.id) as topics,
+  (select count(*) from public.pharmacy_zone_areas s where s.pharmacy_id = p.id) as zone_areas
 from public.pharmacies p
 where p.license_number like 'DEMO-10%'
 order by p.city, p.name;
