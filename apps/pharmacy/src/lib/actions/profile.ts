@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requirePharmacy } from "@getmed/core/auth";
-import { slugify } from "@getmed/core/format";
+import { pharmacySlug } from "@getmed/core/format";
 import type { TablesUpdate } from "@getmed/db/types";
 import { issuePricesSchema, optionalNumberField, pharmacistSchema, phoneSchema, serviceSchema, signupStep1Schema, signupStep2Schema, signupStep5Schema, signupStep6Schema, themeColorSchema } from "@getmed/core/validation";
 
@@ -95,12 +95,16 @@ export async function advanceStep(step: number): Promise<R> {
 export async function submitSignup(): Promise<R> {
   try {
     const { pharmacy, db } = await requirePharmacy();
-    const { data: p } = await db.from("pharmacies").select("name, address_line, phone, license_number, license_doc_path, pic_name, slug").eq("id", pharmacy.id).single();
+    const { data: p } = await db.from("pharmacies").select("name, address_line, postal_code, phone, license_number, license_doc_path, pic_name, slug").eq("id", pharmacy.id).single();
     if (!p?.name || !p.address_line || !p.phone) return { ok: false, error: "Complete your business basics first" };
     if (!p.license_number || !p.pic_name) return { ok: false, error: "Complete your licensing details first" };
     if (!p.license_doc_path) return { ok: false, error: "Upload your licence document" };
-    let slug = p.slug ?? slugify(p.name);
+    // Set once, at submission, and never regenerated: a public URL that moves
+    // when someone edits an address is a dead link everywhere it was shared.
+    let slug = p.slug ?? pharmacySlug(p.name, p.postal_code);
     if (!p.slug) {
+      // Two branches can share a postal code, and a pharmacy with no usable one
+      // falls back to its name alone, so a tie is still possible.
       const { data: clash } = await db.from("pharmacies").select("id").eq("slug", slug).neq("id", pharmacy.id).maybeSingle();
       if (clash) slug = `${slug}-${pharmacy.id.slice(0, 4)}`;
     }

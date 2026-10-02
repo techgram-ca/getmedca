@@ -1,7 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@getmed/db/proxy";
 
-const PUBLIC_PATHS = ["/", "/login", "/signup", "/api/auth"];
+// Password recovery has to be reachable while signed out — that is the whole
+// point of it. Leaving these off sent anyone clicking "Forgot your password?"
+// to /login, which is where they had just come from.
+const PUBLIC_PATHS = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/api/auth"];
 
 function hasAuthCookie(request: NextRequest) {
   return request.cookies.getAll().some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));

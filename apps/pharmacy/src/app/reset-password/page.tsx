@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Alert, Button, Logo } from "@getmed/ui";
+import { Logo } from "@getmed/ui";
 import { getSession } from "@getmed/core/auth";
 import { NewPasswordForm } from "@/components/password-reset-forms";
+import { RecoverFromHash } from "@/components/recover-from-hash";
 
 export const metadata: Metadata = { title: "Choose a new password" };
 export const dynamic = "force-dynamic";
@@ -27,13 +27,9 @@ export default async function ResetPasswordPage() {
               <NewPasswordForm />
             </>
           ) : (
-            <div className="mt-4 space-y-4">
-              <Alert tone="warning" title="This link is no longer valid">
-                Reset links work once and expire quickly, and they have to be opened on the device that asked for them.
-                Request a new one and it will work.
-              </Alert>
-              <Button asChild className="w-full"><Link href="/forgot-password">Send a new link</Link></Button>
-            </div>
+            // No session from the server, which may only mean the link carried
+            // its tokens in the fragment. The browser can see that; we cannot.
+            <RecoverFromHash />
           )}
         </div>
       </div>
