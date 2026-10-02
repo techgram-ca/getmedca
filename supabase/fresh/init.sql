@@ -31,7 +31,7 @@ create type public.delivery_zone as enum ('zone1', 'zone2', 'zone3', 'zone4', 'z
 -- How an order's zone was decided, kept so support can explain a price.
 create type public.delivery_price_source as enum ('tagged', 'remote', 'manual');
 -- A delivery bills once; a failed attempt bills its own share of the same fee.
-create type public.order_charge_kind as enum ('delivery', 'failed_delivery');
+create type public.order_charge_kind as enum ('delivery', 'failed_delivery', 'refrigeration');
 
 -- ---------------------------------------------------------------------
 -- Profiles (one row per auth user; role drives RLS)
@@ -307,7 +307,11 @@ create table public.orders (
   cancelled_at timestamptz,
   timed_out_at timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  -- What the delivery needs handled, set when the pharmacy marks it ready.
+  requires_refrigeration boolean not null default false,
+  has_narcotics boolean not null default false,
+  cash_to_collect numeric(10,2) constraint orders_cash_to_collect_non_negative check (cash_to_collect is null or cash_to_collect >= 0)
 );
 create index orders_pharmacy_idx on public.orders (pharmacy_id, created_at desc);
 create index orders_status_idx on public.orders (status);
@@ -465,7 +469,9 @@ create table public.platform_settings (
   failed_delivery_fee_percent numeric(5,2) not null default 100
     constraint platform_settings_failed_fee_percent_range check (failed_delivery_fee_percent between 0 and 100),
   sla_minutes int not null default 30,
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  default_refrigeration_fee numeric(10,2) not null default 0
+    constraint platform_settings_refrigeration_fee_non_negative check (default_refrigeration_fee >= 0)
 );
 
 -- Per-pharmacy price overrides. A missing row means "use the platform default".
@@ -510,6 +516,7 @@ create index pharmacy_zone_areas_pharmacy_idx on public.pharmacy_zone_areas (pha
 create table public.pharmacy_delivery_config (
   pharmacy_id uuid primary key references public.pharmacies (id) on delete cascade,
   remote_per_km numeric(10,2) constraint pharmacy_delivery_config_per_km_positive check (remote_per_km is null or remote_per_km >= 0),
+  refrigeration_fee numeric(10,2) constraint pharmacy_delivery_config_refrigeration_non_negative check (refrigeration_fee is null or refrigeration_fee >= 0),
   updated_at timestamptz not null default now()
 );
 
@@ -572,7 +579,8 @@ select
   delivery_address_line, delivery_notes,
   delivery_distance_m, delivery_duration_s, delivery_route_avoids_tolls, delivery_route_computed_at,
   delivery_attempt,
-  delivery_price_source, delivery_quote_min, delivery_quote_max
+  delivery_price_source, delivery_quote_min, delivery_quote_max,
+  requires_refrigeration, has_narcotics, cash_to_collect
 from public.orders;
 
 -- ---------------------------------------------------------------------
@@ -859,7 +867,8 @@ select
   o.assigned_at, o.picked_up_at, o.delivered_at, o.failed_at, o.created_at, o.updated_at,
   p.name as pharmacy_name, p.phone as pharmacy_phone, p.address_line as pharmacy_address_line,
   p.city as pharmacy_city, p.postal_code as pharmacy_postal_code,
-  st_y(p.location::geometry) as pharmacy_lat, st_x(p.location::geometry) as pharmacy_lng
+  st_y(p.location::geometry) as pharmacy_lat, st_x(p.location::geometry) as pharmacy_lng,
+  o.requires_refrigeration, o.has_narcotics, o.cash_to_collect
 from public.orders o
 join public.pharmacies p on p.id = o.pharmacy_id;
 

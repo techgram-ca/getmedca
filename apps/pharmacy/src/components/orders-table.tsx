@@ -26,6 +26,7 @@ import {
 } from "@getmed/ui";
 import { useDateWindow } from "@/lib/use-date-window";
 import { acceptOrderAction, cancelOrderAction, markReadyAction, rejectOrderAction, returnToDeliveryAction } from "@/lib/actions/orders";
+import { ReadyDialog, type Handling } from "./ready-dialog";
 
 const STATUSES: OrderStatus[] = [
   "pending", "accepted", "ready_for_delivery", "assigned", "picked_up",
@@ -56,7 +57,7 @@ export type PharmacyOrderRow = {
   delivery_quote_max: number | null;
 };
 
-export function PharmacyOrdersTable({ rows, from, to }: { rows: PharmacyOrderRow[]; from: string; to: string }) {
+export function PharmacyOrdersTable({ rows, from, to, refrigerationFee }: { rows: PharmacyOrderRow[]; from: string; to: string; refrigerationFee: number }) {
   const { setWindow, refresh, loading } = useDateWindow(from, to);
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
@@ -134,7 +135,7 @@ export function PharmacyOrdersTable({ rows, from, to }: { rows: PharmacyOrderRow
             <THead>
               <TR><TH>Order</TH><TH>Patient</TH><TH>Type</TH><TH>Source</TH><TH>Status</TH><TH>Delivery cost</TH><TH>Received</TH><TH /></TR>
             </THead>
-            <TBody>{visible.map((o) => <OrderRow key={o.id} order={o} />)}</TBody>
+            <TBody>{visible.map((o) => <OrderRow key={o.id} order={o} refrigerationFee={refrigerationFee} />)}</TBody>
           </Table>
         </div>
       )}
@@ -143,11 +144,12 @@ export function PharmacyOrdersTable({ rows, from, to }: { rows: PharmacyOrderRow
 }
 
 /** One order, with its next status change available without opening it. */
-function OrderRow({ order }: { order: PharmacyOrderRow }) {
+function OrderRow({ order, refrigerationFee }: { order: PharmacyOrderRow; refrigerationFee: number }) {
   const [editing, setEditing] = useState(false);
   const [action, setAction] = useState<OrderAction | "">("");
   const [reason, setReason] = useState("");
   const [pending, start] = useTransition();
+  const [readyOpen, setReadyOpen] = useState(false);
 
   // The state machine decides what is offered, so the row can never propose a
   // move the server would refuse.
@@ -161,6 +163,18 @@ function OrderRow({ order }: { order: PharmacyOrderRow }) {
     setReason("");
   };
 
+  // mark_ready has three questions attached, so the tick opens the dialog and
+  // the dialog does the saving.
+  const saveReady = (handling: Handling) =>
+    start(async () => {
+      const r = await markReadyAction(order.id, handling);
+      if (r.ok) {
+        toast.success("Marked ready for delivery");
+        setReadyOpen(false);
+        close();
+      } else toast.error(r.error);
+    });
+
   const save = () =>
     start(async () => {
       const text = reason.trim();
@@ -168,7 +182,7 @@ function OrderRow({ order }: { order: PharmacyOrderRow }) {
         switch (action) {
           case "accept": return acceptOrderAction(order.id);
           case "reject": return rejectOrderAction(order.id, text);
-          case "mark_ready": return markReadyAction(order.id);
+          case "mark_ready": return { ok: false as const, error: "Use the Ready for delivery dialog" };
           case "cancel": return cancelOrderAction(order.id, text);
           case "return_to_delivery": return returnToDeliveryAction(order.id, "");
           default: return { ok: false as const, error: "Choose an action" };
@@ -210,13 +224,27 @@ function OrderRow({ order }: { order: PharmacyOrderRow }) {
               />
             ) : null}
             <div className="flex gap-1">
-              <Button size="icon" className="size-7" aria-label="Save" loading={pending} disabled={!ready} onClick={save}>
+              <Button
+                size="icon"
+                className="size-7"
+                aria-label="Save"
+                loading={pending}
+                disabled={!ready}
+                onClick={action === "mark_ready" ? () => setReadyOpen(true) : save}
+              >
                 {pending ? null : <Check className="size-3.5" />}
               </Button>
               <Button size="icon" variant="ghost" className="size-7" aria-label="Cancel" disabled={pending} onClick={close}>
                 <X className="size-3.5" />
               </Button>
             </div>
+            <ReadyDialog
+              open={readyOpen}
+              onOpenChange={setReadyOpen}
+              refrigerationFee={refrigerationFee}
+              pending={pending}
+              onConfirm={saveReady}
+            />
           </div>
         ) : (
           <div className="flex items-center gap-2">

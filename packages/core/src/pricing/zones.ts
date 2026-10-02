@@ -44,6 +44,19 @@ export function resolvePerKm(settings: PlatformSettingsRow, config?: PharmacyDel
   return config?.remote_per_km != null ? Number(config.remote_per_km) : Number(settings.default_remote_per_km);
 }
 
+/**
+ * What this pharmacy pays to carry a delivery cold, the pharmacy's own figure
+ * ahead of the platform default — the same override the per-km rate uses.
+ *
+ * Zero is a real answer, not an absent one: the pharmacy is still asked whether
+ * the delivery needs refrigeration, because the driver has to know, it simply
+ * is not quoted a price for saying yes.
+ */
+export function resolveRefrigerationFee(settings: PlatformSettingsRow, config?: PharmacyDeliveryConfigRow | null): number {
+  const fee = config?.refrigeration_fee != null ? Number(config.refrigeration_fee) : Number(settings.default_refrigeration_fee ?? 0);
+  return Math.max(0, round2(fee));
+}
+
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**

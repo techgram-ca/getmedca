@@ -40,12 +40,17 @@ type Row = {
   transferFromPhone: string;
   transferPrescriptionNumber: string;
   consentConfirmed: boolean;
+  requiresRefrigeration: boolean;
+  hasNarcotics: boolean;
+  /** Blank means nothing is collected, which is not the same as collecting $0. */
+  cashToCollect: string;
 };
 
 let nextKey = 1;
 const blank = (): Row => ({
   key: nextKey++, orderType: "new", patientName: "", patientPhone: "", patientDob: "", addressText: "", address: null,
   deliveryNotes: "", allergies: "", transferFromPharmacyName: "", transferFromPhone: "", transferPrescriptionNumber: "", consentConfirmed: false,
+  requiresRefrigeration: false, hasNarcotics: false, cashToCollect: "",
 });
 
 /**
@@ -53,7 +58,7 @@ const blank = (): Row => ({
  * Supports several orders in one submission; each row is validated and the
  * whole batch is rejected if any row fails, so nothing is half-created.
  */
-export function AddOrderDialog() {
+export function AddOrderDialog({ refrigerationFee }: { refrigerationFee: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Row[]>([blank()]);
@@ -110,6 +115,9 @@ export function AddOrderDialog() {
           transferFromPhone: row.transferFromPhone,
           transferPrescriptionNumber: row.transferPrescriptionNumber,
           consentConfirmed: row.consentConfirmed,
+          requiresRefrigeration: row.requiresRefrigeration,
+          hasNarcotics: row.hasNarcotics,
+          cashToCollect: row.cashToCollect,
         })),
       });
       if (!r.ok) {
@@ -187,6 +195,15 @@ export function AddOrderDialog() {
                     ) : null}
                     <Field label="Delivery notes" htmlFor={`notes-${row.key}`} optional><Input id={`notes-${row.key}`} placeholder="Unit, buzzer, drop-off instructions" value={row.deliveryNotes} onChange={(e) => update(i, { deliveryNotes: e.target.value })} /></Field>
                     <Field label="Allergies / notes for driver" htmlFor={`all-${row.key}`} optional><Textarea id={`all-${row.key}`} rows={1} value={row.allergies} onChange={(e) => update(i, { allergies: e.target.value })} /></Field>
+                    <div className="sm:col-span-2">
+                      <HandlingFields
+                        row={row}
+                        refrigerationFee={refrigerationFee}
+                        onChange={(patch) => update(i, patch)}
+                        idSuffix={String(row.key)}
+                        error={fe("cashToCollect") ?? undefined}
+                      />
+                    </div>
                   </div>
                   <label className="mt-3 flex items-start gap-2 text-xs text-ink-700">
                     <Checkbox checked={row.consentConfirmed} onCheckedChange={(v) => update(i, { consentConfirmed: v === true })} className="mt-0.5" />
@@ -233,5 +250,61 @@ function DeliveryTotal({ count, sum, priced, unpriced }: { count: number; sum: n
         {unpriced > 0 ? " — the rest are not priced yet" : ""}
       </span>
     </p>
+  );
+}
+
+/**
+ * The same three handling questions the ready-for-delivery dialog asks, on the
+ * form that creates the order. A manual order is often handed to a driver the
+ * same hour, so asking here saves answering it again minutes later.
+ */
+function HandlingFields({
+  row,
+  refrigerationFee,
+  onChange,
+  idSuffix,
+  error,
+}: {
+  row: { requiresRefrigeration: boolean; hasNarcotics: boolean; cashToCollect: string };
+  refrigerationFee: number;
+  onChange: (patch: { requiresRefrigeration?: boolean; hasNarcotics?: boolean; cashToCollect?: string }) => void;
+  idSuffix: string;
+  error?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-ink-200 bg-ink-50/40 p-3">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+        <label className="flex items-center gap-2">
+          <Checkbox checked={row.requiresRefrigeration} onCheckedChange={(v) => onChange({ requiresRefrigeration: v === true })} />
+          <span>
+            Needs refrigeration
+            {refrigerationFee > 0 ? <span className="ml-1 text-xs text-ink-500">(+{formatCurrency(refrigerationFee)})</span> : null}
+          </span>
+        </label>
+        <label className="flex items-center gap-2">
+          <Checkbox checked={row.hasNarcotics} onCheckedChange={(v) => onChange({ hasNarcotics: v === true })} />
+          <span>Controlled substance</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="text-ink-700">Cash to collect</span>
+          <span className="relative w-28">
+            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-ink-500">$</span>
+            <Input
+              id={`cash-${idSuffix}`}
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="None"
+              aria-label="Cash to collect"
+              className="h-9 pl-5 text-sm"
+              invalid={!!error}
+              value={row.cashToCollect}
+              onChange={(e) => onChange({ cashToCollect: e.target.value })}
+            />
+          </span>
+        </label>
+      </div>
+      {error ? <p className="mt-1.5 text-xs text-danger-500">{error}</p> : null}
+    </div>
   );
 }

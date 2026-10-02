@@ -9,6 +9,7 @@ import { savePricingDefaults } from "@/lib/actions/pricing";
 export type PricingDefaults = {
   prices: Record<FixedZone, number>;
   remotePerKm: number;
+  refrigerationFee: number;
   failedDeliveryPercent: number;
 };
 
@@ -22,6 +23,7 @@ export function PricingDefaultsForm({ defaults }: { defaults: PricingDefaults })
     () => Object.fromEntries(FIXED_ZONES.map((z) => [z, String(defaults.prices[z])])) as Record<FixedZone, string>,
   );
   const [perKm, setPerKm] = useState(String(defaults.remotePerKm));
+  const [fridge, setFridge] = useState(String(defaults.refrigerationFee));
   const [failedPercent, setFailedPercent] = useState(String(defaults.failedDeliveryPercent));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -33,6 +35,7 @@ export function PricingDefaultsForm({ defaults }: { defaults: PricingDefaults })
       const r = await savePricingDefaults({
         ...Object.fromEntries(FIXED_ZONES.map((z) => [z, prices[z]])),
         remotePerKm: perKm,
+        refrigerationFee: fridge,
         failedDeliveryPercent: failedPercent,
       });
       if (r.ok) {
@@ -79,12 +82,22 @@ export function PricingDefaultsForm({ defaults }: { defaults: PricingDefaults })
             <Field
               label="Zone 5 rate"
               htmlFor="per-km"
-              hint="Charged per kilometre of driving distance. Applies to every delivery whose postal code a pharmacy has not tagged; the admin confirms the final price on each one."
+              hint="Charged per kilometre of driving distance. Applies to every delivery whose postal code a pharmacy has not tagged, and settles on arrival without anyone confirming it."
             >
               <div className="relative">
                 <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-ink-500">$</span>
                 <Input id="per-km" type="number" min={0} step="0.01" className="pl-7 pr-14" value={perKm} onChange={(e) => setPerKm(e.target.value)} />
                 <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-ink-500">/ km</span>
+              </div>
+            </Field>
+            <Field
+              label="Refrigeration fee"
+              htmlFor="fridge-fee"
+              hint="Added when a pharmacy marks a delivery cold-chain. At 0 the pharmacy is still asked — the driver needs a cold bag either way — but nothing is billed."
+            >
+              <div className="relative">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-ink-500">$</span>
+                <Input id="fridge-fee" type="number" min={0} step="0.01" className="pl-7" value={fridge} onChange={(e) => setFridge(e.target.value)} />
               </div>
             </Field>
             <Field

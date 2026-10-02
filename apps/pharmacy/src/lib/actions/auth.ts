@@ -85,3 +85,52 @@ export async function changePassword(_prev: AuthState, fd: FormData): Promise<Au
   if (error) return { error: error.message };
   return { message: "Password updated" };
 }
+
+const emailSchema = z.object({ email: z.string().trim().email("Enter the email you signed up with") });
+
+/**
+ * Sends a password reset link.
+ *
+ * The link has to come back to this app's callback, not to the Supabase project
+ * Site URL — that points at the patient site, which has nothing to exchange the
+ * token with, so the reset bounces off the marketing page with the token spent.
+ *
+ * The answer is the same whether or not the address has an account. Saying
+ * "no account with that email" turns this form into a way to find out which
+ * pharmacies are registered.
+ */
+export async function requestPasswordReset(_prev: AuthState, fd: FormData): Promise<AuthState> {
+  const parsed = emailSchema.safeParse(Object.fromEntries(fd.entries()));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Enter a valid email" };
+  const supabase = await createClient();
+  const origin = await appOrigin();
+  await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+    redirectTo: `${origin}/api/auth/callback?next=/reset-password`,
+  });
+  return { message: "If that email has a GetMed pharmacy account, a reset link is on its way. The link is good for one use." };
+}
+
+const newPasswordSchema = z
+  .object({
+    password: z.string().min(10, "Use at least 10 characters"),
+    confirm: z.string(),
+  })
+  .refine((v) => v.password === v.confirm, { message: "Both passwords must match", path: ["confirm"] });
+
+/**
+ * Sets a new password. Reached only with the recovery session the callback
+ * established, so there is nothing else to verify here — Supabase refuses the
+ * update without it.
+ */
+export async function setNewPassword(_prev: AuthState, fd: FormData): Promise<AuthState> {
+  const parsed = newPasswordSchema.safeParse(Object.fromEntries(fd.entries()));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the passwords" };
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "That reset link has expired. Request a new one and open it on this device." };
+  }
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error) return { error: error.message };
+  redirect("/login?reset=1");
+}

@@ -17,6 +17,7 @@ function ctx(tagged: Record<string, "zone1" | "zone2" | "zone3" | "zone4"> = {})
       zone4: { price: 18, source: "default" },
     },
     perKm: 1.2,
+    refrigerationFee: 0,
     span: 6,
     taggedZones: new Map(Object.entries(tagged) as [string, "zone1"][]),
   };
@@ -93,7 +94,7 @@ test("an unparseable postal code cannot match a tag, so it is remote", () => {
 });
 
 test("a pharmacy's own per-km rate overrides the platform default", () => {
-  const config = { pharmacy_id: "p1", remote_per_km: 2.5, updated_at: "" };
+  const config = { pharmacy_id: "p1", remote_per_km: 2.5, refrigeration_fee: null, updated_at: "" };
   assert.equal(resolvePerKm(settings, config), 2.5);
   assert.equal(resolvePerKm(settings, null), 1.2);
 });

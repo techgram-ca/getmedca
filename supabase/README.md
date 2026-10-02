@@ -45,6 +45,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0010_order_sla_minutes.sql` | Snapshots the response window on each order so the countdown follows the admin's setting |
 | `migrations/0011_role_grants.sql` | Grants the PostgREST roles access to `public`; newer Supabase projects do not do this automatically |
 | `migrations/0012_orders_created_at_idx.sql` | Indexes `orders.created_at` for the admin lists, which filter by date across all pharmacies |
+| `migrations/0013_handling_requirements.sql` | Refrigeration, narcotics and cash-to-collect on an order, and the refrigeration fee that bills |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
 After any schema change, regenerate the TypeScript types with `pnpm db:types`.
@@ -90,6 +91,15 @@ whether or not 0007 has already been applied.
 coordinates through `st_x`/`st_y`. The manual order form quotes a delivery as soon as the address is
 picked, which needs the driving distance from the pharmacy before any order row exists for
 `order_route_points` to read.
+
+`migrations/0013_handling_requirements.sql` records what a delivery needs handled —
+`requires_refrigeration`, `has_narcotics` and `cash_to_collect` on `orders` — captured when the
+pharmacy marks the order ready, or on the manual order form. Refrigeration costs money to carry, so
+it bills: `platform_settings.default_refrigeration_fee` with a per-pharmacy override in
+`pharmacy_delivery_config.refrigeration_fee`, charged through a new `refrigeration` value on the
+`order_charge_kind` enum rather than folded into the delivery price, so an invoice itemises it and a
+re-delivery cannot double it. A fee of zero still asks the question and still tells the driver; it
+just records no charge. All three columns are appended to `orders_driver` and `orders_admin`.
 
 `migrations/0012_orders_created_at_idx.sql` indexes `orders (created_at desc)`. `orders_pharmacy_idx`
 leads with `pharmacy_id`, so it serves the pharmacy portal but not the admin orders and escalations
