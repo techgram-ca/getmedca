@@ -39,6 +39,32 @@ export const addressSchema = z.object({
 export type AddressInput = z.infer<typeof addressSchema>;
 
 /**
+ * Whether an address carried between screens is complete enough to submit.
+ *
+ * The patient picks an address on the search screen, and the order form shows
+ * it back for confirmation rather than asking again. That only works if what
+ * was carried over has everything `addressSchema` demands — a search by postal
+ * code alone, or an old link from before the postal code was carried, arrives
+ * with a piece missing. Presenting one of those as confirmed produces a form
+ * that looks finished and refuses to submit, so the field opens for editing
+ * instead.
+ */
+export function isCompleteAddress(address: {
+  line?: string | null;
+  postalCode?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+} | null | undefined): boolean {
+  if (!address) return false;
+  return (
+    !!address.line?.trim() &&
+    !!address.postalCode?.trim() &&
+    typeof address.lat === "number" &&
+    typeof address.lng === "number"
+  );
+}
+
+/**
  * Numbers typed into a form arrive as strings, and a blank field arrives as "".
  * `z.coerce.number()` turns "" (and null) into 0, so a field the user left
  * alone silently saved a real zero — a blank delivery price became $0.00.

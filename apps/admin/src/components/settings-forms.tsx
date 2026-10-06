@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition } from "react";
-import { Alert, Button, Field, FormError, Input, toast } from "@getmed/ui";
+import { Rocket } from "lucide-react";
+import { Alert, Button, Field, FormError, Input, Textarea, toast } from "@getmed/ui";
 import { changePassword, type AuthState } from "@/lib/actions/auth";
-import { savePlatformSettings } from "@/lib/actions/config";
+import { saveLaunchState, savePlatformSettings } from "@/lib/actions/config";
 
 export function PlatformSettingsForm({ searchRadiusKm, slaMinutes }: { searchRadiusKm: number; slaMinutes: number }) {
   const router = useRouter();
@@ -31,5 +32,86 @@ export function PasswordForm() {
       <Field label="Confirm" htmlFor="confirm"><Input id="confirm" name="confirm" type="password" autoComplete="new-password" required /></Field>
       <Button type="submit" loading={pending}>Update password</Button>
     </form>
+  );
+}
+
+/**
+ * The switch that opens the patient site.
+ *
+ * Deliberately awkward to flip by accident: the button says which direction it
+ * goes, and taking the site back down asks for confirmation, because doing that
+ * to a live service by misclick is a different kind of mistake from doing it to
+ * one nobody has seen yet.
+ */
+export function LaunchForm({ launchedAt, message }: { launchedAt: string | null; message: string | null }) {
+  const router = useRouter();
+  const [text, setText] = useState(message ?? "");
+  const [pending, start] = useTransition();
+  const launched = launchedAt != null;
+
+  const save = (nextLaunched: boolean) =>
+    start(async () => {
+      const r = await saveLaunchState({ launched: nextLaunched, message: text });
+      if (r.ok) {
+        toast.success(nextLaunched === launched ? "Message saved" : nextLaunched ? "GetMed is live" : "Patient site taken down");
+        router.refresh();
+      } else toast.error(r.error);
+    });
+
+  return (
+    <div className="space-y-4">
+      <Alert tone={launched ? "success" : "warning"}>
+        {launched ? (
+          <>
+            <strong>Live.</strong> Patients can search, order and request consultations. Launched{" "}
+            {new Date(launchedAt).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" })}.
+          </>
+        ) : (
+          <>
+            <strong>Not launched.</strong> The homepage shows your message instead of the site, with no navigation.
+            Pharmacy pages stay visible with ordering and consultations disabled, and both are refused if anyone
+            reaches them by direct link.
+          </>
+        )}
+      </Alert>
+
+      <Field
+        label="Coming soon message"
+        htmlFor="launch-message"
+        optional
+        hint="Shown on the homepage before launch. Leave empty to use the default copy."
+      >
+        <Textarea
+          id="launch-message"
+          rows={3}
+          value={text}
+          maxLength={600}
+          placeholder="We're getting GetMed ready for Ontario…"
+          onChange={(e) => setText(e.target.value)}
+        />
+      </Field>
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" loading={pending} onClick={() => save(launched)}>
+          Save message
+        </Button>
+        {launched ? (
+          <Button
+            type="button"
+            variant="danger"
+            loading={pending}
+            onClick={() => {
+              if (confirm("Take the patient site down? Patients will not be able to order until you launch again.")) save(false);
+            }}
+          >
+            Take site down
+          </Button>
+        ) : (
+          <Button type="button" loading={pending} onClick={() => save(true)}>
+            <Rocket /> Launch GetMed
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
