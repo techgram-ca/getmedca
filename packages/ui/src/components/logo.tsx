@@ -8,6 +8,8 @@ const SIZES = {
   sm: "h-8",
   md: "h-10",
   lg: "h-12",
+  /** Hero use, where the wordmark is the page's main mark rather than chrome. */
+  xl: "h-16 sm:h-24",
 } as const;
 
 /**
@@ -26,7 +28,7 @@ export function Logo({
   /** @deprecated The mark is a wordmark; this prop is ignored. */
   wordmark?: boolean;
   light?: boolean;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }) {
   const img = (
     // eslint-disable-next-line @next/next/no-img-element

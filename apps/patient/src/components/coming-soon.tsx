@@ -22,10 +22,10 @@ export function ComingSoon({ message }: { message: string | null }) {
     <div className="flex min-h-screen flex-col">
       <section className="relative overflow-hidden bg-gradient-to-b from-brand-50 via-white to-white px-6 py-24 sm:py-32">
         <div className="mx-auto flex max-w-[780px] flex-col items-center text-center">
-          <Logo className="mb-10" />
+          <Logo size="xl" className="mb-10" />
 
-          <span className="inline-flex items-center gap-2 rounded-full border border-brand-600/20 bg-brand-100 px-4 py-1.5 text-sm font-semibold text-brand-800">
-            <Clock className="size-4" />
+          <span className="inline-flex items-center gap-2.5 rounded-full border border-brand-600/20 bg-brand-100 px-6 py-2.5 text-base font-semibold text-brand-800 sm:text-lg">
+            <Clock className="size-5" />
             Coming soon
           </span>
 
