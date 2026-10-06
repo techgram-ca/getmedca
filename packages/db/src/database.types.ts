@@ -328,6 +328,10 @@ export type PlatformSettingsRow = {
   failed_delivery_fee_percent: number;
   /** Added when a delivery has to stay cold. Zero asks the question without pricing it. */
   default_refrigeration_fee: number;
+  /** When the patient site opened. Null means pre-launch: no ordering, no consultations. */
+  launched_at: string | null;
+  /** Shown on the public homepage before launch. */
+  launch_message: string | null;
   updated_at: string;
 };
 

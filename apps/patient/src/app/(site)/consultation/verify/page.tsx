@@ -3,11 +3,13 @@ import { notFound, redirect } from "next/navigation";
 import { createServiceClient } from "@getmed/db/service";
 import { maskPhone } from "@getmed/core/format";
 import { OtpForm } from "@/components/otp-form";
+import { requireLaunched } from "@/lib/launch";
 
 export const metadata: Metadata = { title: "Verify your phone" };
 export const dynamic = "force-dynamic";
 
 export default async function VerifyConsultationPage({ searchParams }: { searchParams: Promise<{ requestId?: string }> }) {
+  await requireLaunched();
   const { requestId } = await searchParams;
   if (!requestId || !/^[0-9a-f-]{36}$/i.test(requestId)) notFound();
   const db = createServiceClient();

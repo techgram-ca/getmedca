@@ -6,6 +6,7 @@ import { Avatar } from "@getmed/ui";
 import { OrderingFrom } from "@/components/pharmacy/ordering-from";
 import { ConsultationForm } from "@/components/consultation-form";
 import { getPublicPharmacy } from "@/lib/pharmacy";
+import { requireLaunched } from "@/lib/launch";
 
 export const metadata: Metadata = { title: "Request a consultation" };
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 type Search = { pharmacyId?: string; pharmacist?: string; issue?: string; service?: string };
 
 export default async function RequestPage({ searchParams }: { searchParams: Promise<Search> }) {
+  await requireLaunched();
   const sp = await searchParams;
   if (!sp.pharmacyId) notFound();
   const pharmacy = await getPublicPharmacy(sp.pharmacyId);

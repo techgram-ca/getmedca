@@ -1,8 +1,15 @@
+import { ComingSoon } from "@/components/coming-soon";
 import { HomeHero } from "@/components/home-hero";
 import { HowItWorksSection } from "@/components/how-it-works-section";
 import { WhyChooseSection } from "@/components/why-choose-section";
+import { getLaunchState } from "@/lib/launch";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const { launched, message } = await getLaunchState();
+  if (!launched) return <ComingSoon message={message} />;
+
   return (
     <>
       <HomeHero />

@@ -4,6 +4,7 @@ import { ArrowRight, Stethoscope } from "lucide-react";
 import { createServiceClient } from "@getmed/db/service";
 import { ImageWithFallback } from "@getmed/ui";
 import { IssuePicker } from "@/components/issue-picker";
+import { requireLaunched } from "@/lib/launch";
 
 export const metadata: Metadata = {
   title: "Consult a Pharmacist",
@@ -22,6 +23,7 @@ const ACCENTS = [
 ];
 
 export default async function ConsultationIndex() {
+  await requireLaunched();
   const db = createServiceClient();
   const { data: issues } = await db.from("issues").select("id, name, slug, description").eq("active", true).order("sort_order");
   const list = issues ?? [];

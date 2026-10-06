@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Menu, Phone, X } from "lucide-react";
 import { Avatar, Button, PoweredByGetMed, cn } from "@getmed/ui";
+import { ActionButton } from "./action-button";
 
 export type ChromePharmacy = {
   id: string;
@@ -22,10 +23,13 @@ export function PharmacyHeader({
   pharmacy,
   links = [],
   orderHref,
+  preLaunch,
 }: {
   pharmacy: ChromePharmacy;
   links?: { href: string; label: string }[];
   orderHref?: string;
+  /** Before launch the page is shown in full, but nothing on it can be acted on. */
+  preLaunch?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const href = orderHref ?? `/order/new?pharmacyId=${pharmacy.id}`;
@@ -51,7 +55,7 @@ export function PharmacyHeader({
               <Phone className="size-4" /> Call
             </a>
           ) : null}
-          <Button asChild size="sm"><Link href={href}>Order prescription</Link></Button>
+          <ActionButton size="sm" href={href} disabled={preLaunch}>Order prescription</ActionButton>
         </nav>
 
         <button className="cursor-pointer border-none bg-transparent p-2 text-ink-950 md:hidden" onClick={() => setOpen(!open)} aria-label="Menu" aria-expanded={open}>
@@ -65,7 +69,7 @@ export function PharmacyHeader({
             <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="text-sm font-medium text-ink-600 no-underline">{l.label}</a>
           ))}
           {pharmacy.phone ? <a href={`tel:${pharmacy.phone}`} className="text-sm font-semibold text-ink-950 no-underline">Call {pharmacy.phone}</a> : null}
-          <Button asChild size="sm" className="w-fit"><Link href={href}>Order prescription</Link></Button>
+          <ActionButton size="sm" className="w-fit" href={href} disabled={preLaunch}>Order prescription</ActionButton>
         </div>
       ) : null}
     </header>
@@ -94,13 +98,13 @@ export function PharmacyFooter({ pharmacy, address }: { pharmacy: ChromePharmacy
 }
 
 /** Mobile action bar pinned to the bottom of pharmacy-owned pages. */
-export function StickyOrderBar({ pharmacy, className, orderHref }: { pharmacy: ChromePharmacy; className?: string; orderHref?: string }) {
+export function StickyOrderBar({ pharmacy, className, orderHref, preLaunch }: { pharmacy: ChromePharmacy; className?: string; orderHref?: string; preLaunch?: boolean }) {
   return (
     <div className={cn("fixed inset-x-0 bottom-0 z-40 border-t border-ink-200 bg-white/95 px-4 py-3 backdrop-blur md:hidden", className)}>
       <div className="flex gap-2">
-        <Button asChild className="flex-1"><Link href={orderHref ?? `/order/new?pharmacyId=${pharmacy.id}`}>Order prescription</Link></Button>
+        <ActionButton className="flex-1" href={orderHref ?? `/order/new?pharmacyId=${pharmacy.id}`} disabled={preLaunch}>Order prescription</ActionButton>
         {pharmacy.offersConsultation ? (
-          <Button asChild variant="outline" className="flex-1"><Link href={`/consultation/request?pharmacyId=${pharmacy.id}`}>Ask a pharmacist</Link></Button>
+          <ActionButton variant="outline" className="flex-1" href={`/consultation/request?pharmacyId=${pharmacy.id}`} disabled={preLaunch}>Ask a pharmacist</ActionButton>
         ) : null}
       </div>
     </div>

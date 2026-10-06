@@ -1,6 +1,7 @@
 import { createServiceClient } from "@getmed/db/service";
 import { AppError } from "@getmed/core/errors";
 import { sendOtp } from "@getmed/core/otp";
+import { getPlatformSettings, isLaunched } from "@getmed/core/settings";
 import { applyConsultationFieldConfig, consultationSchema } from "@getmed/core/validation";
 import { z } from "zod";
 import { clientIp, handler, json } from "@/lib/api";
@@ -17,6 +18,11 @@ export const POST = handler(async (req: Request) => {
   }
   const input = parsed.data;
   const db = createServiceClient();
+
+  // Same gate the order path has: before launch the buttons are disabled, but a
+  // direct link would otherwise still reach this.
+  const settings = await getPlatformSettings(db);
+  if (!isLaunched(settings)) throw new AppError("GetMed is not open for consultations yet", 403);
 
   const { data: pharmacy } = await db.from("pharmacies").select("id, status, offers_consultation").eq("id", input.pharmacyId).maybeSingle();
   if (!pharmacy || pharmacy.status !== "approved") throw new AppError("This pharmacy is not accepting requests", 400);

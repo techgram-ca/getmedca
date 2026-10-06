@@ -471,7 +471,10 @@ create table public.platform_settings (
   sla_minutes int not null default 30,
   updated_at timestamptz not null default now(),
   default_refrigeration_fee numeric(10,2) not null default 0
-    constraint platform_settings_refrigeration_fee_non_negative check (default_refrigeration_fee >= 0)
+    constraint platform_settings_refrigeration_fee_non_negative check (default_refrigeration_fee >= 0),
+  -- Null until an admin launches the patient site. See 0015.
+  launched_at timestamptz,
+  launch_message text
 );
 
 -- Per-pharmacy price overrides. A missing row means "use the platform default".

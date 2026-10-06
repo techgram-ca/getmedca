@@ -47,6 +47,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0012_orders_created_at_idx.sql` | Indexes `orders.created_at` for the admin lists, which filter by date across all pharmacies |
 | `migrations/0013_handling_requirements.sql` | Refrigeration, narcotics and cash-to-collect on an order, and the refrigeration fee that bills |
 | `migrations/0014_pharmacy_slug_postal_code.sql` | Rebuilds public pharmacy slugs as `name-postalcode`, so one chain can have many branches |
+| `migrations/0015_launch_state.sql` | Whether the patient site is open, and the message shown before it is |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
 After any schema change, regenerate the TypeScript types with `pnpm db:types`.
@@ -92,6 +93,13 @@ whether or not 0007 has already been applied.
 coordinates through `st_x`/`st_y`. The manual order form quotes a delivery as soon as the address is
 picked, which needs the driving distance from the pharmacy before any order row exists for
 `order_route_points` to read.
+
+`migrations/0015_launch_state.sql` adds `platform_settings.launched_at` and `launch_message`. Null
+`launched_at` is the pre-launch state, which is what every existing database arrives in — launching
+is a deliberate act in admin settings, never something a migration does on someone's behalf. Before
+launch the patient homepage is a coming-soon page with no navigation, transactional pages redirect
+to it, and both `createOrder` and the consultations API refuse outright, so a direct link gets no
+further than a disabled button would. Pharmacy pages stay visible with their actions disabled.
 
 `migrations/0014_pharmacy_slug_postal_code.sql` rebuilds `pharmacies.slug` as the name followed by
 the postal code. A chain repeats its name in every city, so a name-only slug collided and the second

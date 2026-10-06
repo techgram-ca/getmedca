@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { createServiceClient } from "@getmed/db/service";
 import { searchPharmacies } from "@getmed/core/geo";
 import { SearchView } from "@/components/search-view";
+import { requireLaunched } from "@/lib/launch";
 
 export const metadata: Metadata = { title: "Pharmacies near you" };
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 type Search = { address?: string; lat?: string; lng?: string; postal?: string };
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<Search> }) {
+  await requireLaunched();
   const sp = await searchParams;
   const address = sp.address?.trim() ?? "";
   const lat = sp.lat ? Number(sp.lat) : undefined;

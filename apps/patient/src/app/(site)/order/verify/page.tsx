@@ -4,11 +4,13 @@ import { maskPhone } from "@getmed/core/format";
 import { OtpForm } from "@/components/otp-form";
 import { OrderingFrom } from "@/components/pharmacy/ordering-from";
 import { getOrderSummary, toChrome } from "@/lib/order-summary";
+import { requireLaunched } from "@/lib/launch";
 
 export const metadata: Metadata = { title: "Verify your phone" };
 export const dynamic = "force-dynamic";
 
 export default async function VerifyPage({ searchParams }: { searchParams: Promise<{ orderId?: string }> }) {
+  await requireLaunched();
   const { orderId } = await searchParams;
   if (!orderId) notFound();
   const order = await getOrderSummary(orderId);

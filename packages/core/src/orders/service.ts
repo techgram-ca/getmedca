@@ -8,7 +8,7 @@ import { ensureOrderRoute } from "./distance";
 import { adminTarget, notify } from "../notifications/dispatch";
 import { pushToDriver } from "../notifications/push";
 import { REMOTE_ZONE, loadPricingContext, resolvePricing, resolveZone, round2, zoneLabel, zonePatch, type FixedZone } from "../pricing";
-import { getPlatformSettings } from "../settings";
+import { isLaunched, getPlatformSettings } from "../settings";
 import { ESCALATION_STATUSES, TRANSITIONS, canTransition, type Actor, type OrderAction } from "./state-machine";
 
 type Ctx = { db?: ServiceClient };
@@ -109,6 +109,12 @@ async function escalate(db: ServiceClient, order: OrderRow) {
 /** Patient submission (after OTP verification). Starts the SLA timer + notifies pharmacy. */
 export async function createOrder(input: OrderInsert, ctx: Ctx = {}): Promise<OrderRow> {
   const db = dbOf(ctx);
+  // Before launch the public site shows a coming-soon page, but a direct link
+  // or an old tab would otherwise still reach here. Refusing at the point of
+  // creation is what makes the launch switch real rather than cosmetic.
+  const settings = await getPlatformSettings(db);
+  if (!isLaunched(settings)) throw new AppError("GetMed is not open for orders yet", 403);
+
   const { data: pharmacy } = await db.from("pharmacies").select("id, status").eq("id", input.pharmacy_id).maybeSingle();
   if (!pharmacy || pharmacy.status !== "approved") throw new AppError("This pharmacy is not accepting orders", 400);
 

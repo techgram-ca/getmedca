@@ -7,6 +7,7 @@ import { listConsultationPharmacists, type PharmacistListing } from "@getmed/cor
 import { formatCurrency, formatDistance, formatDuration } from "@getmed/core/format";
 import { Avatar, Badge, Button, EmptyState, cn } from "@getmed/ui";
 import { IssueAddressSearch } from "@/components/issue-address-search";
+import { requireLaunched } from "@/lib/launch";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 }
 
 export default async function IssuePage({ params, searchParams }: { params: Promise<Params>; searchParams: Promise<Search> }) {
+  await requireLaunched();
   const { issueSlug } = await params;
   const sp = await searchParams;
   const db = createServiceClient();
