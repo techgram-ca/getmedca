@@ -6,13 +6,14 @@ import { SearchView } from "@/components/search-view";
 export const metadata: Metadata = { title: "Pharmacies near you" };
 export const dynamic = "force-dynamic";
 
-type Search = { address?: string; lat?: string; lng?: string };
+type Search = { address?: string; lat?: string; lng?: string; postal?: string };
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
   const address = sp.address?.trim() ?? "";
   const lat = sp.lat ? Number(sp.lat) : undefined;
   const lng = sp.lng ? Number(sp.lng) : undefined;
+  const postal = sp.postal?.trim() ?? "";
 
   let response: Awaited<ReturnType<typeof searchPharmacies>> = { origin: null, radiusKm: 0, results: [] };
   let error: string | null = null;
@@ -28,5 +29,5 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     }
   }
 
-  return <SearchView address={address} response={response} error={error} />;
+  return <SearchView address={address} postal={postal} response={response} error={error} />;
 }

@@ -14,7 +14,7 @@ const SearchMap = dynamic(() => import("./search-map").then((m) => m.SearchMap),
   loading: () => <div className="h-full w-full animate-pulse bg-ink-100" />,
 });
 
-export function SearchView({ address, response, error }: { address: string; response: SearchResponse; error: string | null }) {
+export function SearchView({ address, postal, response, error }: { address: string; postal?: string; response: SearchResponse; error: string | null }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const { results, origin, radiusKm } = response;
 
@@ -22,6 +22,7 @@ export function SearchView({ address, response, error }: { address: string; resp
   // the pharmacy page and order form, so they are never asked for it twice.
   const params = new URLSearchParams();
   if (address) params.set("address", address);
+  if (postal) params.set("postal", postal);
   if (origin) {
     params.set("lat", String(origin.lat));
     params.set("lng", String(origin.lng));

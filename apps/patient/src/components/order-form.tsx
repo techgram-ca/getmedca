@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ArrowLeftRight, ArrowRight, CheckCircle2, FileText, FileUp, Lock, MapPin } from "lucide-react";
+import { isCompleteAddress } from "@getmed/core/validation";
 import type { FormFieldConfigRow } from "@getmed/db/types";
 import {
   AddressAutocomplete,
@@ -29,6 +30,8 @@ type Props = {
   /** Address the patient already searched with; when present we confirm rather than re-ask. */
   initialAddress: string;
   initialCoords: { lat: number; lng: number } | null;
+  /** Postal code of that address, carried from the search so it is not asked for twice. */
+  initialPostalCode: string | null;
   initialType: "new" | "transfer";
 };
 
@@ -51,7 +54,7 @@ const FIELD_META: Record<string, { label: string; id: string }> = {
 
 type Mode = "upload" | "manual";
 
-export function OrderForm({ pharmacy, config, initialAddress, initialCoords, initialType }: Props) {
+export function OrderForm({ pharmacy, config, initialAddress, initialCoords, initialPostalCode, initialType }: Props) {
   const router = useRouter();
   const [type, setType] = useState<"new" | "transfer">(initialType);
   const [busy, setBusy] = useState(false);
@@ -62,11 +65,28 @@ export function OrderForm({ pharmacy, config, initialAddress, initialCoords, ini
   const [addressText, setAddressText] = useState(initialAddress);
   const [address, setAddress] = useState<AddressValue | null>(
     initialAddress
-      ? { line: initialAddress, full: initialAddress, lat: initialCoords?.lat ?? null, lng: initialCoords?.lng ?? null }
+      ? {
+          line: initialAddress,
+          full: initialAddress,
+          postalCode: initialPostalCode,
+          lat: initialCoords?.lat ?? null,
+          lng: initialCoords?.lng ?? null,
+        }
       : null,
   );
-  // Known address arrives from search: show it for confirmation instead of an empty field.
-  const [editingAddress, setEditingAddress] = useState(!initialAddress);
+  // An address is only carried forward if the patient picked it from the
+  // suggestions, which is what supplies the postal code and the coordinates.
+  // Searching by postal code alone, or arriving on an old link, leaves one of
+  // them missing — so the field opens for editing rather than presenting an
+  // address for confirmation that could not be submitted.
+  const [editingAddress, setEditingAddress] = useState(
+    !isCompleteAddress({
+      line: initialAddress,
+      postalCode: initialPostalCode,
+      lat: initialCoords?.lat ?? null,
+      lng: initialCoords?.lng ?? null,
+    }),
+  );
   const [insuranceMode, setInsuranceMode] = useState<Mode>("upload");
   const [healthMode, setHealthMode] = useState<Mode>("manual");
   const [consent, setConsent] = useState(false);
@@ -91,10 +111,13 @@ export function OrderForm({ pharmacy, config, initialAddress, initialCoords, ini
       setTimeout(() => focusFirstError(), 0);
       return;
     }
-    // A typed address has no coordinates or postal code, so the order could not
-    // be priced or routed. The picker supplies both, so it has to be used.
-    if (address?.lat == null || address.lng == null || !address.postalCode) {
-      setFieldErrors({ deliveryAddress: "Choose your address from the list of suggestions so we can price the delivery" });
+    // A typed address has no coordinates or postal code, so the driver could not
+    // be routed to it. The picker supplies both, so it has to be used. Nothing
+    // here is about money: delivery is free to the patient and billed to the
+    // pharmacy, so saying we need it "to price the delivery" was both wrong and
+    // alarming to the one person who is never charged.
+    if (!isCompleteAddress(address)) {
+      setFieldErrors({ deliveryAddress: "Pick your address from the suggestions so the driver can find you" });
       setTimeout(() => focusFirstError(), 0);
       return;
     }
@@ -188,7 +211,7 @@ export function OrderForm({ pharmacy, config, initialAddress, initialCoords, ini
               htmlFor="deliveryAddress"
               required
               error={fe("deliveryAddress")}
-              hint="Pick a suggestion so the driver gets exact directions."
+              hint="Pick a suggestion so the driver gets exact directions. Delivery is free — your pharmacy covers it."
             >
               <AddressAutocomplete
                 id="deliveryAddress"

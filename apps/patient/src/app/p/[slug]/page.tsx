@@ -28,7 +28,7 @@ import { getPublicPharmacy } from "@/lib/pharmacy";
 export const dynamic = "force-dynamic";
 
 type Params = { slug: string };
-type Search = { address?: string; lat?: string; lng?: string };
+type Search = { address?: string; lat?: string; lng?: string; postal?: string };
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { slug } = await params;
@@ -45,7 +45,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 
 export default async function PharmacyPage({ params, searchParams }: { params: Promise<Params>; searchParams: Promise<Search> }) {
   const { slug } = await params;
-  const { address, lat: latParam, lng: lngParam } = await searchParams;
+  const { address, lat: latParam, lng: lngParam, postal } = await searchParams;
   const p = await getPublicPharmacy(slug);
   if (!p) notFound();
 
@@ -58,6 +58,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
   const fullAddress = [p.address_line, p.city, p.province, p.postal_code].filter(Boolean).join(", ");
   const orderParams = new URLSearchParams({ pharmacyId: p.id });
   if (address) orderParams.set("address", address);
+  if (postal) orderParams.set("postal", postal);
   if (latParam && lngParam) {
     orderParams.set("lat", latParam);
     orderParams.set("lng", lngParam);

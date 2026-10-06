@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function NewOrderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ pharmacyId?: string; address?: string; lat?: string; lng?: string; type?: string }>;
+  searchParams: Promise<{ pharmacyId?: string; address?: string; lat?: string; lng?: string; postal?: string; type?: string }>;
 }) {
   const sp = await searchParams;
   if (!sp.pharmacyId) notFound();
@@ -43,6 +43,7 @@ export default async function NewOrderPage({
           config={config ?? []}
           initialAddress={sp.address ?? ""}
           initialCoords={initialCoords}
+          initialPostalCode={sp.postal?.trim() || null}
           initialType={sp.type === "transfer" ? "transfer" : "new"}
         />
       </div>
