@@ -4,6 +4,7 @@ import { createServiceClient } from "@getmed/db/service";
 import { OrderForm } from "@/components/order-form";
 import { OrderingFrom } from "@/components/pharmacy/ordering-from";
 import { getPublicPharmacy } from "@/lib/pharmacy";
+import { requireLaunched } from "@/lib/launch";
 
 export const metadata: Metadata = { title: "Order your prescription" };
 export const dynamic = "force-dynamic";
@@ -11,8 +12,9 @@ export const dynamic = "force-dynamic";
 export default async function NewOrderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ pharmacyId?: string; address?: string; lat?: string; lng?: string; type?: string }>;
+  searchParams: Promise<{ pharmacyId?: string; address?: string; lat?: string; lng?: string; postal?: string; type?: string }>;
 }) {
+  await requireLaunched();
   const sp = await searchParams;
   if (!sp.pharmacyId) notFound();
   const pharmacy = await getPublicPharmacy(sp.pharmacyId);
@@ -43,6 +45,7 @@ export default async function NewOrderPage({
           config={config ?? []}
           initialAddress={sp.address ?? ""}
           initialCoords={initialCoords}
+          initialPostalCode={sp.postal?.trim() || null}
           initialType={sp.type === "transfer" ? "transfer" : "new"}
         />
       </div>

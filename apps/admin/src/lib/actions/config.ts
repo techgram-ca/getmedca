@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireAdmin } from "@getmed/core/auth";
 import { slugify } from "@getmed/core/format";
 import { TEMPLATE_DEFAULTS, validateTemplate, type NotificationEvent } from "@getmed/core/notifications";
-import { updatePlatformSettings } from "@getmed/core/settings";
+import { getPlatformSettings, updatePlatformSettings } from "@getmed/core/settings";
 import type { NotificationChannel } from "@getmed/db/types";
 
 type R = { ok: true } | { ok: false; error: string };
@@ -95,6 +95,34 @@ export async function savePlatformSettings(input: unknown): Promise<R> {
     const d = settingsSchema.parse(input);
     const { db } = await requireAdmin();
     await updatePlatformSettings(db, { search_radius_km: d.searchRadiusKm, sla_minutes: d.slaMinutes });
+    revalidatePath("/settings");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+const launchSchema = z.object({
+  launched: z.boolean(),
+  message: z.string().trim().max(600, "Keep the message under 600 characters").optional().or(z.literal("")),
+});
+
+/**
+ * Opens or closes the patient site.
+ *
+ * Launching stamps the moment it happened and leaves it alone afterwards, so a
+ * later save of the message does not rewrite the launch date. Closing clears
+ * the stamp — which is the switch going back, not a record being falsified:
+ * there is one launch state, and it is whatever it is now.
+ */
+export async function saveLaunchState(input: unknown): Promise<R> {
+  try {
+    const d = launchSchema.parse(input);
+    const { db } = await requireAdmin();
+    const current = await getPlatformSettings(db);
+    await updatePlatformSettings(db, {
+      launched_at: d.launched ? (current.launched_at ?? new Date().toISOString()) : null,
+      launch_message: d.message?.trim() || null,
+    });
+    // The patient site reads this on every page, so its caches have to go too.
     revalidatePath("/settings");
     return { ok: true };
   } catch (e) { return fail(e); }

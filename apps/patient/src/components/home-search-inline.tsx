@@ -24,6 +24,10 @@ export function HomeSearchInline({ className }: { className?: string }) {
           params.set("lat", String(place.lat));
           params.set("lng", String(place.lng));
         }
+        // Carried so the order form never has to ask for an address the patient
+        // has already picked. Without it the order page rebuilds an address with
+        // no postal code and refuses to submit.
+        if (place?.postalCode) params.set("postal", place.postalCode);
         start(() => router.push(`/search?${params}`));
       }}
     >

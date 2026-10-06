@@ -24,11 +24,13 @@ import { DEFAULT_THEME_COLOR, themeStyle } from "@getmed/core/theme";
 import { Avatar, Badge, Button, ImageWithFallback, ScrollReveal, cn } from "@getmed/ui";
 import { PharmacyFooter, PharmacyHeader, StickyOrderBar, type ChromePharmacy } from "@/components/pharmacy/pharmacy-chrome";
 import { getPublicPharmacy } from "@/lib/pharmacy";
+import { getLaunchState } from "@/lib/launch";
+import { ActionButton } from "@/components/pharmacy/action-button";
 
 export const dynamic = "force-dynamic";
 
 type Params = { slug: string };
-type Search = { address?: string; lat?: string; lng?: string };
+type Search = { address?: string; lat?: string; lng?: string; postal?: string };
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { slug } = await params;
@@ -45,7 +47,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 
 export default async function PharmacyPage({ params, searchParams }: { params: Promise<Params>; searchParams: Promise<Search> }) {
   const { slug } = await params;
-  const { address, lat: latParam, lng: lngParam } = await searchParams;
+  const { address, lat: latParam, lng: lngParam, postal } = await searchParams;
   const p = await getPublicPharmacy(slug);
   if (!p) notFound();
 
@@ -58,11 +60,15 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
   const fullAddress = [p.address_line, p.city, p.province, p.postal_code].filter(Boolean).join(", ");
   const orderParams = new URLSearchParams({ pharmacyId: p.id });
   if (address) orderParams.set("address", address);
+  if (postal) orderParams.set("postal", postal);
   if (latParam && lngParam) {
     orderParams.set("lat", latParam);
     orderParams.set("lng", lngParam);
   }
   const orderHref = `/order/new?${orderParams}`;
+  // Before launch the page is shown in full but nothing on it can be acted on.
+  const { launched } = await getLaunchState();
+  const preLaunch = !launched;
   const consultHref = `/consultation/request?pharmacyId=${p.id}`;
 
   const chrome: ChromePharmacy = {
@@ -97,7 +103,12 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
 
   return (
     <div style={theme} className="flex min-h-screen flex-col bg-ink-50">
-      <PharmacyHeader pharmacy={chrome} links={navLinks} orderHref={orderHref} />
+      <PharmacyHeader pharmacy={chrome} links={navLinks} orderHref={orderHref} preLaunch={preLaunch} />
+      {preLaunch ? (
+        <p className="border-b border-brand-600/20 bg-brand-100 px-6 py-3 text-center text-sm font-medium text-brand-900">
+          GetMed opens soon. This page is a preview — ordering and consultations are not available yet.
+        </p>
+      ) : null}
 
       {/* ── Hero ─────────────────────────────────────────────── */}
       <section className="border-b border-ink-200 bg-gradient-to-b from-brand-50 to-ink-50">
@@ -116,9 +127,9 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
-                <Button asChild size="lg"><Link href={orderHref}><FileText /> Order prescription</Link></Button>
+                <ActionButton size="lg" href={orderHref} disabled={preLaunch}><FileText /> Order prescription</ActionButton>
                 {p.offers_consultation ? (
-                  <Button asChild size="lg" variant="outline"><Link href={consultHref}><Stethoscope /> Ask a pharmacist</Link></Button>
+                  <ActionButton size="lg" variant="outline" href={consultHref} disabled={preLaunch}><Stethoscope /> Ask a pharmacist</ActionButton>
                 ) : null}
               </div>
 
@@ -226,7 +237,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
                     </li>
                   ))}
                 </ol>
-                <Button asChild className="mt-7 w-full"><Link href={orderHref}>Start your order <ArrowRight /></Link></Button>
+                <ActionButton className="mt-7 w-full" href={orderHref} disabled={preLaunch}>Start your order <ArrowRight /></ActionButton>
               </div>
             </ScrollReveal>
           </div>
@@ -316,9 +327,9 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
             </ScrollReveal>
 
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button asChild size="lg"><Link href={orderHref}><FileText /> Order prescription</Link></Button>
+              <ActionButton size="lg" href={orderHref} disabled={preLaunch}><FileText /> Order prescription</ActionButton>
               {p.offers_consultation ? (
-                <Button asChild size="lg" variant="outline"><Link href={consultHref}><Stethoscope /> Ask a pharmacist</Link></Button>
+                <ActionButton size="lg" variant="outline" href={consultHref} disabled={preLaunch}><Stethoscope /> Ask a pharmacist</ActionButton>
               ) : null}
             </div>
           </div>
@@ -341,6 +352,12 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
                 <ul className="flex flex-wrap gap-2">
                   {p.issues.map((i) => (
                     <li key={i.id}>
+                      {preLaunch ? (
+                        <span className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-full border border-ink-200 bg-ink-50 px-4 py-2 text-sm font-medium text-ink-400">
+                          <Stethoscope className="size-3.5 text-ink-400" />
+                          {i.name}
+                        </span>
+                      ) : (
                       <Link
                         href={`${consultHref}&issue=${i.slug}`}
                         className="inline-flex items-center gap-1.5 rounded-full border border-ink-200 bg-white px-4 py-2 text-sm font-medium text-ink-700 no-underline transition-soft hover:border-brand-600 hover:text-brand-700"
@@ -348,6 +365,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
                         <Stethoscope className="size-3.5 text-brand-600" />
                         {i.name}
                       </Link>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -454,7 +472,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
             Send us your prescription in under two minutes. We&#39;ll take care of the rest and bring it right to your door.
           </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <Button asChild size="lg" variant="white"><Link href={orderHref}>Order prescription <ArrowRight /></Link></Button>
+            <ActionButton size="lg" variant="white" href={orderHref} disabled={preLaunch}>Order prescription <ArrowRight /></ActionButton>
             {p.phone ? (
               <Button asChild size="lg" variant="outline" className="border-white/40 bg-transparent text-white hover:border-white hover:text-white">
                 <a href={`tel:${p.phone}`}><Phone /> Call {p.phone}</a>
@@ -465,7 +483,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
       </section>
 
       <PharmacyFooter pharmacy={chrome} address={fullAddress} />
-      <StickyOrderBar pharmacy={chrome} orderHref={orderHref} />
+      <StickyOrderBar pharmacy={chrome} orderHref={orderHref} preLaunch={preLaunch} />
       <div className="h-16 md:hidden" />
     </div>
   );

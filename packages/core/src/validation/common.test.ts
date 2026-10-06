@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
-import { optionalNumberField, requiredNumberField } from "./common.ts";
+import { addressSchema, isCompleteAddress, optionalNumberField, requiredNumberField } from "./common.ts";
 
 const price = z.number().min(0, "Price cannot be negative").max(1000, "That price looks too high");
 const optional = optionalNumberField(price, "Enter a price");
@@ -46,4 +46,27 @@ test("editing one price leaves the other delivery types untouched", () => {
     gta: null,
     extended: null,
   });
+});
+
+test("an address carried from search is only confirmed when it is submittable", () => {
+  const picked = { line: "12 Queen Street North", postalCode: "L7E 1E8", lat: 43.8783, lng: -79.7375 };
+  assert.equal(isCompleteAddress(picked), true, "a picked address should not be re-asked");
+
+  // Each of these produced the bug: the order form showed an address for
+  // confirmation, then refused to submit it.
+  assert.equal(isCompleteAddress({ ...picked, postalCode: null }), false, "no postal code — the case that broke ordering");
+  assert.equal(isCompleteAddress({ ...picked, lat: null }), false);
+  assert.equal(isCompleteAddress({ ...picked, lng: null }), false);
+  assert.equal(isCompleteAddress({ ...picked, line: "   " }), false);
+  assert.equal(isCompleteAddress({ ...picked, postalCode: "  " }), false);
+  assert.equal(isCompleteAddress(null), false);
+  assert.equal(isCompleteAddress(undefined), false);
+});
+
+test("a complete address satisfies the schema it is standing in for", () => {
+  // The two must not drift: whatever isCompleteAddress passes, addressSchema
+  // must accept, or the form confirms an address the server then rejects.
+  const picked = { line: "12 Queen Street North", city: "Bolton", postalCode: "L7E 1E8", lat: 43.8783, lng: -79.7375 };
+  assert.equal(isCompleteAddress(picked), true);
+  assert.equal(addressSchema.safeParse(picked).success, true);
 });

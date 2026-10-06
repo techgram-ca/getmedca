@@ -1,7 +1,7 @@
 import { requireAdmin } from "@getmed/core/auth";
 import { getPlatformSettings } from "@getmed/core/settings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader } from "@getmed/ui";
-import { PasswordForm, PlatformSettingsForm } from "@/components/settings-forms";
+import { LaunchForm, PasswordForm, PlatformSettingsForm } from "@/components/settings-forms";
 
 export default async function SettingsPage() {
   const { db, session } = await requireAdmin();
@@ -9,6 +9,13 @@ export default async function SettingsPage() {
   return (
     <div className="max-w-2xl space-y-6">
       <PageHeader title="Settings" />
+      <Card>
+        <CardHeader>
+          <CardTitle>Launch</CardTitle>
+          <CardDescription>Whether the patient site is open for business. Pharmacy and admin portals are unaffected.</CardDescription>
+        </CardHeader>
+        <CardContent><LaunchForm launchedAt={s.launched_at} message={s.launch_message} /></CardContent>
+      </Card>
       <Card>
         <CardHeader><CardTitle>Platform settings</CardTitle><CardDescription>Applied at query time — no reprocessing needed. Delivery prices live on the Pricing page.</CardDescription></CardHeader>
         <CardContent><PlatformSettingsForm searchRadiusKm={Number(s.search_radius_km)} slaMinutes={s.sla_minutes} /></CardContent>
