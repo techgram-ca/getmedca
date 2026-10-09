@@ -25,7 +25,7 @@ export function SignupWizard({ data }: { data: ProfileData }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // ---- draft state (mirrors DB row; autosaved per step) ----
+  // ---- draft state (mirrors the DB row; written on Continue) ----
   const [s1, setS1] = useState({ name: p.name ?? "", addressLine: p.address_line ?? "", city: p.city ?? "", postalCode: p.postal_code ?? "", lat: null as number | null, lng: null as number | null, phone: p.phone ?? "", email: p.email ?? "" });
   const [addressText, setAddressText] = useState([p.address_line, p.city, p.postal_code].filter(Boolean).join(", "));
   const [issues, setIssues] = useState({ issueIds: data.selectedIssueIds, issuePrices: data.issuePrices });
