@@ -53,6 +53,20 @@ export const issuePricesSchema = z
   .record(z.string().uuid(), optionalNumberField(z.number().min(0).max(10000), "Enter a price, for example 25.00"))
   .default({});
 
+/**
+ * How many steps signup has: Business, Pharmacists & consultations, Services,
+ * Review. Licensing, hours, delivery options and branding were all removed —
+ * each is either verified out of band or editable later from the account, and
+ * together they were most of the reason registrations were abandoned.
+ */
+export const SIGNUP_STEPS = 4;
+
+/** Consultation topics, now collected on the pharmacists step. */
+export const signupIssuesSchema = z.object({
+  issueIds: z.array(z.string().uuid()).max(100).default([]),
+  issuePrices: issuePricesSchema,
+});
+
 export const signupStep5Schema = z.object({
   hours: hoursSchema,
   deliveryRadiusKm: optionalNumberField(z.number().min(0).max(200), "Enter a delivery radius in km").optional(),
