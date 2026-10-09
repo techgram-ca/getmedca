@@ -13,6 +13,23 @@ export const DAY_LABELS: Record<DayKey, string> = {
   sun: "Sunday",
 };
 
+/**
+ * What a pharmacy gets until it sets its own.
+ *
+ * Signup does not ask for opening hours any more — it is the kind of detail
+ * that stalls a registration and that every pharmacy can correct in a minute
+ * from its own account. Weekdays and Saturday nine to six, Sunday closed.
+ */
+export const SIGNUP_DEFAULT_HOURS: WeeklyHours = {
+  mon: { open: "09:00", close: "18:00" },
+  tue: { open: "09:00", close: "18:00" },
+  wed: { open: "09:00", close: "18:00" },
+  thu: { open: "09:00", close: "18:00" },
+  fri: { open: "09:00", close: "18:00" },
+  sat: { open: "09:00", close: "18:00" },
+  sun: { open: "09:00", close: "18:00", closed: true },
+};
+
 export const DEFAULT_HOURS: WeeklyHours = {
   mon: { open: "09:00", close: "18:00" },
   tue: { open: "09:00", close: "18:00" },

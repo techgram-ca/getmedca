@@ -1,31 +1,26 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { ArrowLeft, ArrowRight, Check, CloudUpload, Loader2 } from "lucide-react";
-import type { WeeklyHours } from "@getmed/core/hours";
-import { DEFAULT_THEME_COLOR } from "@getmed/core/theme";
-import { AddressAutocomplete, Alert, Button, Card, CardContent, Field, Input, Logo, Switch, Textarea, cn, toast } from "@getmed/ui";
-import { advanceStep, saveStep1, saveStep2, saveStep5, saveStep6, submitSignup } from "@/lib/actions/profile";
+import { AddressAutocomplete, Alert, Button, Card, CardContent, Field, Input, Logo, cn, toast } from "@getmed/ui";
+import { advanceStep, saveSignupIssues, saveStep1, submitSignup } from "@/lib/actions/profile";
 import { logout } from "@/lib/actions/auth";
 import type { ProfileData } from "@/lib/load-profile";
-import { HoursEditor } from "./hours-editor";
 import { PharmacistsEditor } from "./pharmacists-editor";
 import { ServicesEditor } from "./services-editor";
-import { TagInput } from "./tag-input";
 import { IssuePricingEditor } from "./issue-pricing-editor";
-import { ThemeColorPicker } from "./theme-color-picker";
-import { UploadField } from "./upload-field";
 
-const STEPS = ["Business", "Licensing", "Pharmacists", "Services", "Hours & delivery", "Branding", "Review"];
-const INSURERS = ["OHIP / ODB", "Sun Life", "Manulife", "Canada Life", "Green Shield", "Blue Cross", "Desjardins", "Express Scripts", "NIHB", "Trillium"];
+const STEPS = ["Business", "Pharmacists", "Services", "Review"];
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
 export function SignupWizard({ data }: { data: ProfileData }) {
   const router = useRouter();
   const p = data.pharmacy;
-  const [step, setStep] = useState(Math.min(Math.max(p.signup_step, 1), 7));
+  // Clamped: a pharmacy part-way through the old seven-step flow has a stored
+  // step that no longer exists.
+  const [step, setStep] = useState(Math.min(Math.max(p.signup_step, 1), STEPS.length));
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -33,48 +28,37 @@ export function SignupWizard({ data }: { data: ProfileData }) {
   // ---- draft state (mirrors DB row; autosaved per step) ----
   const [s1, setS1] = useState({ name: p.name ?? "", addressLine: p.address_line ?? "", city: p.city ?? "", postalCode: p.postal_code ?? "", lat: null as number | null, lng: null as number | null, phone: p.phone ?? "", email: p.email ?? "" });
   const [addressText, setAddressText] = useState([p.address_line, p.city, p.postal_code].filter(Boolean).join(", "));
-  const [s2, setS2] = useState({ licenseNumber: p.license_number ?? "", licenseCollege: p.license_college ?? "Ontario College of Pharmacists", picName: p.pic_name ?? "", picLicenseNumber: p.pic_license_number ?? "" });
-  const [license, setLicense] = useState({ path: p.license_doc_path, url: p.licenseUrl });
-  const [s5, setS5] = useState({ hours: p.hours as WeeklyHours, deliveryRadiusKm: p.delivery_radius_km?.toString() ?? "", estimatedDeliveryTime: p.estimated_delivery_time ?? "", offersDelivery: p.offers_delivery, offersTransfer: p.offers_transfer, offersConsultation: p.offers_consultation, acceptedInsurance: p.accepted_insurance, accessibilityNotes: p.accessibility_notes ?? "", issueIds: data.selectedIssueIds, issuePrices: data.issuePrices });
-  const [s6, setS6] = useState({ tagline: p.tagline ?? "", bio: p.bio ?? "", themeColor: p.theme_color ?? DEFAULT_THEME_COLOR });
-  const [logo, setLogo] = useState({ path: p.logo_path, url: p.logoUrl });
-  const [cover, setCover] = useState({ path: p.cover_path, url: p.coverUrl });
+  const [issues, setIssues] = useState({ issueIds: data.selectedIssueIds, issuePrices: data.issuePrices });
 
-  // ---- autosave (debounced 1.2s after any change on the current step) ----
+  /**
+   * Saves the current step. Called from Continue and nowhere else.
+   *
+   * This used to run on a 1.2s debounce after every keystroke, which meant the
+   * server validated a half-typed pharmacy name and the page showed "Too small:
+   * expected string to have >=2 characters" at someone still filling the field
+   * in. Nothing is sent until the step is finished.
+   */
   const persist = useCallback(async (): Promise<boolean> => {
     setSaveState("saving");
     let r: { ok: boolean; error?: string } = { ok: true };
     if (step === 1) r = await saveStep1(s1);
-    else if (step === 2) r = await saveStep2(s2, license.path);
-    else if (step === 5) r = await saveStep5({ ...s5, deliveryRadiusKm: s5.deliveryRadiusKm === "" ? null : Number(s5.deliveryRadiusKm) });
-    else if (step === 6) r = await saveStep6({ ...s6, logoPath: logo.path, coverPath: cover.path });
+    else if (step === 2) r = await saveSignupIssues(issues);
+    else r = await advanceStep(step + 1);
     setSaveState(r.ok ? "saved" : "error");
-    if (!r.ok) setError(r.error ?? "Could not save");
-    else setError(null);
+    setError(r.ok ? null : r.error ?? "Could not save");
     return r.ok;
-  }, [step, s1, s2, license.path, s5, s6, logo.path, cover.path]);
-
-  const first = useRef(true);
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    if (![1, 2, 5, 6].includes(step)) return;
-    const t = setTimeout(() => void persist(), 1200);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [s1, s2, license.path, s5, s6, logo.path, cover.path]);
+  }, [step, s1, issues]);
 
   const next = () =>
     start(async () => {
-      const ok = [1, 2, 5, 6].includes(step) ? await persist() : (await advanceStep(step + 1)).ok;
-      if (!ok) return;
-      if (step === 2 && !license.path) {
-        setError("Please upload your pharmacy licence document.");
+      // Topics are a promise to patients that someone will call them back, so
+      // they need a pharmacist attached before the step can be left.
+      if (step === 2 && issues.issueIds.length > 0 && data.pharmacists.length === 0) {
+        setError("Add at least one pharmacist, or remove your consultation topics.");
         return;
       }
-      setStep((s) => Math.min(7, s + 1));
+      if (!(await persist())) return;
+      setStep((s) => Math.min(STEPS.length, s + 1));
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
 
@@ -133,90 +117,64 @@ export function SignupWizard({ data }: { data: ProfileData }) {
             ) : null}
 
             {step === 2 ? (
-              <StepCard title="Licensing" desc="Verified by GetMed before you go live. Never shown to patients.">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Pharmacy licence / accreditation number" htmlFor="lic" required><Input id="lic" value={s2.licenseNumber} onChange={(e) => setS2({ ...s2, licenseNumber: e.target.value })} /></Field>
-                  <Field label="Issuing college" htmlFor="college" required><Input id="college" value={s2.licenseCollege} onChange={(e) => setS2({ ...s2, licenseCollege: e.target.value })} /></Field>
-                  <Field label="Pharmacist-in-charge" htmlFor="pic" required><Input id="pic" value={s2.picName} onChange={(e) => setS2({ ...s2, picName: e.target.value })} /></Field>
-                  <Field label="Their licence number" htmlFor="piclic" required><Input id="piclic" value={s2.picLicenseNumber} onChange={(e) => setS2({ ...s2, picLicenseNumber: e.target.value })} /></Field>
-                  <div className="sm:col-span-2"><UploadField kind="license" label="Licence document (PDF or image)" value={license} onChange={setLicense} accept="image/*,.pdf" aspect="doc" hint="Certificate of accreditation from the Ontario College of Pharmacists." /></div>
+              <StepCard title="Pharmacists & consultations" desc="Topics patients can book you for, and the pharmacists who answer them.">
+                <p className="text-sm font-medium">Consultation topics you offer</p>
+                <p className="text-xs text-ink-500">
+                  Choose from GetMed&apos;s list — patients browse these to find you. Leave a price blank to charge no
+                  fee. Select none and consultations stay switched off for your pharmacy.
+                </p>
+                <div className="mt-2">
+                  <IssuePricingEditor
+                    issues={data.issues}
+                    selected={issues.issueIds}
+                    prices={issues.issuePrices}
+                    onSelectedChange={(issueIds) => setIssues({ ...issues, issueIds })}
+                    onPricesChange={(issuePrices) => setIssues({ ...issues, issuePrices })}
+                  />
+                </div>
+
+                <hr className="my-6 border-ink-200" />
+
+                <p className="text-sm font-medium">Your pharmacists</p>
+                <p className="text-xs text-ink-500">
+                  {issues.issueIds.length > 0
+                    ? "A topic is a promise that someone will call the patient back, so add at least one pharmacist."
+                    : "Patients see the main pharmacist first. You can add them later from your account."}
+                </p>
+                <div className="mt-2">
+                  <PharmacistsEditor pharmacists={data.pharmacists} embedded onChanged={() => router.refresh()} />
                 </div>
               </StepCard>
             ) : null}
 
             {step === 3 ? (
-              <StepCard title="Pharmacists" desc="Add your team. Patients see the main pharmacist first.">
-                <PharmacistsEditor pharmacists={data.pharmacists} embedded onChanged={() => router.refresh()} />
-              </StepCard>
-            ) : null}
-
-            {step === 4 ? (
               <StepCard title="Paid services" desc="Optional. Listed on your page for information; patients request a call and settle with you.">
                 <ServicesEditor services={data.services} embedded onChanged={() => router.refresh()} />
               </StepCard>
             ) : null}
 
-            {step === 5 ? (
-              <StepCard title="Hours & delivery" desc="Your open/closed indicator updates live on your page.">
-                <HoursEditor value={s5.hours} onChange={(hours) => setS5({ ...s5, hours })} />
-                <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                  {([["offersDelivery", "Delivery"], ["offersTransfer", "Transfers"], ["offersConsultation", "Consultations"]] as const).map(([k, l]) => (
-                    <label key={k} className="flex items-center justify-between rounded-lg border border-ink-200 px-3 py-2 text-sm"><span>{l}</span><Switch checked={s5[k]} onCheckedChange={(v) => setS5({ ...s5, [k]: v })} /></label>
-                  ))}
-                </div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <Field label="Delivery radius (km)" htmlFor="radius" hint="Shown to patients as context. The platform search radius is set by GetMed."><Input id="radius" type="number" min={0} step="0.5" value={s5.deliveryRadiusKm} onChange={(e) => setS5({ ...s5, deliveryRadiusKm: e.target.value })} /></Field>
-                  <Field label="Typical delivery time" htmlFor="eta"><Input id="eta" placeholder="e.g. same day" value={s5.estimatedDeliveryTime} onChange={(e) => setS5({ ...s5, estimatedDeliveryTime: e.target.value })} /></Field>
-                </div>
-                <Field label="Accepted insurance" htmlFor="ins" className="mt-4"><TagInput value={s5.acceptedInsurance} onChange={(v) => setS5({ ...s5, acceptedInsurance: v })} placeholder="Type and press Enter" suggestions={INSURERS} /></Field>
-                <Field label="Accessibility notes" htmlFor="acc" optional className="mt-4"><Input id="acc" value={s5.accessibilityNotes} onChange={(e) => setS5({ ...s5, accessibilityNotes: e.target.value })} /></Field>
-                <div className="mt-6">
-                  <p className="text-sm font-medium">Consultation topics you offer</p>
-                  <p className="text-xs text-ink-500">Choose from GetMed's list — patients browse these to find you. Leave a price blank to charge no fee.</p>
-                  <div className="mt-2">
-                    <IssuePricingEditor
-                      issues={data.issues}
-                      selected={s5.issueIds}
-                      prices={s5.issuePrices}
-                      onSelectedChange={(issueIds) => setS5({ ...s5, issueIds })}
-                      onPricesChange={(issuePrices) => setS5({ ...s5, issuePrices })}
-                    />
-                  </div>
-                </div>
-              </StepCard>
-            ) : null}
-
-            {step === 6 ? (
-              <StepCard title="Branding" desc="Make your page yours.">
-                <div className="flex flex-wrap gap-6">
-                  <UploadField kind="logo" label="Logo" value={logo} onChange={setLogo} />
-                  <div className="min-w-64 flex-1"><UploadField kind="cover" label="Cover photo" value={cover} onChange={setCover} aspect="wide" /></div>
-                </div>
-                <Field label="Tagline" htmlFor="tagline" className="mt-4"><Input id="tagline" maxLength={120} value={s6.tagline} onChange={(e) => setS6({ ...s6, tagline: e.target.value })} placeholder="Family-owned since 1998. Free delivery on every prescription." /></Field>
-                <Field label="About your pharmacy" htmlFor="bio" className="mt-4"><Textarea id="bio" rows={5} maxLength={2000} value={s6.bio} onChange={(e) => setS6({ ...s6, bio: e.target.value })} /></Field>
-                <ThemeColorPicker value={s6.themeColor} onChange={(themeColor) => setS6({ ...s6, themeColor })} />
-              </StepCard>
-            ) : null}
-
-            {step === 7 ? (
-              <StepCard title="Review & submit" desc="Once submitted, our team verifies your licence. You'll get an email when you're approved.">
+            {step === 4 ? (
+              <StepCard title="Review & submit" desc="Our team checks your details before you go live. You'll get an email when you're approved.">
                 <dl className="grid gap-3 text-sm sm:grid-cols-2">
                   <Item k="Pharmacy" v={s1.name} /><Item k="Address" v={[s1.addressLine, s1.city, s1.postalCode].filter(Boolean).join(", ")} />
                   <Item k="Phone" v={s1.phone} /><Item k="Email" v={s1.email} />
-                  <Item k="Licence #" v={s2.licenseNumber} /><Item k="Pharmacist-in-charge" v={s2.picName} />
-                  <Item k="Licence document" v={license.path ? "Uploaded" : "Missing"} warn={!license.path} />
-                  <Item k="Pharmacists" v={`${data.pharmacists.length} added`} warn={data.pharmacists.length === 0} />
-                  <Item k="Services" v={`${data.services.length} listed`} /><Item k="Consultation topics" v={`${s5.issueIds.length} selected`} />
+                  <Item k="Pharmacists" v={`${data.pharmacists.length} added`} warn={issues.issueIds.length > 0 && data.pharmacists.length === 0} />
+                  <Item k="Services" v={`${data.services.length} listed`} />
+                  <Item k="Consultations" v={issues.issueIds.length > 0 ? `${issues.issueIds.length} topics` : "Not offered"} />
                 </dl>
+                <p className="mt-4 rounded-xl bg-ink-50 px-4 py-3 text-xs text-ink-500">
+                  Opening hours default to 9am–6pm, closed Sunday, and delivery and transfers are switched on. Change
+                  any of it, and add your logo and photos, from your account once you are approved.
+                </p>
                 <Button size="lg" className="mt-6" loading={pending} loadingText="Submitting your profile…" onClick={submit}>Submit for review <Check /></Button>
               </StepCard>
             ) : null}
 
             <div className="flex items-center justify-between">
               <Button variant="ghost" disabled={step === 1 || pending} onClick={() => setStep((s) => s - 1)}><ArrowLeft /> Back</Button>
-              {step < 7 ? <Button loading={pending} loadingText="Saving…" onClick={next}>Continue <ArrowRight /></Button> : null}
+              {step < STEPS.length ? <Button loading={pending} loadingText="Saving…" onClick={next}>Continue <ArrowRight /></Button> : null}
             </div>
-            <p className="text-center text-xs text-ink-400">Your progress is saved automatically as you type.</p>
+            <p className="text-center text-xs text-ink-400">Each step is saved when you continue.</p>
           </div>
         </div>
       </div>

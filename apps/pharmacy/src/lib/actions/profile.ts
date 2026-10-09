@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requirePharmacy } from "@getmed/core/auth";
 import { pharmacySlug } from "@getmed/core/format";
-import type { TablesUpdate } from "@getmed/db/types";
-import { issuePricesSchema, optionalNumberField, pharmacistSchema, phoneSchema, serviceSchema, signupStep1Schema, signupStep2Schema, signupStep5Schema, signupStep6Schema, themeColorSchema } from "@getmed/core/validation";
+import { SIGNUP_DEFAULT_HOURS } from "@getmed/core/hours";
+import { SIGNUP_STEPS } from "@getmed/core/validation";
+import type { Json, TablesUpdate } from "@getmed/db/types";
+import { issuePricesSchema, optionalNumberField, pharmacistSchema, phoneSchema, serviceSchema, signupIssuesSchema, signupStep1Schema, signupStep2Schema, signupStep5Schema, signupStep6Schema, themeColorSchema } from "@getmed/core/validation";
 
 type R = { ok: true } | { ok: false; error: string };
 const fail = (e: unknown): R => ({ ok: false, error: e instanceof z.ZodError ? (e.issues[0]?.message ?? "Invalid input") : e instanceof Error ? e.message : "Failed" });
@@ -86,6 +88,27 @@ export async function saveStep6(input: unknown): Promise<R> {
   } catch (e) { return fail(e); }
 }
 
+/**
+ * Consultation topics, now asked on the pharmacists step.
+ *
+ * Offering consultations is no longer a switch a pharmacy sets: picking topics
+ * is the decision, and picking none is how a pharmacy says it does not do them.
+ * One fact in the UI instead of two that could disagree.
+ */
+export async function saveSignupIssues(input: unknown): Promise<R> {
+  try {
+    const d = signupIssuesSchema.parse(input);
+    const { pharmacy, db } = await requirePharmacy();
+    await saveIssues(db, pharmacy.id, d.issueIds, d.issuePrices);
+    const { error } = await db
+      .from("pharmacies")
+      .update({ offers_consultation: d.issueIds.length > 0, signup_step: Math.max(3, pharmacy.signup_step) })
+      .eq("id", pharmacy.id);
+    if (error) throw error;
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
 export async function advanceStep(step: number): Promise<R> {
   const { pharmacy, db } = await requirePharmacy();
   await db.from("pharmacies").update({ signup_step: Math.max(step, pharmacy.signup_step) }).eq("id", pharmacy.id);
@@ -95,10 +118,20 @@ export async function advanceStep(step: number): Promise<R> {
 export async function submitSignup(): Promise<R> {
   try {
     const { pharmacy, db } = await requirePharmacy();
-    const { data: p } = await db.from("pharmacies").select("name, address_line, postal_code, phone, license_number, license_doc_path, pic_name, slug").eq("id", pharmacy.id).single();
+    const { data: p } = await db.from("pharmacies").select("name, address_line, postal_code, phone, hours, slug").eq("id", pharmacy.id).single();
     if (!p?.name || !p.address_line || !p.phone) return { ok: false, error: "Complete your business basics first" };
-    if (!p.license_number || !p.pic_name) return { ok: false, error: "Complete your licensing details first" };
-    if (!p.license_doc_path) return { ok: false, error: "Upload your licence document" };
+
+    // Licensing is verified by GetMed out of band rather than collected here —
+    // asking a pharmacy to find its accreditation certificate was the step
+    // registrations died on.
+    const [{ count: issueCount }, { count: pharmacistCount }] = await Promise.all([
+      db.from("pharmacy_issues").select("issue_id", { count: "exact", head: true }).eq("pharmacy_id", pharmacy.id),
+      db.from("pharmacists").select("id", { count: "exact", head: true }).eq("pharmacy_id", pharmacy.id),
+    ]);
+    const offersConsultation = (issueCount ?? 0) > 0;
+    if (offersConsultation && (pharmacistCount ?? 0) === 0) {
+      return { ok: false, error: "Add at least one pharmacist, or remove your consultation topics" };
+    }
     // Set once, at submission, and never regenerated: a public URL that moves
     // when someone edits an address is a dead link everywhere it was shared.
     let slug = p.slug ?? pharmacySlug(p.name, p.postal_code);
@@ -108,7 +141,19 @@ export async function submitSignup(): Promise<R> {
       const { data: clash } = await db.from("pharmacies").select("id").eq("slug", slug).neq("id", pharmacy.id).maybeSingle();
       if (clash) slug = `${slug}-${pharmacy.id.slice(0, 4)}`;
     }
-    const { error } = await db.from("pharmacies").update({ slug, submitted_at: new Date().toISOString(), status: "pending", signup_step: 7 }).eq("id", pharmacy.id);
+    // Everything signup no longer asks for gets a sensible default here, so the
+    // row is complete whether or not the pharmacy ever opens its profile page.
+    const hasHours = p.hours && Object.keys(p.hours as object).length > 0;
+    const { error } = await db.from("pharmacies").update({
+      slug,
+      submitted_at: new Date().toISOString(),
+      status: "pending",
+      signup_step: SIGNUP_STEPS,
+      hours: hasHours ? p.hours : (SIGNUP_DEFAULT_HOURS as unknown as Json),
+      offers_delivery: true,
+      offers_transfer: true,
+      offers_consultation: offersConsultation,
+    }).eq("id", pharmacy.id);
     if (error) throw error;
     return { ok: true };
   } catch (e) { return fail(e); }
