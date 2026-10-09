@@ -7,7 +7,7 @@ import { pharmacySlug } from "@getmed/core/format";
 import { SIGNUP_DEFAULT_HOURS } from "@getmed/core/hours";
 import { SIGNUP_STEPS } from "@getmed/core/validation";
 import type { Json, TablesUpdate } from "@getmed/db/types";
-import { issuePricesSchema, optionalNumberField, pharmacistSchema, phoneSchema, serviceSchema, signupIssuesSchema, signupStep1Schema, signupStep2Schema, signupStep5Schema, signupStep6Schema, themeColorSchema } from "@getmed/core/validation";
+import { pharmacistSchema, phoneSchema, serviceSchema, signupIssuesSchema, signupStep1Schema, signupStep2Schema, signupStep5Schema, signupStep6Schema, themeColorSchema } from "@getmed/core/validation";
 
 type R = { ok: true } | { ok: false; error: string };
 const fail = (e: unknown): R => ({ ok: false, error: e instanceof z.ZodError ? (e.issues[0]?.message ?? "Invalid input") : e instanceof Error ? e.message : "Failed" });
@@ -89,22 +89,46 @@ export async function saveStep6(input: unknown): Promise<R> {
 }
 
 /**
- * Consultation topics, now asked on the pharmacists step.
+ * Replaces the pharmacy's consultation topics and settles whether it offers
+ * consultations at all. Shared by the signup step and the Pharmacists tab.
  *
  * Offering consultations is no longer a switch a pharmacy sets: picking topics
  * is the decision, and picking none is how a pharmacy says it does not do them.
  * One fact in the UI instead of two that could disagree.
+ *
+ * A topic is also a promise that a pharmacist will call the patient back, so
+ * one has to be on file. Both screens check before letting you save; this is
+ * the check that actually holds.
  */
+async function putIssues(input: unknown) {
+  const d = signupIssuesSchema.parse(input);
+  const { pharmacy, db } = await requirePharmacy();
+  if (d.issueIds.length > 0) {
+    const { count } = await db.from("pharmacists").select("id", { count: "exact", head: true }).eq("pharmacy_id", pharmacy.id);
+    if ((count ?? 0) === 0) throw new Error("Add at least one pharmacist, or remove your consultation topics");
+  }
+  await saveIssues(db, pharmacy.id, d.issueIds, d.issuePrices);
+  return { pharmacy, db, offersConsultation: d.issueIds.length > 0 };
+}
+
 export async function saveSignupIssues(input: unknown): Promise<R> {
   try {
-    const d = signupIssuesSchema.parse(input);
-    const { pharmacy, db } = await requirePharmacy();
-    await saveIssues(db, pharmacy.id, d.issueIds, d.issuePrices);
+    const { pharmacy, db, offersConsultation } = await putIssues(input);
     const { error } = await db
       .from("pharmacies")
-      .update({ offers_consultation: d.issueIds.length > 0, signup_step: Math.max(3, pharmacy.signup_step) })
+      .update({ offers_consultation: offersConsultation, signup_step: Math.max(3, pharmacy.signup_step) })
       .eq("id", pharmacy.id);
     if (error) throw error;
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+export async function saveConsultationTopics(input: unknown): Promise<R> {
+  try {
+    const { pharmacy, db, offersConsultation } = await putIssues(input);
+    const { error } = await db.from("pharmacies").update({ offers_consultation: offersConsultation }).eq("id", pharmacy.id);
+    if (error) throw error;
+    revalidatePath("/profile/pharmacists");
     return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -160,6 +184,14 @@ export async function submitSignup(): Promise<R> {
 }
 
 // ---------------- Profile editing (post-signup) ----------------
+/**
+ * Only what the profile form still edits.
+ *
+ * The service switches, delivery radius, delivery time, accepted insurance and
+ * accessibility notes came off that form, and they came out of here with it:
+ * a column no screen edits should not be writable by a request that claims to
+ * be a profile save. The columns stay, and the public page still reads them.
+ */
 const profileSchema = z.object({
   name: z.string().trim().min(2).max(120),
   phone: phoneSchema,
@@ -174,15 +206,6 @@ const profileSchema = z.object({
   logoPath: z.string().max(300).nullable().optional(),
   coverPath: z.string().max(300).nullable().optional(),
   themeColor: themeColorSchema,
-  deliveryRadiusKm: optionalNumberField(z.number().min(0).max(200), "Enter a delivery radius in km").optional(),
-  estimatedDeliveryTime: z.string().trim().max(60).optional().or(z.literal("")),
-  offersDelivery: z.boolean(),
-  offersTransfer: z.boolean(),
-  offersConsultation: z.boolean(),
-  acceptedInsurance: z.array(z.string().trim().max(60)).max(30),
-  accessibilityNotes: z.string().trim().max(500).optional().or(z.literal("")),
-  issueIds: z.array(z.string().uuid()).max(100),
-  issuePrices: issuePricesSchema,
 });
 
 export async function saveProfile(input: unknown): Promise<R> {
@@ -191,9 +214,14 @@ export async function saveProfile(input: unknown): Promise<R> {
     const { pharmacy, db } = await requirePharmacy();
     const patch: TablesUpdate<"pharmacies"> = {
       name: d.name, phone: d.phone, email: d.email, address_line: d.addressLine, city: d.city || null, postal_code: d.postalCode || null,
-      tagline: d.tagline || null, bio: d.bio || null, theme_color: d.themeColor ?? null, delivery_radius_km: d.deliveryRadiusKm ?? null, estimated_delivery_time: d.estimatedDeliveryTime || null,
-      offers_delivery: d.offersDelivery, offers_transfer: d.offersTransfer, offers_consultation: d.offersConsultation,
-      accepted_insurance: d.acceptedInsurance, accessibility_notes: d.accessibilityNotes || null,
+      tagline: d.tagline || null, bio: d.bio || null, theme_color: d.themeColor ?? null,
+      // Delivery and transfers are what being on GetMed means, which is why
+      // signup no longer asks and the profile form no longer offers a switch.
+      // Asserted rather than left alone so a pharmacy that switched one off
+      // back when the form had the toggles is not stuck off with nothing in
+      // the UI able to turn it back on.
+      offers_delivery: true,
+      offers_transfer: true,
     };
     const loc = point(d.lat, d.lng);
     if (loc) patch.location = loc;
@@ -201,7 +229,6 @@ export async function saveProfile(input: unknown): Promise<R> {
     if (d.coverPath !== undefined) patch.cover_path = d.coverPath;
     const { error } = await db.from("pharmacies").update(patch).eq("id", pharmacy.id);
     if (error) throw error;
-    await saveIssues(db, pharmacy.id, d.issueIds, d.issuePrices);
     revalidatePath("/profile");
     return { ok: true };
   } catch (e) { return fail(e); }
