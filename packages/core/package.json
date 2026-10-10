@@ -17,6 +17,7 @@
     "./pricing": "./src/pricing/index.ts",
     "./theme": "./src/theme/index.ts",
     "./auth": "./src/auth/index.ts",
+    "./auth/signup-result": "./src/auth/signup-result.ts",
     "./settings": "./src/settings.ts",
     "./storage": "./src/storage.ts",
     "./hours": "./src/hours.ts",

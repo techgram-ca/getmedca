@@ -311,6 +311,25 @@ export type NotificationTemplateRow = {
   updated_at: string;
 };
 
+export type DeliveryRateCardRow = {
+  id: string;
+  city: string;
+  slug: string;
+  published: boolean;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DeliveryRateRowRow = {
+  id: string;
+  card_id: string;
+  destination: string;
+  price: number;
+  sort_order: number;
+  created_at: string;
+};
+
 export type PlatformSettingsRow = {
   id: number;
   search_radius_km: number;
@@ -521,6 +540,8 @@ export type Database = {
       pharmacy_zone_areas: Tbl<PharmacyZoneAreaRow, Pick<PharmacyZoneAreaRow, "pharmacy_id" | "fsa" | "zone"> & Partial<PharmacyZoneAreaRow>>;
       pharmacy_delivery_config: Tbl<PharmacyDeliveryConfigRow, Pick<PharmacyDeliveryConfigRow, "pharmacy_id"> & Partial<PharmacyDeliveryConfigRow>>;
       support_messages: Tbl<SupportMessageRow, Pick<SupportMessageRow, "name" | "message"> & Partial<SupportMessageRow>>;
+      delivery_rate_cards: Tbl<DeliveryRateCardRow, Pick<DeliveryRateCardRow, "city" | "slug"> & Partial<DeliveryRateCardRow>>;
+      delivery_rate_rows: Tbl<DeliveryRateRowRow, Pick<DeliveryRateRowRow, "card_id" | "destination" | "price"> & Partial<DeliveryRateRowRow>>;
     };
     Views: {
       pharmacies_public: { Row: PharmacyPublicRow; Relationships: [] };
@@ -538,6 +559,10 @@ export type Database = {
         Returns: { from_lat: number; from_lng: number; to_lat: number; to_lng: number }[];
       };
       pharmacy_point: { Args: { p_pharmacy_id: string }; Returns: { lat: number; lng: number }[] };
+      email_signup_state: {
+        Args: { p_email: string };
+        Returns: { confirmed_at: string | null; confirmation_sent_at: string | null }[];
+      };
       is_admin: { Args: Record<string, never>; Returns: boolean };
       current_role_name: { Args: Record<string, never>; Returns: UserRole };
       owns_pharmacy: { Args: { p_pharmacy_id: string }; Returns: boolean };

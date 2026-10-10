@@ -48,11 +48,26 @@ export default async function PharmacyDetail({ params }: { params: Promise<{ pha
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle>Licensing (verify before approving)</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Licensing</CardTitle></CardHeader>
           <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
-            <Row k="Licence number" v={p.license_number ?? "—"} /><Row k="Issuing college" v={p.license_college ?? "—"} />
-            <Row k="Pharmacist-in-charge" v={p.pic_name ?? "—"} /><Row k="PIC licence #" v={p.pic_license_number ?? "—"} />
-            <div className="sm:col-span-2">{p.license_doc_path ? <Button asChild variant="outline" size="sm"><a href={`/api/pharmacies/${p.id}/file`} target="_blank" rel="noreferrer"><FileText /> Open licence document</a></Button> : <span className="text-danger-500">No licence document uploaded</span>}</div>
+            {p.license_number || p.pic_name || p.license_doc_path ? (
+              <>
+                <Row k="Licence number" v={p.license_number ?? "—"} /><Row k="Issuing college" v={p.license_college ?? "—"} />
+                <Row k="Pharmacist-in-charge" v={p.pic_name ?? "—"} /><Row k="PIC licence #" v={p.pic_license_number ?? "—"} />
+                {p.license_doc_path ? (
+                  <div className="sm:col-span-2"><Button asChild variant="outline" size="sm"><a href={`/api/pharmacies/${p.id}/file`} target="_blank" rel="noreferrer"><FileText /> Open licence document</a></Button></div>
+                ) : null}
+              </>
+            ) : (
+              // Signup stopped asking for this: finding an accreditation
+              // certificate mid-registration was where applications died.
+              // Flagging its absence on every single one would train whoever
+              // reviews them to ignore a red warning, so it says what is true.
+              <p className="text-ink-500 sm:col-span-2">
+                Not collected at signup. Verify this pharmacy&apos;s accreditation with the Ontario College of
+                Pharmacists before approving.
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>

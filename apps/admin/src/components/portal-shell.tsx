@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { AlertTriangle, BarChart3, Bell, Building2, Car, ClipboardList, DollarSign, FormInput, LayoutDashboard, LifeBuoy, ListChecks, LogOut, MapPin, Menu, MessageSquare, Settings, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Bell, Building2, Car, ClipboardList, DollarSign, FormInput, LayoutDashboard, LifeBuoy, ListChecks, LogOut, MapPin, Menu, MessageSquare, Receipt, Settings, X } from "lucide-react";
 import { Logo, cn } from "@getmed/ui";
 import { logout } from "@/lib/actions/auth";
 
@@ -20,6 +20,7 @@ export function PortalShell({ counts, children }: { counts: Counts; children: Re
     { href: "/drivers", label: "Drivers", icon: Car },
     { href: "/pricing", label: "Pricing", icon: DollarSign },
     { href: "/postal-areas", label: "Postal areas", icon: MapPin },
+    { href: "/delivery-rates", label: "Delivery rates", icon: Receipt },
     { href: "/consultations", label: "Consultations", icon: MessageSquare },
     { href: "/issues", label: "Issue categories", icon: ListChecks },
     { href: "/forms", label: "Form fields", icon: FormInput },
