@@ -6,6 +6,7 @@ const LINKS = [
   { label: "Consultations", href: "/consultation" },
   { label: "FAQs", href: "/faq" },
   { label: "Contact", href: "/contact" },
+  { label: "Privacy", href: "/privacy" },
 ];
 
 export function SiteFooter() {
@@ -32,7 +33,8 @@ export function SiteFooter() {
         </p>
       </div>
       <p className="mx-auto mt-6 max-w-[1200px] text-xs text-ink-400">
-        Your information is handled in accordance with PIPEDA and PHIPA. Data is stored in Canada.
+        Your information is handled in accordance with PIPEDA and PHIPA. Orders and documents are stored in Canada.{" "}
+        <Link href="/privacy" className="underline transition-colors hover:text-ink-600">Read our privacy policy</Link>.
       </p>
     </footer>
   );
