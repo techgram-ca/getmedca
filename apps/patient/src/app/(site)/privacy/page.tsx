@@ -18,7 +18,8 @@ export const metadata: Metadata = {
  */
 const LAST_UPDATED = "10 October 2026";
 
-const PRIVACY_EMAIL = "privacy@getmed.ca";
+// One inbox. A policy that points at an address nobody reads is worse
+// than one pointing at the address people already answer.
 const SUPPORT_EMAIL = "support@getmed.ca";
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
@@ -175,7 +176,7 @@ export default async function PrivacyPage() {
           </p>
           <p>
             You can withdraw consent at any time by contacting us at{" "}
-            <a href={`mailto:${PRIVACY_EMAIL}`} className="font-medium text-brand-700 hover:underline">{PRIVACY_EMAIL}</a>.
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium text-brand-700 hover:underline">{SUPPORT_EMAIL}</a>.
             Withdrawing it stops any further use of your information by GetMed, but it cannot undo a delivery already
             made, and it does not reach back into the pharmacy&rsquo;s own clinical record, which that pharmacy is
             required by law to keep. We will tell you plainly which parts we can act on and which you need to raise with
@@ -269,7 +270,7 @@ export default async function PrivacyPage() {
           </ul>
           <p>
             Write to{" "}
-            <a href={`mailto:${PRIVACY_EMAIL}`} className="font-medium text-brand-700 hover:underline">{PRIVACY_EMAIL}</a>{" "}
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium text-brand-700 hover:underline">{SUPPORT_EMAIL}</a>{" "}
             and we will respond within 30 days. If we need longer, or we have to refuse part of a request, we will tell
             you why. There is no charge for a reasonable request.
           </p>
@@ -302,11 +303,10 @@ export default async function PrivacyPage() {
 
         <Section id="contact" title="Contact and complaints">
           <p>
-            Privacy questions and requests:{" "}
-            <a href={`mailto:${PRIVACY_EMAIL}`} className="font-medium text-brand-700 hover:underline">{PRIVACY_EMAIL}</a>.
-            Anything else:{" "}
+            Privacy questions and requests, and anything else:{" "}
             <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium text-brand-700 hover:underline">{SUPPORT_EMAIL}</a>,
             or through our <Link href="/contact" className="font-medium text-brand-700 hover:underline">contact page</Link>.
+            Mark a privacy request as such in the subject line and it will be routed to the right person.
           </p>
           <p>
             If you are not satisfied with how we have handled a privacy matter, you can complain to the Information and

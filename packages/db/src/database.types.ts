@@ -311,6 +311,25 @@ export type NotificationTemplateRow = {
   updated_at: string;
 };
 
+export type DeliveryRateCardRow = {
+  id: string;
+  city: string;
+  slug: string;
+  published: boolean;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DeliveryRateRowRow = {
+  id: string;
+  card_id: string;
+  destination: string;
+  price: number;
+  sort_order: number;
+  created_at: string;
+};
+
 export type PlatformSettingsRow = {
   id: number;
   search_radius_km: number;
@@ -521,6 +540,8 @@ export type Database = {
       pharmacy_zone_areas: Tbl<PharmacyZoneAreaRow, Pick<PharmacyZoneAreaRow, "pharmacy_id" | "fsa" | "zone"> & Partial<PharmacyZoneAreaRow>>;
       pharmacy_delivery_config: Tbl<PharmacyDeliveryConfigRow, Pick<PharmacyDeliveryConfigRow, "pharmacy_id"> & Partial<PharmacyDeliveryConfigRow>>;
       support_messages: Tbl<SupportMessageRow, Pick<SupportMessageRow, "name" | "message"> & Partial<SupportMessageRow>>;
+      delivery_rate_cards: Tbl<DeliveryRateCardRow, Pick<DeliveryRateCardRow, "city" | "slug"> & Partial<DeliveryRateCardRow>>;
+      delivery_rate_rows: Tbl<DeliveryRateRowRow, Pick<DeliveryRateRowRow, "card_id" | "destination" | "price"> & Partial<DeliveryRateRowRow>>;
     };
     Views: {
       pharmacies_public: { Row: PharmacyPublicRow; Relationships: [] };
