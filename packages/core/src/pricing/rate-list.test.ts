@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { formatRate, formatRateList, parseRateList } from "./rate-list.ts";
+import { formatRate, formatRateList, groupRatesByPrice, parseRateList } from "./rate-list.ts";
 
 test("the shape an admin actually types", () => {
   // "Vaughan at five; Mississauga and Brampton at seven."
@@ -118,4 +118,38 @@ test("a whole number loses its decimals, a price with cents keeps them", () => {
   assert.equal(formatRate(5), "5");
   assert.equal(formatRate(7.5), "7.50");
   assert.equal(formatRateList([{ destination: "Vaughan", price: 5 }]), "Vaughan 5");
+});
+
+// ---------------- groupRatesByPrice ----------------
+
+test("destinations that cost the same become one row", () => {
+  const rows = parseRateList("Vaughan 5, Brampton 7, Mississauga 7, Caledon 7, Barrie 12").rows;
+  assert.deepEqual(groupRatesByPrice(rows), [
+    { destinations: ["Vaughan"], price: 5 },
+    { destinations: ["Brampton", "Mississauga", "Caledon"], price: 7 },
+    { destinations: ["Barrie"], price: 12 },
+  ]);
+});
+
+test("a group is placed where its first member was entered, not sorted", () => {
+  const rows = parseRateList("Barrie 12, Vaughan 5, Oshawa 12").rows;
+  assert.deepEqual(groupRatesByPrice(rows), [
+    { destinations: ["Barrie", "Oshawa"], price: 12 },
+    { destinations: ["Vaughan"], price: 5 },
+  ]);
+});
+
+test("prices that differ only in cents stay apart", () => {
+  const rows = parseRateList("Markham 7.50, Brampton 7").rows;
+  assert.equal(groupRatesByPrice(rows).length, 2);
+});
+
+test("grouping an empty card gives nothing to show", () => {
+  assert.deepEqual(groupRatesByPrice([]), []);
+});
+
+test("every destination survives grouping", () => {
+  const rows = parseRateList("Ajax, Pickering, Whitby 8, Oshawa 9, Bowmanville 8").rows;
+  const groups = groupRatesByPrice(rows);
+  assert.equal(groups.flatMap((g) => g.destinations).length, rows.length);
 });
