@@ -7,6 +7,7 @@ import {
   DEFAULT_CONFIRMATION_TTL_SECONDS,
   isAddressTaken,
   isSendingTooOften,
+  isUnconfirmed,
   readSignupState,
 } from "@getmed/core/auth/signup-result";
 import { createClient } from "@getmed/db/server";
@@ -21,15 +22,41 @@ export type AuthState = {
   confirmationPending?: { expiresAt: string };
   /** A fresh link just went out, because the last one had run out. */
   confirmationResent?: true;
+  /** Unconfirmed with no usable link left. Carries the address so one can be sent. */
+  confirmationExpired?: { email: string };
 } | null;
 
 const loginSchema = z.object({ email: z.string().trim().email(), password: z.string().min(8), next: z.string().optional() });
+
+/**
+ * Looks up where an unconfirmed address stands, for the login form.
+ *
+ * Same rule as signup: while the link already sent still works, say so and
+ * send nothing; once it has run out, offer a new one. The offer is a button
+ * rather than an automatic send, because arriving at a login page is not by
+ * itself a request for mail.
+ */
+async function confirmationState(email: string): Promise<AuthState> {
+  const db = createServiceClient();
+  const { data: rows } = await db.rpc("email_signup_state", { p_email: email });
+  const state = readSignupState(rows?.[0], { ttlSeconds: confirmationTtlSeconds() });
+  return state.kind === "pending"
+    ? { confirmationPending: { expiresAt: state.expiresAt.toISOString() } }
+    : { confirmationExpired: { email } };
+}
 
 export async function login(_prev: AuthState, fd: FormData): Promise<AuthState> {
   const parsed = loginSchema.safeParse(Object.fromEntries(fd.entries()));
   if (!parsed.success) return { error: "Enter a valid email and password" };
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email: parsed.data.email, password: parsed.data.password });
+
+  // An account that exists but was never confirmed cannot sign in, and saying
+  // "incorrect email or password" to someone typing the right password sends
+  // them to reset a password that was never the problem. The confirmation link
+  // is, so say so and offer another.
+  if (isUnconfirmed(error)) return await confirmationState(parsed.data.email);
+
   if (error || !data.user) return { error: "Incorrect email or password" };
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", data.user.id).maybeSingle();
   if (profile?.role !== "pharmacy") {
@@ -131,6 +158,31 @@ export async function signup(_prev: AuthState, fd: FormData): Promise<AuthState>
       : { message: "Almost there — check your email and click the confirmation link to continue setting up your pharmacy." };
   }
   redirect("/signup");
+}
+
+/**
+ * Sends a fresh confirmation link, for an account stuck unconfirmed.
+ *
+ * Deliberately says the same thing whichever way it goes. By the time this is
+ * reachable the login form has already said the address has an unconfirmed
+ * account, so there is nothing left to protect — but there is also nothing
+ * useful to report, since "no account" and "already confirmed" both mean the
+ * same thing to whoever clicked: stop waiting and sign in.
+ */
+export async function resendConfirmation(_prev: AuthState, fd: FormData): Promise<AuthState> {
+  const parsed = emailSchema.safeParse(Object.fromEntries(fd.entries()));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Enter a valid email" };
+  const supabase = await createClient();
+  const origin = await appOrigin();
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email: parsed.data.email,
+    options: { emailRedirectTo: `${origin}/api/auth/callback?next=/signup` },
+  });
+  if (isSendingTooOften(error)) {
+    return { error: "We have just sent a link to this address. Give it a minute, then check your inbox and spam folder." };
+  }
+  return { confirmationResent: true };
 }
 
 export async function logout() {

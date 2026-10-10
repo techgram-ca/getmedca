@@ -89,6 +89,17 @@ export function isAddressTaken(result: {
   return Array.isArray(user?.identities) && user.identities.length === 0;
 }
 
+/**
+ * Whether a sign-in failed because the address was never confirmed.
+ *
+ * This is not a wrong password, and treating it as one sends someone off to
+ * reset a password that was never the problem.
+ */
+export function isUnconfirmed(error: { code?: string | null; message?: string | null } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === "email_not_confirmed" || /email not confirmed/i.test(error.message ?? "");
+}
+
 /** Supabase's own cap on how often it will re-send to the same address. */
 export function isSendingTooOften(error: { code?: string | null; message?: string | null } | null | undefined): boolean {
   if (!error) return false;

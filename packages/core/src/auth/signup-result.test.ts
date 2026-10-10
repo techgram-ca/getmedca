@@ -4,6 +4,7 @@ import {
   DEFAULT_CONFIRMATION_TTL_SECONDS,
   isAddressTaken,
   isSendingTooOften,
+  isUnconfirmed,
   readSignupState,
 } from "./signup-result.ts";
 
@@ -128,4 +129,14 @@ test("Supabase's resend cap is recognised", () => {
   assert.equal(isSendingTooOften({ code: "weak_password", message: "too short" }), false);
   assert.equal(isSendingTooOften(null), false);
   assert.equal(isSendingTooOften(undefined), false);
+});
+
+// ---------------- isUnconfirmed ----------------
+
+test("a sign-in blocked by a missing confirmation is told apart from a bad password", () => {
+  assert.equal(isUnconfirmed({ code: "email_not_confirmed", message: "Email not confirmed" }), true);
+  assert.equal(isUnconfirmed({ code: null, message: "Email not confirmed" }), true);
+  assert.equal(isUnconfirmed({ code: "invalid_credentials", message: "Invalid login credentials" }), false);
+  assert.equal(isUnconfirmed(null), false);
+  assert.equal(isUnconfirmed(undefined), false);
 });

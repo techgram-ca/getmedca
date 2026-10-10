@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Clock, MapPin } from "lucide-react";
 import { Button, Logo, SectionLabel } from "@getmed/ui";
 import { HowItWorksSection } from "@/components/how-it-works-section";
@@ -61,9 +62,12 @@ export function ComingSoon({ message }: { message: string | null }) {
         </div>
       </section>
 
+      {/* The one link that belongs on a page with no navigation: a privacy
+          policy has to be reachable from anywhere the public can reach. */}
       <footer className="border-t border-ink-200 px-6 py-8">
         <p className="mx-auto max-w-[1200px] text-center text-sm text-ink-500">
-          © {new Date().getFullYear()} GetMed Pharmacy Network
+          © {new Date().getFullYear()} GetMed Pharmacy Network ·{" "}
+          <Link href="/privacy" className="no-underline transition-colors hover:text-ink-900">Privacy</Link>
         </p>
       </footer>
     </div>
