@@ -12,7 +12,7 @@ export function LoginForm({ next }: { next?: string }) {
   // Signed up, never confirmed, and the link sent is still good. Nothing to
   // resend — point at the one already sitting in their inbox.
   if (state?.confirmationPending) {
-    return <ConfirmationPending expiresAt={state.confirmationPending.expiresAt} className="mt-5" />;
+    return <ConfirmationPending email={state.confirmationPending.email} expiresAt={state.confirmationPending.expiresAt} className="mt-5" />;
   }
 
   // Signed up, never confirmed, and the link has run out. This is the one case

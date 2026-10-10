@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { Alert, Button, FormError } from "@getmed/ui";
-import { resendConfirmation, type AuthState } from "@/lib/actions/auth";
+import { Alert, Button, Field, FormError, Input } from "@getmed/ui";
+import { resendConfirmation, verifyEmailCode, type AuthState } from "@/lib/actions/auth";
 
 const SUPPORT_EMAIL = "support@getmed.ca";
 
@@ -26,6 +26,47 @@ export function SupportLine() {
 }
 
 /**
+ * The 6-digit code from the confirmation email, as a way in when the link
+ * will not work.
+ *
+ * A confirmation link is single-use, and the mail security products a lot of
+ * pharmacies sit behind follow every link in an inbound message to check it.
+ * That spends the link before anyone reads the email, and what the pharmacy
+ * then sees is a link that is already dead the first time they click it. A
+ * code in the same email survives that, because reading it does not use it.
+ *
+ * Offered beside the link rather than instead of it: clicking is still less
+ * work when clicking works.
+ */
+export function ConfirmCodeForm({ email, className }: { email: string; className?: string }) {
+  const [state, action, pending] = useActionState<AuthState, FormData>(verifyEmailCode, null);
+
+  return (
+    <form action={action} className={className}>
+      <input type="hidden" name="email" value={email} />
+      <FormError message={state?.error} />
+      <Field label="Or enter the 6-digit code from the email" htmlFor="confirm-code" className={state?.error ? "mt-3" : undefined}>
+        <div className="flex flex-wrap items-start gap-2">
+          <Input
+            id="confirm-code"
+            name="code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            // Not maxLength={6}: a code pasted as "123 456" would be cut to
+            // "123 45" before the server ever saw it. The action strips spaces.
+            maxLength={12}
+            placeholder="123456"
+            className="w-36 font-mono tracking-[0.3em]"
+            required
+          />
+          <Button type="submit" loading={pending} loadingText="Checking…">Confirm</Button>
+        </div>
+      </Field>
+    </form>
+  );
+}
+
+/**
  * Registered, unconfirmed, and the link already sent still works.
  *
  * Shown on both the signup and the login form, because both are places a
@@ -35,7 +76,7 @@ export function SupportLine() {
  * No resend here on purpose: a second link only makes it harder to know which
  * one in the inbox to click, and the older one is the one that fails.
  */
-export function ConfirmationPending({ expiresAt, className }: { expiresAt: string; className?: string }) {
+export function ConfirmationPending({ email, expiresAt, className }: { email: string; expiresAt: string; className?: string }) {
   const left = timeLeft(expiresAt);
   return (
     <Alert tone="info" title="Your confirmation is still pending" className={className}>
@@ -44,17 +85,22 @@ export function ConfirmationPending({ expiresAt, className }: { expiresAt: strin
         {left ? ` for ${left}` : ""} — open it to finish setting up your pharmacy. Check your spam folder if you
         cannot find it.
       </p>
-      <p className="mt-2">Once it runs out, come back here and we will send a new one.</p>
+      <ConfirmCodeForm email={email} className="mt-4" />
+      <p className="mt-3 text-xs">Once it runs out, come back here and we will send a new one.</p>
       <SupportLine />
     </Alert>
   );
 }
 
-/** A fresh link has just gone out. */
-export function ConfirmationResent({ className }: { className?: string }) {
+/** Signed up, or a fresh link has just gone out. Either way: go and open it. */
+export function ConfirmationSent({ email, title, className }: { email: string; title: string; className?: string }) {
   return (
-    <Alert tone="success" title="A new confirmation link is on its way" className={className}>
-      <p>Open it to finish setting up your pharmacy, and check your spam folder if it does not arrive.</p>
+    <Alert tone="success" title={title} className={className}>
+      <p>
+        Open the link in the email to finish setting up your pharmacy, and check your spam folder if it does not
+        arrive.
+      </p>
+      <ConfirmCodeForm email={email} className="mt-4" />
       <SupportLine />
     </Alert>
   );
@@ -68,7 +114,9 @@ export function ConfirmationResent({ className }: { className?: string }) {
 export function ResendConfirmation({ email, className }: { email: string; className?: string }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(resendConfirmation, null);
 
-  if (state?.confirmationResent) return <ConfirmationResent className={className} />;
+  if (state?.confirmationResent) {
+    return <ConfirmationSent email={state.confirmationResent.email} title="A new confirmation link is on its way" className={className} />;
+  }
 
   return (
     <Alert tone="warning" title="Confirm your email to sign in" className={className}>

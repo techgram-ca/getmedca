@@ -18,10 +18,12 @@ export type AuthState = {
   message?: string;
   /** A confirmed account already uses this address. Signing up again cannot work. */
   existingAccount?: true;
+  /** Signed up; a link and a code are now in the inbox. */
+  awaitingConfirmation?: { email: string };
   /** A link is already out and still usable; ISO expiry so the form can say until when. */
-  confirmationPending?: { expiresAt: string };
+  confirmationPending?: { expiresAt: string; email: string };
   /** A fresh link just went out, because the last one had run out. */
-  confirmationResent?: true;
+  confirmationResent?: { email: string };
   /** Unconfirmed with no usable link left. Carries the address so one can be sent. */
   confirmationExpired?: { email: string };
 } | null;
@@ -41,7 +43,7 @@ async function confirmationState(email: string): Promise<AuthState> {
   const { data: rows } = await db.rpc("email_signup_state", { p_email: email });
   const state = readSignupState(rows?.[0], { ttlSeconds: confirmationTtlSeconds() });
   return state.kind === "pending"
-    ? { confirmationPending: { expiresAt: state.expiresAt.toISOString() } }
+    ? { confirmationPending: { expiresAt: state.expiresAt.toISOString(), email } }
     : { confirmationExpired: { email } };
 }
 
@@ -122,7 +124,7 @@ export async function signup(_prev: AuthState, fd: FormData): Promise<AuthState>
   if (state.kind === "pending") {
     // Deliberately no second email. The one in their inbox still works, and a
     // duplicate only makes it harder to tell which link to click.
-    return { confirmationPending: { expiresAt: state.expiresAt.toISOString() } };
+    return { confirmationPending: { expiresAt: state.expiresAt.toISOString(), email: parsed.data.email } };
   }
 
   const supabase = await createClient();
@@ -155,8 +157,8 @@ export async function signup(_prev: AuthState, fd: FormData): Promise<AuthState>
     // saying "almost there" to someone on their second or third try reads as
     // if nothing happened the last time.
     return state.kind === "expired"
-      ? { confirmationResent: true }
-      : { message: "Almost there — check your email and click the confirmation link to continue setting up your pharmacy." };
+      ? { confirmationResent: { email: parsed.data.email } }
+      : { awaitingConfirmation: { email: parsed.data.email } };
   }
   redirect("/signup");
 }
@@ -183,7 +185,48 @@ export async function resendConfirmation(_prev: AuthState, fd: FormData): Promis
   if (isSendingTooOften(error)) {
     return { error: "We have just sent a link to this address. Give it a minute, then check your inbox and spam folder." };
   }
-  return { confirmationResent: true };
+  return { confirmationResent: { email: parsed.data.email } };
+}
+
+const codeSchema = z.object({
+  email: z.string().trim().email("Enter the email you signed up with"),
+  // Trimmed of spaces as well as whitespace: a code pasted out of an email
+  // arrives as "123 456" more often than anyone would like.
+  code: z
+    .string()
+    .trim()
+    .transform((v) => v.replace(/\s+/g, ""))
+    .pipe(z.string().regex(/^\d{6}$/, "Enter the 6-digit code from the email")),
+});
+
+/**
+ * Confirms an address with the code from the email instead of the link.
+ *
+ * The link is the nicer path and stays the default, but it is single-use and
+ * a corporate mail gateway that follows every inbound link consumes it before
+ * the pharmacy ever sees the message — which looks, from their side, exactly
+ * like a link that never worked. A code cannot be spent by something merely
+ * reading the email.
+ *
+ * No pharmacy row is written here. Confirming lands on /signup, which already
+ * creates one when it is missing; doing it again from here risks resetting the
+ * progress of a row that already exists.
+ */
+export async function verifyEmailCode(_prev: AuthState, fd: FormData): Promise<AuthState> {
+  const parsed = codeSchema.safeParse(Object.fromEntries(fd.entries()));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the code" };
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.verifyOtp({
+    email: parsed.data.email,
+    token: parsed.data.code,
+    type: "signup",
+  });
+  // Supabase does not distinguish a wrong code from an expired one, and it is
+  // right not to: saying which would let someone test codes against an address.
+  if (error || !data.user) {
+    return { error: "That code is wrong or has expired. Check the most recent email, or ask for a new one below." };
+  }
+  redirect("/signup");
 }
 
 export async function logout() {

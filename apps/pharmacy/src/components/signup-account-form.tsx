@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { Alert, Button, Field, FormError, Input } from "@getmed/ui";
 import { signup, type AuthState } from "@/lib/actions/auth";
-import { ConfirmationPending, ConfirmationResent, SupportLine } from "./confirmation-notices";
+import { ConfirmationPending, ConfirmationSent, SupportLine } from "./confirmation-notices";
 
 export function SignupAccountForm() {
   const [state, action, pending] = useActionState<AuthState, FormData>(signup, null);
@@ -25,11 +25,17 @@ export function SignupAccountForm() {
   }
 
   if (state?.confirmationPending) {
-    return <ConfirmationPending expiresAt={state.confirmationPending.expiresAt} className="mt-5" />;
+    return <ConfirmationPending email={state.confirmationPending.email} expiresAt={state.confirmationPending.expiresAt} className="mt-5" />;
   }
 
   // The link they were waiting on had run out, so signing up again sent a new one.
-  if (state?.confirmationResent) return <ConfirmationResent className="mt-5" />;
+  if (state?.confirmationResent) {
+    return <ConfirmationSent email={state.confirmationResent.email} title="A new confirmation link is on its way" className="mt-5" />;
+  }
+
+  if (state?.awaitingConfirmation) {
+    return <ConfirmationSent email={state.awaitingConfirmation.email} title="Almost there — confirm your email" className="mt-5" />;
+  }
 
   if (state?.message) return <Alert tone="success" className="mt-5">{state.message}</Alert>;
 

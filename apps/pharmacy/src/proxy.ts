@@ -6,7 +6,7 @@ import { updateSession } from "@getmed/db/proxy";
 // to /login, which is where they had just come from.
 // Rate cards are marketing: a pharmacy that has never heard of GetMed has to
 // be able to open one from a link or a search result without signing in.
-const PUBLIC_PATHS = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/delivery-rates", "/api/auth"];
+const PUBLIC_PATHS = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/confirm", "/delivery-rates", "/api/auth"];
 
 function hasAuthCookie(request: NextRequest) {
   return request.cookies.getAll().some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
