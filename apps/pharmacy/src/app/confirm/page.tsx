@@ -23,7 +23,7 @@ export default async function ConfirmPage({ searchParams }: { searchParams: Prom
         <div className="surface p-6">
           <h1 className="text-xl font-semibold">Confirm your email</h1>
           <p className="mt-1 text-sm text-ink-500">
-            Enter the 6-digit code from the email we sent. It works even if the link in that email does not.
+            Enter the code from the email we sent. It works even if the link in that email does not.
           </p>
           <ConfirmByCodeForm defaultEmail={email ?? ""} />
         </div>

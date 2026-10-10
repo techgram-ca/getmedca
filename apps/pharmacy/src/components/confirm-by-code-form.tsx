@@ -20,15 +20,15 @@ export function ConfirmByCodeForm({ defaultEmail }: { defaultEmail: string }) {
       <Field label="Email" htmlFor="confirm-email">
         <Input id="confirm-email" name="email" type="email" autoComplete="email" defaultValue={defaultEmail} required />
       </Field>
-      <Field label="6-digit code" htmlFor="confirm-code">
+      <Field label="Code from the email" htmlFor="confirm-code">
         <Input
           id="confirm-code"
           name="code"
           inputMode="numeric"
           autoComplete="one-time-code"
-          // Not 6: a code pasted as "123 456" would be truncated before the
-          // server ever saw it. The action strips the spaces instead.
-          maxLength={12}
+          // Codes run 6 to 10 digits depending on the project, and paste in
+          // with spaces, so this is deliberately loose. The action decides.
+          maxLength={16}
           placeholder="123456"
           autoFocus
           className="font-mono tracking-[0.4em]"
