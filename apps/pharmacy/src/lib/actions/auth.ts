@@ -3,10 +3,11 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { isAddressTaken } from "@getmed/core/auth/signup-result";
 import { createClient } from "@getmed/db/server";
 import { createServiceClient } from "@getmed/db/service";
 
-export type AuthState = { error?: string; message?: string } | null;
+export type AuthState = { error?: string; message?: string; existingAccount?: true } | null;
 
 const loginSchema = z.object({ email: z.string().trim().email(), password: z.string().min(8), next: z.string().optional() });
 
@@ -57,6 +58,13 @@ export async function signup(_prev: AuthState, fd: FormData): Promise<AuthState>
       emailRedirectTo: `${origin}/api/auth/callback?next=/signup`,
     },
   });
+  // Supabase does not reject a second signup for an address that already has a
+  // confirmed account — it returns success with a fake user and sends no mail,
+  // so that the form cannot be used to test which addresses are registered.
+  // For a pharmacy portal that is the wrong trade: the pharmacies on GetMed
+  // have public pages, and the cost of the silence is one of them waiting for a
+  // confirmation email that was never sent, then giving up.
+  if (isAddressTaken({ error, user: data?.user })) return { existingAccount: true };
   if (error) return { error: error.message };
   if (!data.user) return { error: "Could not create your account" };
 
