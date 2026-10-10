@@ -7,11 +7,30 @@ import { signup, type AuthState } from "@/lib/actions/auth";
 
 const SUPPORT_EMAIL = "support@getmed.ca";
 
+/** "in about 40 minutes", "in about 3 hours", or nothing once it has passed. */
+function timeLeft(expiresAt: string): string | null {
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `about ${minutes} more minute${minutes === 1 ? "" : "s"}`;
+  const hours = Math.round(minutes / 60);
+  return `about ${hours} more hour${hours === 1 ? "" : "s"}`;
+}
+
+function SupportLine() {
+  return (
+    <p className="mt-3 text-xs">
+      Still stuck? Email{" "}
+      <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium underline">{SUPPORT_EMAIL}</a>.
+    </p>
+  );
+}
+
 export function SignupAccountForm() {
   const [state, action, pending] = useActionState<AuthState, FormData>(signup, null);
 
-  // Already registered. Not an error the pharmacy can fix by trying again, so
-  // it gets the three ways out rather than a line of red text.
+  // Already registered and confirmed. Not something trying again can fix, so
+  // it gets the ways out rather than a line of red text.
   if (state?.existingAccount) {
     return (
       <Alert tone="warning" title="This email already has a GetMed account" className="mt-5">
@@ -20,10 +39,35 @@ export function SignupAccountForm() {
           <Button asChild size="sm"><Link href="/login">Sign in</Link></Button>
           <Button asChild size="sm" variant="outline"><Link href="/forgot-password">Reset password</Link></Button>
         </div>
-        <p className="mt-3 text-xs">
-          Not you, or locked out of the inbox? Email{" "}
-          <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium underline">{SUPPORT_EMAIL}</a>.
+        <SupportLine />
+      </Alert>
+    );
+  }
+
+  // Registered, not confirmed, and the link already sent still works. Sending
+  // another would only put two links in the inbox and make it harder to know
+  // which one to click.
+  if (state?.confirmationPending) {
+    const left = timeLeft(state.confirmationPending.expiresAt);
+    return (
+      <Alert tone="info" title="Your confirmation is still pending" className="mt-5">
+        <p>
+          You have already registered this email. The confirmation link we sent is still valid
+          {left ? ` for ${left}` : ""} — open it to finish setting up your pharmacy. Check your spam folder if you
+          cannot find it.
         </p>
+        <p className="mt-2">Once it runs out, sign up again here and we will send a new one.</p>
+        <SupportLine />
+      </Alert>
+    );
+  }
+
+  // The link they were waiting on had run out, so signing up again sent a new one.
+  if (state?.confirmationResent) {
+    return (
+      <Alert tone="success" title="A new confirmation link is on its way" className="mt-5">
+        <p>Your last link had expired, so we have sent a fresh one. Open it to finish setting up your pharmacy, and check your spam folder if it does not arrive.</p>
+        <SupportLine />
       </Alert>
     );
   }

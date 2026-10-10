@@ -3,11 +3,25 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { isAddressTaken } from "@getmed/core/auth/signup-result";
+import {
+  DEFAULT_CONFIRMATION_TTL_SECONDS,
+  isAddressTaken,
+  isSendingTooOften,
+  readSignupState,
+} from "@getmed/core/auth/signup-result";
 import { createClient } from "@getmed/db/server";
 import { createServiceClient } from "@getmed/db/service";
 
-export type AuthState = { error?: string; message?: string; existingAccount?: true } | null;
+export type AuthState = {
+  error?: string;
+  message?: string;
+  /** A confirmed account already uses this address. Signing up again cannot work. */
+  existingAccount?: true;
+  /** A link is already out and still usable; ISO expiry so the form can say until when. */
+  confirmationPending?: { expiresAt: string };
+  /** A fresh link just went out, because the last one had run out. */
+  confirmationResent?: true;
+} | null;
 
 const loginSchema = z.object({ email: z.string().trim().email(), password: z.string().min(8), next: z.string().optional() });
 
@@ -43,9 +57,46 @@ async function appOrigin(): Promise<string> {
   return process.env.NEXT_PUBLIC_PHARMACY_URL ?? "http://localhost:3001";
 }
 
+/**
+ * How long one of this project's confirmation links lasts.
+ *
+ * Supabase's own docs give two different answers — 1 hour in the Auth guide
+ * and the CLI default, 24 in the JavaScript reference — and the dashboard can
+ * change it, so the value has to come from configuration. Set
+ * `SUPABASE_CONFIRMATION_TTL_SECONDS` to whatever Authentication → Email →
+ * "Email OTP Expiration" actually says.
+ *
+ * Unset, it assumes the shorter one. That is the safe way to be wrong: too
+ * short only means sending a fresh link that works, while too long leaves a
+ * pharmacy told its confirmation is pending while holding a dead link.
+ */
+function confirmationTtlSeconds(): number {
+  const raw = Number(process.env.SUPABASE_CONFIRMATION_TTL_SECONDS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_CONFIRMATION_TTL_SECONDS;
+}
+
 export async function signup(_prev: AuthState, fd: FormData): Promise<AuthState> {
   const parsed = signupSchema.safeParse(Object.fromEntries(fd.entries()));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check your details" };
+  const db = createServiceClient();
+
+  // Ask first. Supabase will not say whether an address is taken, and for an
+  // unconfirmed one it re-sends the confirmation before answering — which
+  // overwrites the single fact worth knowing, when the link the pharmacy is
+  // still waiting on went out. After the call it is too late to look.
+  //
+  // A lookup that fails falls through to an ordinary signup rather than
+  // blocking one, so an environment without the migration still works; the
+  // check on the response below then catches what it can.
+  const { data: rows } = await db.rpc("email_signup_state", { p_email: parsed.data.email });
+  const state = readSignupState(rows?.[0], { ttlSeconds: confirmationTtlSeconds() });
+  if (state.kind === "registered") return { existingAccount: true };
+  if (state.kind === "pending") {
+    // Deliberately no second email. The one in their inbox still works, and a
+    // duplicate only makes it harder to tell which link to click.
+    return { confirmationPending: { expiresAt: state.expiresAt.toISOString() } };
+  }
+
   const supabase = await createClient();
   const origin = await appOrigin();
   const { data, error } = await supabase.auth.signUp({
@@ -58,21 +109,27 @@ export async function signup(_prev: AuthState, fd: FormData): Promise<AuthState>
       emailRedirectTo: `${origin}/api/auth/callback?next=/signup`,
     },
   });
-  // Supabase does not reject a second signup for an address that already has a
-  // confirmed account — it returns success with a fake user and sends no mail,
-  // so that the form cannot be used to test which addresses are registered.
-  // For a pharmacy portal that is the wrong trade: the pharmacies on GetMed
-  // have public pages, and the cost of the silence is one of them waiting for a
-  // confirmation email that was never sent, then giving up.
+  // Backstop for the gap between the lookup and this call, and for a project
+  // where the lookup is not available at all.
   if (isAddressTaken({ error, user: data?.user })) return { existingAccount: true };
+  if (isSendingTooOften(error)) {
+    return { error: "We have just sent a link to this address. Give it a minute, then check your inbox and spam folder." };
+  }
   if (error) return { error: error.message };
   if (!data.user) return { error: "Could not create your account" };
 
   // Create the pharmacy draft row (one login per pharmacy).
-  const db = createServiceClient();
   await db.from("pharmacies").upsert({ owner_user_id: data.user.id, email: parsed.data.email, status: "pending", signup_step: 1 }, { onConflict: "owner_user_id" });
 
-  if (!data.session) return { message: "Almost there — check your email and click the confirmation link to continue setting up your pharmacy." };
+  if (!data.session) {
+    // `expired` means there was an account here already, waiting on a link
+    // that ran out. Supabase re-sends on signup, so one is on its way — but
+    // saying "almost there" to someone on their second or third try reads as
+    // if nothing happened the last time.
+    return state.kind === "expired"
+      ? { confirmationResent: true }
+      : { message: "Almost there — check your email and click the confirmation link to continue setting up your pharmacy." };
+  }
   redirect("/signup");
 }
 

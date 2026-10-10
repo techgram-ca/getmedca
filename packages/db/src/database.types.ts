@@ -538,6 +538,10 @@ export type Database = {
         Returns: { from_lat: number; from_lng: number; to_lat: number; to_lng: number }[];
       };
       pharmacy_point: { Args: { p_pharmacy_id: string }; Returns: { lat: number; lng: number }[] };
+      email_signup_state: {
+        Args: { p_email: string };
+        Returns: { confirmed_at: string | null; confirmation_sent_at: string | null }[];
+      };
       is_admin: { Args: Record<string, never>; Returns: boolean };
       current_role_name: { Args: Record<string, never>; Returns: UserRole };
       owns_pharmacy: { Args: { p_pharmacy_id: string }; Returns: boolean };
