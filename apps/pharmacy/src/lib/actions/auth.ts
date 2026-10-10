@@ -90,8 +90,9 @@ async function appOrigin(): Promise<string> {
  * Supabase's own docs give two different answers — 1 hour in the Auth guide
  * and the CLI default, 24 in the JavaScript reference — and the dashboard can
  * change it, so the value has to come from configuration. Set
- * `SUPABASE_CONFIRMATION_TTL_SECONDS` to whatever Authentication → Email →
- * "Email OTP Expiration" actually says.
+ * `SUPABASE_CONFIRMATION_TTL_SECONDS` to whatever the dashboard's
+ * Authentication → Sign In / Providers → Email → "Email OTP expiration"
+ * actually says. The same setting governs password reset links.
  *
  * Unset, it assumes the shorter one. That is the safe way to be wrong: too
  * short only means sending a fresh link that works, while too long leaves a
