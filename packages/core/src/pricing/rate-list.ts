@@ -82,3 +82,27 @@ export function formatRateList(rows: RateEntry[]): string {
 export function formatRate(price: number): string {
   return Number.isInteger(price) ? String(price) : price.toFixed(2);
 }
+
+export type RateGroup = { destinations: string[]; price: number };
+
+/**
+ * Collapses destinations that cost the same into one row.
+ *
+ * A rate card with eight cities and three prices reads as three facts, not
+ * eight, and a pharmacy scanning it wants the prices — the cities are how it
+ * finds its own. So "Brampton, Mississauga, Caledon — $7" rather than three
+ * lines saying $7.
+ *
+ * Groups keep the order their first member was entered in, and cities keep
+ * theirs within a group, so the admin's ordering is what gets published
+ * rather than something sorted out from under them.
+ */
+export function groupRatesByPrice(rows: RateEntry[]): RateGroup[] {
+  const groups = new Map<number, RateGroup>();
+  for (const row of rows) {
+    const group = groups.get(row.price);
+    if (group) group.destinations.push(row.destination);
+    else groups.set(row.price, { destinations: [row.destination], price: row.price });
+  }
+  return [...groups.values()];
+}

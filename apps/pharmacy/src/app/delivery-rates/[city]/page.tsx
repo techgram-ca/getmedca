@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { BadgeCheck, Clock, Inbox, MapPin, ShieldCheck, Truck, Wallet } from "lucide-react";
 import { createServiceClient } from "@getmed/db/service";
 import { formatCurrency } from "@getmed/core/format";
+import { groupRatesByPrice } from "@getmed/core/pricing";
 import { Button, Logo } from "@getmed/ui";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,8 @@ export default async function DeliveryRatesPage({ params }: { params: Promise<{ 
   if (!card) notFound();
 
   const lowest = Math.min(...card.rows.map((r) => r.price));
+  // Eight cities at three prices is three facts, not eight.
+  const groups = groupRatesByPrice(card.rows);
 
   return (
     <div className="min-h-screen bg-white">
@@ -82,7 +85,7 @@ export default async function DeliveryRatesPage({ params }: { params: Promise<{ 
       </header>
 
       {/* ---------------- Hero ---------------- */}
-      <section className="bg-gradient-to-b from-brand-50 to-white px-6 py-14 sm:py-20">
+      <section className="bg-gradient-to-b from-brand-50 to-white px-6 pb-10 pt-12 sm:pb-12 sm:pt-16">
         <div className="mx-auto max-w-[1100px]">
           <div className="inline-flex items-center gap-2 rounded-full border border-brand-600/20 bg-white px-3.5 py-1.5 text-xs font-semibold text-brand-700">
             <MapPin className="size-3.5" />
@@ -99,37 +102,16 @@ export default async function DeliveryRatesPage({ params }: { params: Promise<{ 
         </div>
       </section>
 
-      {/* ---------------- Who delivers, and external orders ---------------- */}
-      <section className="px-6 py-14">
+      {/* ---------------- Who delivers ---------------- */}
+      <section className="px-6 pb-12 pt-2">
         <div className="mx-auto max-w-[1100px]">
-          <h2 className="text-2xl font-bold tracking-tight text-ink-950 sm:text-3xl">Every delivery is ours to run</h2>
-          <p className="mt-4 max-w-[70ch] text-[1.02rem] leading-[1.75] text-ink-600">
-            Orders placed through GetMed are delivered by the GetMed team — our own trained drivers, our own
-            cold-chain and controlled-substance handling, our own proof of delivery at the door. We do not hand your
-            patients to a third-party courier or a gig app, because the people carrying someone&rsquo;s medication are
-            the whole of whether this is trustworthy. That is the service you are buying, and it is the service your
-            patient gets.
+          <h2 className="text-2xl font-bold tracking-tight text-ink-950 sm:text-3xl">We handle the delivery</h2>
+          <p className="mt-4 max-w-[68ch] text-[1.02rem] leading-[1.75] text-ink-600">
+            Every GetMed order is delivered by the GetMed team — our own trained drivers, our own cold-chain and
+            controlled-substance handling, and proof of delivery at the door. You can send us your other deliveries
+            too: a prescription that came in by phone, by fax, through your own site or over the counter goes on the
+            same rates and the same process, straight from your dashboard.
           </p>
-
-          <div className="mt-8 rounded-2xl border border-brand-600/20 bg-brand-50 p-6 sm:p-8">
-            <div className="flex items-start gap-4">
-              <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-white text-brand-600">
-                <Inbox className="size-5" />
-              </span>
-              <div>
-                <h3 className="text-lg font-bold text-ink-950">Bring us your other orders too</h3>
-                <p className="mt-2 max-w-[65ch] text-[0.975rem] leading-[1.7] text-ink-600">
-                  You are not limited to orders that come from GetMed. If a prescription reaches you by phone, by fax,
-                  through your own website or over the counter, you can hand that delivery to us as well — the price is
-                  the same, and so is the process. It is already built into your dashboard: add the order, we pick it
-                  up, and it is tracked and proven exactly like any other.
-                </p>
-                <p className="mt-3 text-sm font-medium text-brand-800">
-                  Same rate card. Same drivers. Same proof of delivery. Whatever the order came in on.
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -150,10 +132,10 @@ export default async function DeliveryRatesPage({ params }: { params: Promise<{ 
               <span className="text-xs font-bold uppercase tracking-wider text-ink-500">Per order</span>
             </div>
             <ul className="list-none divide-y divide-ink-200">
-              {card.rows.map((r) => (
-                <li key={r.destination} className="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-brand-50/50 sm:px-7">
-                  <span className="font-medium text-ink-900">{r.destination}</span>
-                  <span className="text-lg font-extrabold tabular-nums text-brand-700">{formatCurrency(r.price)}</span>
+              {groups.map((g) => (
+                <li key={g.price} className="flex items-start justify-between gap-5 px-5 py-4 transition-colors hover:bg-brand-50/50 sm:px-7">
+                  <span className="font-medium leading-[1.5] text-ink-900">{g.destinations.join(", ")}</span>
+                  <span className="shrink-0 text-lg font-extrabold tabular-nums text-brand-700">{formatCurrency(g.price)}</span>
                 </li>
               ))}
             </ul>
@@ -161,10 +143,29 @@ export default async function DeliveryRatesPage({ params }: { params: Promise<{ 
 
           {card.note ? <p className="mt-4 max-w-[680px] text-sm text-ink-500">{card.note}</p> : null}
 
+          {/* Cutoffs belong next to the price, not in the small print: they are
+              the other half of what a pharmacy needs to answer a patient. */}
+          <div className="mt-6 max-w-[680px] rounded-2xl border border-ink-200 bg-white p-5">
+            <p className="flex items-center gap-2 text-sm font-bold text-ink-950">
+              <Clock className="size-4 text-brand-600" /> Cutoff times
+            </p>
+            <ul className="mt-3 list-none space-y-2.5 text-sm text-ink-600">
+              <li>
+                <span className="font-semibold text-ink-900">Your own orders:</span> add them by{" "}
+                <span className="font-semibold text-ink-900">1:00 PM</span> for same-day delivery. Anything later goes
+                out the next day.
+              </li>
+              <li>
+                <span className="font-semibold text-ink-900">GetMed orders:</span> patients are told to order before{" "}
+                <span className="font-semibold text-ink-900">11:00 AM</span> for same-day delivery, so these arrive
+                with the cutoff already accounted for.
+              </li>
+            </ul>
+          </div>
+
           <p className="mt-4 max-w-[680px] text-xs leading-relaxed text-ink-500">
-            Rates are per delivered order and exclude applicable taxes. Refrigerated handling, where your pharmacy has
-            it enabled, is added per order and shown to you before you mark an order ready. Deliveries beyond the
-            cities listed are quoted by distance.
+            Rates are per delivered order and exclude applicable taxes. Refrigerated handling may cost more.
+            Deliveries beyond the cities listed are quoted by distance.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">

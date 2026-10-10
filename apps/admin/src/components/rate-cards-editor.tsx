@@ -141,8 +141,12 @@ export function RateCardsEditor({ cards, pharmacyUrl }: { cards: Card[]; pharmac
 
               {preview && preview.rows.length > 0 ? (
                 <div>
+                  {/* Listed one per city, which is what checks the parse. The
+                      page itself groups the ones that cost the same. */}
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
-                    {preview.rows.length} destination{preview.rows.length === 1 ? "" : "s"}, as the page will show them
+                    {preview.rows.length} destination{preview.rows.length === 1 ? "" : "s"} at{" "}
+                    {new Set(preview.rows.map((r) => r.price)).size} price
+                    {new Set(preview.rows.map((r) => r.price)).size === 1 ? "" : "s"} — same-price cities share a row on the page
                   </p>
                   <ul className="grid list-none gap-x-8 gap-y-1.5 rounded-xl border border-ink-200 p-3.5 text-sm sm:grid-cols-2">
                     {preview.rows.map((r) => (
