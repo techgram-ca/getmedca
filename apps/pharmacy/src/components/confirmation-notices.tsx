@@ -26,7 +26,7 @@ export function SupportLine() {
 }
 
 /**
- * The 6-digit code from the confirmation email, as a way in when the link
+ * The code from the confirmation email, as a way in when the link
  * will not work.
  *
  * A confirmation link is single-use, and the mail security products a lot of
@@ -45,16 +45,16 @@ export function ConfirmCodeForm({ email, className }: { email: string; className
     <form action={action} className={className}>
       <input type="hidden" name="email" value={email} />
       <FormError message={state?.error} />
-      <Field label="Or enter the 6-digit code from the email" htmlFor="confirm-code" className={state?.error ? "mt-3" : undefined}>
+      <Field label="Or enter the code from the email" htmlFor="confirm-code" className={state?.error ? "mt-3" : undefined}>
         <div className="flex flex-wrap items-start gap-2">
           <Input
             id="confirm-code"
             name="code"
             inputMode="numeric"
             autoComplete="one-time-code"
-            // Not maxLength={6}: a code pasted as "123 456" would be cut to
-            // "123 45" before the server ever saw it. The action strips spaces.
-            maxLength={12}
+            // Codes run 6 to 10 digits depending on the project, and paste in
+            // with spaces, so this is deliberately loose. The action decides.
+            maxLength={16}
             placeholder="123456"
             className="w-36 font-mono tracking-[0.3em]"
             required

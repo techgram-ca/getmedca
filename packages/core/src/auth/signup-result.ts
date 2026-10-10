@@ -105,3 +105,27 @@ export function isSendingTooOften(error: { code?: string | null; message?: strin
   if (!error) return false;
   return error.code === "over_email_send_rate_limit" || /rate limit|too many requests/i.test(error.message ?? "");
 }
+
+/** Supabase's email OTP length is a project setting, allowed to be 6 to 10. */
+export const OTP_MIN_LENGTH = 6;
+export const OTP_MAX_LENGTH = 10;
+
+/**
+ * Cleans up a confirmation code as it was typed, or returns null if what was
+ * typed is not one.
+ *
+ * The length is not six. It is `GOTRUE_MAILER_OTP_LENGTH`, a project setting
+ * allowed to be anywhere from 6 to 10, and newer Supabase projects issue 8.
+ * Hard-coding six rejects a perfectly good code and leaves someone staring at
+ * an email that plainly contains it, which is exactly what this flow existed
+ * to stop happening.
+ *
+ * Spaces and dashes come free with pasting out of an email client, so they are
+ * stripped rather than refused.
+ */
+export function normalizeOtpCode(input: string): string | null {
+  const digits = input.replace(/[\s .\-–—]/g, "");
+  if (!/^\d+$/.test(digits)) return null;
+  if (digits.length < OTP_MIN_LENGTH || digits.length > OTP_MAX_LENGTH) return null;
+  return digits;
+}

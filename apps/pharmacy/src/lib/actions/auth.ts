@@ -8,6 +8,7 @@ import {
   isAddressTaken,
   isSendingTooOften,
   isUnconfirmed,
+  normalizeOtpCode,
   readSignupState,
 } from "@getmed/core/auth/signup-result";
 import { createClient } from "@getmed/db/server";
@@ -190,13 +191,12 @@ export async function resendConfirmation(_prev: AuthState, fd: FormData): Promis
 
 const codeSchema = z.object({
   email: z.string().trim().email("Enter the email you signed up with"),
-  // Trimmed of spaces as well as whitespace: a code pasted out of an email
-  // arrives as "123 456" more often than anyone would like.
+  // Not a fixed six. The length is a Supabase project setting and newer
+  // projects issue eight, so the normaliser decides what counts.
   code: z
     .string()
-    .trim()
-    .transform((v) => v.replace(/\s+/g, ""))
-    .pipe(z.string().regex(/^\d{6}$/, "Enter the 6-digit code from the email")),
+    .transform((v) => normalizeOtpCode(v))
+    .refine((v): v is string => v !== null, "Enter the code from the email, digits only"),
 });
 
 /**

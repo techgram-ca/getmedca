@@ -5,6 +5,9 @@ import {
   isAddressTaken,
   isSendingTooOften,
   isUnconfirmed,
+  normalizeOtpCode,
+  OTP_MAX_LENGTH,
+  OTP_MIN_LENGTH,
   readSignupState,
 } from "./signup-result.ts";
 
@@ -139,4 +142,38 @@ test("a sign-in blocked by a missing confirmation is told apart from a bad passw
   assert.equal(isUnconfirmed({ code: "invalid_credentials", message: "Invalid login credentials" }), false);
   assert.equal(isUnconfirmed(null), false);
   assert.equal(isUnconfirmed(undefined), false);
+});
+
+// ---------------- normalizeOtpCode ----------------
+
+test("a code is however many digits the project issues, not six", () => {
+  // GOTRUE_MAILER_OTP_LENGTH is 6..10, and newer projects default to 8.
+  assert.equal(normalizeOtpCode("123456"), "123456");
+  assert.equal(normalizeOtpCode("12345678"), "12345678");
+  assert.equal(normalizeOtpCode("1234567890"), "1234567890");
+});
+
+test("what pasting out of an email adds is stripped, not refused", () => {
+  assert.equal(normalizeOtpCode("123 456"), "123456");
+  assert.equal(normalizeOtpCode(" 1234 5678 "), "12345678");
+  assert.equal(normalizeOtpCode("1234-5678"), "12345678");
+  assert.equal(normalizeOtpCode("1234 5678"), "12345678");
+  assert.equal(normalizeOtpCode("12—3456"), "123456");
+});
+
+test("too short or too long is not a code", () => {
+  assert.equal(normalizeOtpCode("12345"), null);
+  assert.equal(normalizeOtpCode("12345678901"), null);
+  assert.equal(normalizeOtpCode(""), null);
+});
+
+test("anything that is not digits is not a code", () => {
+  assert.equal(normalizeOtpCode("12345a"), null);
+  assert.equal(normalizeOtpCode("abcdef"), null);
+  assert.equal(normalizeOtpCode("12345+"), null);
+});
+
+test("the bounds are the ones Supabase allows", () => {
+  assert.equal(OTP_MIN_LENGTH, 6);
+  assert.equal(OTP_MAX_LENGTH, 10);
 });
