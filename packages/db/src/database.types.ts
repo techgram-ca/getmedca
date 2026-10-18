@@ -327,6 +327,18 @@ export type OutreachContactRow = {
   updated_at: string;
 };
 
+export type OutreachLinkRuleRow = {
+  id: string;
+  slug: string;
+  site: "pharmacy" | "patient";
+  path: string;
+  appends_rest: boolean;
+  label: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type OutreachVisitRow = {
   id: string;
   contact_id: string;
@@ -571,6 +583,7 @@ export type Database = {
       delivery_rate_rows: Tbl<DeliveryRateRowRow, Pick<DeliveryRateRowRow, "card_id" | "destination" | "price"> & Partial<DeliveryRateRowRow>>;
       outreach_contacts: Tbl<OutreachContactRow, Pick<OutreachContactRow, "token" | "pharmacy_name"> & Partial<OutreachContactRow>>;
       outreach_visits: Tbl<OutreachVisitRow, Pick<OutreachVisitRow, "contact_id"> & Partial<OutreachVisitRow>>;
+      outreach_link_rules: Tbl<OutreachLinkRuleRow, Pick<OutreachLinkRuleRow, "slug" | "path" | "label"> & Partial<OutreachLinkRuleRow>>;
     };
     Views: {
       pharmacies_public: { Row: PharmacyPublicRow; Relationships: [] };

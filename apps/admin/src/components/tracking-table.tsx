@@ -26,7 +26,19 @@ const STAGE_TONE: Record<OutreachStage, "neutral" | "brand" | "success" | "warni
   new: "neutral", sent: "neutral", visited: "warning", signed_up: "brand", submitted: "brand", approved: "success",
 };
 
-export function TrackingTable({ rows, pharmacies, pharmacyUrl }: { rows: Row[]; pharmacies: Pharmacy[]; pharmacyUrl: string }) {
+type SuffixRule = { slug: string; label: string; appends_rest: boolean };
+
+export function TrackingTable({
+  rows,
+  rules,
+  pharmacies,
+  pharmacyUrl,
+}: {
+  rows: Row[];
+  rules: SuffixRule[];
+  pharmacies: Pharmacy[];
+  pharmacyUrl: string;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -157,11 +169,13 @@ export function TrackingTable({ rows, pharmacies, pharmacyUrl }: { rows: Row[]; 
                     {/* The same token, pointed somewhere else. Several can go in
                         one email, and which gets opened is the real signal. */}
                     <div className="mt-1.5 flex flex-wrap gap-1">
-                      {([
-                        ["signup", "signup"],
-                        ["demo", "demo"],
-                        ...(c.city ? ([[`rates/${slugify(c.city)}`, "rates"]] as [string, string][]) : []),
-                      ] as [string, string][]).map(([suffix, label]) => (
+                      {rules
+                        .filter((r) => r.slug !== "")
+                        // An appending rule needs something to append, and the
+                        // contact's own city is the only thing on file to use.
+                        .filter((r) => !r.appends_rest || !!c.city)
+                        .map((r) => [r.appends_rest ? `${r.slug}/${slugify(c.city ?? "")}` : r.slug, r.slug] as [string, string])
+                        .map(([suffix, label]) => (
                         <button
                           key={suffix}
                           type="button"
@@ -171,7 +185,7 @@ export function TrackingTable({ rows, pharmacies, pharmacyUrl }: { rows: Row[]; 
                         >
                           {copied === `${c.id}:${suffix}` ? "copied" : `+${label}`}
                         </button>
-                      ))}
+                        ))}
                     </div>
                   </TD>
 
