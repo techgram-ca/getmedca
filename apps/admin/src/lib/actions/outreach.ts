@@ -17,7 +17,6 @@ const contactSchema = z.object({
   pharmacyName: z.string().trim().min(2, "Enter the pharmacy name").max(120),
   contactEmail: z.string().trim().email("That is not an email address").or(z.literal("")).optional(),
   city: z.string().trim().max(80).optional(),
-  destinationPath: z.string().trim().min(1).max(200),
   outcome: z.enum(OUTCOMES),
   notes: z.string().trim().max(2000).optional(),
 });
@@ -35,7 +34,6 @@ export async function saveContact(input: unknown): Promise<R> {
       pharmacy_name: d.pharmacyName,
       contact_email: d.contactEmail || null,
       city: d.city || null,
-      destination_path: d.destinationPath,
       outcome: d.outcome,
       notes: d.notes || null,
     };

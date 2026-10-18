@@ -90,9 +90,11 @@ export function isLikelyBot({
   return false;
 }
 
-export type Visit = { created_at: string; likely_bot: boolean; kind?: string };
+export type Visit = { created_at: string; likely_bot: boolean; kind?: string; path?: string | null };
 
 export type VisitSummary = {
+  /** Human hits per destination keyword, so the table can say which pulled. */
+  byDestination: Record<string, number>;
   /** Hits that survived the bot filter. */
   human: number;
   /** Hits that did not. Shown so the filter can be seen working. */
@@ -108,6 +110,7 @@ export type VisitSummary = {
 
 export function summariseVisits(visits: Visit[]): VisitSummary {
   const days = new Set<string>();
+  const byDestination: Record<string, number> = {};
   let human = 0;
   let bot = 0;
   let first: Date | null = null;
@@ -122,11 +125,13 @@ export function summariseVisits(visits: Visit[]): VisitSummary {
     if (Number.isNaN(at.getTime())) continue;
     human += 1;
     days.add(at.toISOString().slice(0, 10));
+    const where = v.path?.trim();
+    if (where) byDestination[where] = (byDestination[where] ?? 0) + 1;
     if (!first || at < first) first = at;
     if (!last || at > last) last = at;
   }
 
-  return { human, bot, days: days.size, firstHuman: first, lastHuman: last };
+  return { human, bot, days: days.size, byDestination, firstHuman: first, lastHuman: last };
 }
 
 /** Where a contact has got to. Ordered: each stage implies the ones before it. */
@@ -191,15 +196,65 @@ export const OUTCOME_LABELS: Record<Outcome, string> = {
 };
 
 /**
- * Where an invite link may send someone.
+ * What an invite link's suffix means.
  *
- * A fixed list rather than a free-text path: a typo in a URL that has already
- * gone out in an email cannot be taken back, and every one of these is a page
- * that exists.
+ * `/i/<token>` goes to the pitch; `/i/<token>/signup` to the form;
+ * `/i/<token>/rates/bolton` to that rate card; `/i/<token>/demo` to the demo
+ * page on the patient site. Several of them can go in one email, and which
+ * one gets opened says more than whether anything did — a pharmacy that reads
+ * the pricing twice and never opens the form is telling you what to write
+ * next.
+ *
+ * The suffix is a keyword, not a path. A page can move without breaking a
+ * link that is already sitting in somebody's inbox.
  */
-export const DESTINATIONS = [
-  { path: "/", label: "Pharmacy home (the pitch)" },
-  { path: "/signup", label: "Sign-up form" },
-  { path: "/delivery-rates/", label: "A delivery rate card…", needsCity: true },
-  { path: "/p/demo-pharmacy", label: "Demo pharmacy page", external: true },
+export type InviteDestination = {
+  /** For the admin list and the stored visit row: short and readable. */
+  key: string;
+  /** Relative to the pharmacy app, unless `patient` says otherwise. */
+  path: string;
+  /** Lives on the patient site, so it needs that app's origin. */
+  patient?: boolean;
+  label: string;
+};
+
+export const INVITE_LINKS = [
+  { suffix: "", key: "home", label: "The pitch (pharmacy home)" },
+  { suffix: "signup", key: "signup", label: "Sign-up form" },
+  { suffix: "demo", key: "demo", label: "Demo pharmacy page" },
+  { suffix: "rates/<city>", key: "rates", label: "A delivery rate card" },
 ] as const;
+
+/**
+ * Turns the bit after the token into somewhere to send them.
+ *
+ * Anything unrecognised falls back to the pitch rather than 404ing. A link
+ * mangled by a mail client is still a pharmacy who clicked, and landing them
+ * on the home page keeps both the visit and the person.
+ */
+export function resolveInviteDestination(segments: string[] | undefined): InviteDestination {
+  const [first, ...rest] = segments ?? [];
+  switch (first) {
+    case undefined:
+    case "":
+      return { key: "home", path: "/", label: "The pitch" };
+    case "signup":
+      return { key: "signup", path: "/signup", label: "Sign-up form" };
+    case "demo":
+      return { key: "demo", path: "/p/demo-pharmacy", patient: true, label: "Demo pharmacy page" };
+    case "rates": {
+      const city = rest[0]?.trim();
+      // No city named: the rate cards have no index, so the pitch is better
+      // than a 404 on a link somebody has already been sent.
+      if (!city) return { key: "home", path: "/", label: "The pitch" };
+      return { key: `rates/${city}`, path: `/delivery-rates/${encodeURIComponent(city)}`, label: `Rate card: ${city}` };
+    }
+    default:
+      return { key: "home", path: "/", label: "The pitch" };
+  }
+}
+
+/** Joins a base URL to a path without the double slash a trailing / leaves. */
+export function joinUrl(base: string, path: string): string {
+  return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+}

@@ -7,14 +7,14 @@ export default async function TrackingPage() {
   const { db } = await requireAdmin();
   const [{ data: contacts }, { data: visits }, { data: pharmacies }] = await Promise.all([
     db.from("outreach_contacts").select("*").order("created_at", { ascending: false }),
-    db.from("outreach_visits").select("contact_id, created_at, likely_bot, kind").order("created_at"),
+    db.from("outreach_visits").select("contact_id, created_at, likely_bot, kind, path").order("created_at"),
     db.from("pharmacies").select("id, name, status, submitted_at, email").order("name"),
   ]);
 
   const byContact = new Map<string, Visit[]>();
   for (const v of visits ?? []) {
     const list = byContact.get(v.contact_id) ?? [];
-    list.push({ created_at: v.created_at, likely_bot: v.likely_bot, kind: v.kind });
+    list.push({ created_at: v.created_at, likely_bot: v.likely_bot, kind: v.kind, path: v.path });
     byContact.set(v.contact_id, list);
   }
   const pharmacyById = new Map((pharmacies ?? []).map((p) => [p.id, p]));
@@ -37,6 +37,7 @@ export default async function TrackingPage() {
         human: summary.human,
         bot: summary.bot,
         days: summary.days,
+        byDestination: summary.byDestination,
         lastHuman: summary.lastHuman ? summary.lastHuman.toISOString() : null,
       },
     };
