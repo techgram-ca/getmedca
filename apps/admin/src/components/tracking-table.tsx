@@ -1,66 +1,45 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { BadgeCheck, Check, Copy, Pencil, Plus, Send, Trash2 } from "lucide-react";
-import { OUTCOMES, OUTCOME_LABELS, STAGE_LABELS, joinUrl, type Outcome, type OutreachStage } from "@getmed/core/outreach";
-import { slugify } from "@getmed/core/format";
-import {
-  Badge, Button, Dialog, DialogContent, Field, Input, Select, TBody, TD, TH, THead, TR, Table, Textarea, toast,
-} from "@getmed/ui";
-import { deleteContact, linkPharmacy, markSent, markSignedUp, saveContact, setUnsubscribed } from "@/lib/actions/outreach";
+import { Check, ChevronRight, Copy, Plus } from "lucide-react";
+import { OUTCOMES, joinUrl, STAGE_LABELS, type Outcome, type OutreachStage } from "@getmed/core/outreach";
+import { Badge, Button, Dialog, DialogContent, Field, Input, Select, TBody, TD, TH, THead, TR, Table, Textarea, toast } from "@getmed/ui";
+import { saveContact } from "@/lib/actions/outreach";
+import { OUTCOME_LABELS } from "@getmed/core/outreach";
 
 type Row = {
-  id: string; token: string; pharmacy_name: string; contact_email: string | null; city: string | null;
-  sent_at: string | null; pharmacy_id: string | null; manual_signed_up_at: string | null;
-  outcome: string; notes: string | null; unsubscribed_at: string | null;
-  stage: OutreachStage; confirmed: boolean; pharmacyName: string | null;
-  visits: { human: number; bot: number; days: number; byDestination: Record<string, number>; lastHuman: string | null };
+  id: string; token: string; pharmacy_name: string; city: string | null;
+  unsubscribed_at: string | null; stage: OutreachStage; confirmed: boolean;
+  visits: { human: number; days: number };
 };
-type Pharmacy = { id: string; name: string; status: string };
-type Draft = { id?: string; pharmacyName: string; contactEmail: string; city: string; outcome: Outcome; notes: string };
+type Draft = { pharmacyName: string; contactEmail: string; city: string; outcome: Outcome; notes: string };
 
 const EMPTY: Draft = { pharmacyName: "", contactEmail: "", city: "", outcome: "new", notes: "" };
 
-const STAGE_TONE: Record<OutreachStage, "neutral" | "brand" | "success" | "warning"> = {
+export const STAGE_TONE: Record<OutreachStage, "neutral" | "brand" | "success" | "warning"> = {
   new: "neutral", sent: "neutral", visited: "warning", signed_up: "brand", submitted: "brand", approved: "success",
 };
 
-type SuffixRule = { slug: string; label: string; appends_rest: boolean };
-
-export function TrackingTable({
-  rows,
-  rules,
-  pharmacies,
-  pharmacyUrl,
-}: {
-  rows: Row[];
-  rules: SuffixRule[];
-  pharmacies: Pharmacy[];
-  pharmacyUrl: string;
-}) {
+/**
+ * The list is five columns on purpose.
+ *
+ * Everything else — the outcome, the notes, the link variants, the things
+ * that change a row — lives on the contact's own page. A table wide enough
+ * to hold all of it could not be read at a glance, and reading it at a glance
+ * is the only thing a list is for.
+ */
+export function TrackingTable({ rows, pharmacyUrl }: { rows: Row[]; pharmacyUrl: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
-  // Deleting throws away a token that is already sitting in somebody's inbox,
-  // turning their link into a dead one. Too easy to hit beside the pencil.
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  const inviteUrl = (token: string, suffix = "") => joinUrl(pharmacyUrl, `i/${token}${suffix ? `/${suffix}` : ""}`);
-  const unsubUrl = (token: string) => joinUrl(pharmacyUrl, `u/${token}`);
-
-  const run = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
-    start(async () => {
-      const r = await fn();
-      if (r.ok) router.refresh();
-      else toast.error(r.error ?? "Failed");
-    });
-
-  const copy = async (id: string, url: string, what: string) => {
-    await navigator.clipboard.writeText(url);
+  const copy = async (id: string, token: string) => {
+    await navigator.clipboard.writeText(joinUrl(pharmacyUrl, `i/${token}`));
     setCopied(id);
-    toast.success(`${what} copied`);
+    toast.success("Pitch link copied");
     setTimeout(() => setCopied(null), 1600);
   };
 
@@ -69,27 +48,16 @@ export function TrackingTable({
       if (!draft) return;
       const r = await saveContact(draft);
       if (r.ok) {
-        toast.success("Saved");
+        toast.success("Contact added");
         setDraft(null);
         router.refresh();
       } else toast.error(r.error);
     });
 
-  const open = (c?: Row) =>
-    setDraft(
-      c
-        ? {
-            id: c.id, pharmacyName: c.pharmacy_name, contactEmail: c.contact_email ?? "", city: c.city ?? "",
-            outcome: (OUTCOMES as readonly string[]).includes(c.outcome) ? (c.outcome as Outcome) : "new",
-            notes: c.notes ?? "",
-          }
-        : EMPTY,
-    );
-
   return (
     <div>
       <div className="mb-3 flex justify-end">
-        <Button size="sm" onClick={() => open()}><Plus /> New contact</Button>
+        <Button size="sm" onClick={() => setDraft(EMPTY)}><Plus /> New contact</Button>
       </div>
 
       {rows.length === 0 ? (
@@ -97,156 +65,49 @@ export function TrackingTable({
           No contacts yet. Add a pharmacy, copy its link, and paste it into the email you write.
         </div>
       ) : (
-        <div className="surface overflow-x-auto">
+        <div className="surface overflow-hidden">
           <Table>
             <THead>
-              <TR>
-                <TH>Pharmacy</TH><TH>Stage</TH><TH>Visits</TH><TH>Outcome</TH><TH>Link</TH><TH />
-              </TR>
+              <TR><TH>Pharmacy</TH><TH>Stage</TH><TH>Visits</TH><TH>Pitch link</TH><TH /></TR>
             </THead>
             <TBody>
               {rows.map((c) => (
                 <TR key={c.id} className={c.unsubscribed_at ? "opacity-55" : undefined}>
                   <TD>
                     <p className="font-medium">{c.pharmacy_name}</p>
-                    <p className="text-xs text-ink-500">
-                      {[c.city, c.contact_email].filter(Boolean).join(" · ") || "—"}
-                    </p>
+                    <p className="text-xs text-ink-500">{c.city ?? "—"}</p>
                     {c.unsubscribed_at ? <Badge tone="danger" className="mt-1">Do not contact</Badge> : null}
                   </TD>
 
                   <TD>
                     <Badge tone={STAGE_TONE[c.stage]}>{STAGE_LABELS[c.stage]}</Badge>
-                    {/* A linked account and a ticked box are not the same claim,
-                        and a table that cannot tell them apart is one that lies. */}
-                    {c.stage === "signed_up" || c.stage === "submitted" || c.stage === "approved" ? (
-                      <p className="mt-1 flex items-center gap-1 text-xs text-ink-500">
-                        {c.confirmed ? (
-                          <><BadgeCheck className="size-3 text-success-500" /> {c.pharmacyName}</>
-                        ) : (
-                          "marked by hand"
-                        )}
-                      </p>
+                    {!c.confirmed && (c.stage === "signed_up" || c.stage === "submitted" || c.stage === "approved") ? (
+                      <p className="mt-1 text-xs text-ink-500">marked by hand</p>
                     ) : null}
                   </TD>
 
                   <TD className="text-sm">
                     {c.visits.human === 0 ? (
-                      <span className="text-ink-400">none{c.visits.bot > 0 ? ` (${c.visits.bot} bot)` : ""}</span>
+                      <span className="text-ink-400">none</span>
                     ) : (
                       <>
                         <span className="font-semibold text-ink-900">{c.visits.days}</span>
                         <span className="text-ink-500"> day{c.visits.days === 1 ? "" : "s"}</span>
-                        <p className="text-xs text-ink-500">
-                          {c.visits.human} hit{c.visits.human === 1 ? "" : "s"}
-                          {c.visits.bot > 0 ? `, ${c.visits.bot} bot` : ""}
-                        </p>
-                        {/* Which of the links in the email they went for. */}
-                        <p className="mt-0.5 text-xs font-medium text-brand-700">
-                          {Object.entries(c.visits.byDestination)
-                            .sort((a, b) => b[1] - a[1])
-                            .map(([k, n]) => `${k}${n > 1 ? ` ×${n}` : ""}`)
-                            .join(", ")}
-                        </p>
+                        <span className="text-ink-500"> · {c.visits.human} hit{c.visits.human === 1 ? "" : "s"}</span>
                       </>
                     )}
-                  </TD>
-
-                  <TD className="text-sm text-ink-600">
-                    {OUTCOME_LABELS[(c.outcome as Outcome) ?? "new"] ?? c.outcome}
-                    {c.notes ? <p className="mt-0.5 max-w-[22ch] truncate text-xs text-ink-500" title={c.notes}>{c.notes}</p> : null}
                   </TD>
 
                   <TD>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Button size="sm" variant="outline" onClick={() => copy(`${c.id}:pitch`, inviteUrl(c.token), "Pitch link")}>
-                        {copied === `${c.id}:pitch` ? <Check /> : <Copy />} Pitch link
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => copy(`${c.id}:unsub`, unsubUrl(c.token), "Unsubscribe link")}>
-                        {copied === `${c.id}:unsub` ? <Check /> : <Copy />} Unsub link
-                      </Button>
-                    </div>
-                    {/* The same token, pointed somewhere else. Several can go in
-                        one email, and which gets opened is the real signal. */}
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {rules
-                        .filter((r) => r.slug !== "")
-                        // An appending rule needs something to append, and the
-                        // contact's own city is the only thing on file to use.
-                        .filter((r) => !r.appends_rest || !!c.city)
-                        .map((r) => [r.appends_rest ? `${r.slug}/${slugify(c.city ?? "")}` : r.slug, r.slug] as [string, string])
-                        .map(([suffix, label]) => (
-                        <button
-                          key={suffix}
-                          type="button"
-                          title={`Copy ${inviteUrl(c.token, suffix)}`}
-                          onClick={() => copy(`${c.id}:${suffix}`, inviteUrl(c.token, suffix), `${label} link`)}
-                          className="rounded-md border border-ink-200 px-1.5 py-0.5 font-mono text-[0.65rem] text-ink-500 transition-soft hover:border-brand-600 hover:text-brand-700"
-                        >
-                          {copied === `${c.id}:${suffix}` ? "copied" : `+${label}`}
-                        </button>
-                        ))}
-                    </div>
+                    <Button size="sm" variant="outline" onClick={() => copy(c.id, c.token)}>
+                      {copied === c.id ? <Check /> : <Copy />} Copy
+                    </Button>
                   </TD>
 
-                  <TD className="whitespace-nowrap text-right">
-                    <Button
-                      size="sm"
-                      variant={c.sent_at ? "ghost" : "secondary"}
-                      disabled={pending}
-                      title={c.sent_at ? `Sent ${new Date(c.sent_at).toLocaleDateString()}` : "Mark as sent"}
-                      onClick={() => run(() => markSent(c.id, !c.sent_at))}
-                    >
-                      <Send /> {c.sent_at ? new Date(c.sent_at).toLocaleDateString() : "Mark sent"}
+                  <TD className="text-right">
+                    <Button asChild size="sm" variant="ghost">
+                      <Link href={`/tracking/${c.id}`}>View details <ChevronRight /></Link>
                     </Button>
-                    <Button size="icon" variant="ghost" aria-label="Edit" onClick={() => open(c)}><Pencil /></Button>
-                    {confirmDelete === c.id ? (
-                      <>
-                        <Button
-                          size="sm" variant="danger" disabled={pending}
-                          onClick={() => { setConfirmDelete(null); run(() => deleteContact(c.id)); }}
-                        >
-                          Delete, breaking the link
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(null)}>Keep</Button>
-                      </>
-                    ) : (
-                      <Button
-                        size="icon" variant="ghost" aria-label="Delete" className="text-danger-500"
-                        onClick={() => setConfirmDelete(c.id)}
-                      >
-                        <Trash2 />
-                      </Button>
-                    )}
-
-                    <div className="mt-2 flex items-center justify-end gap-2">
-                      <Select
-                        aria-label="Link to a pharmacy account"
-                        className="h-8 w-[13rem] text-xs"
-                        value={c.pharmacy_id ?? ""}
-                        disabled={pending}
-                        onChange={(e) => run(() => linkPharmacy(c.id, e.target.value || null))}
-                      >
-                        <option value="">Not linked</option>
-                        {pharmacies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </Select>
-                      {!c.pharmacy_id ? (
-                        <label className="flex items-center gap-1 text-xs text-ink-600">
-                          <input
-                            type="checkbox"
-                            checked={!!c.manual_signed_up_at}
-                            disabled={pending}
-                            onChange={(e) => run(() => markSignedUp(c.id, e.target.checked))}
-                          />
-                          Signed up
-                        </label>
-                      ) : null}
-                      {c.unsubscribed_at ? (
-                        <Button size="sm" variant="ghost" className="text-xs" onClick={() => run(() => setUnsubscribed(c.id, false))}>
-                          Undo unsub
-                        </Button>
-                      ) : null}
-                    </div>
                   </TD>
                 </TR>
               ))}
@@ -256,35 +117,31 @@ export function TrackingTable({
       )}
 
       <Dialog open={draft !== null} onOpenChange={(o) => !o && setDraft(null)}>
-        <DialogContent title={draft?.id ? "Edit contact" : "New contact"} className="max-w-xl">
+        <DialogContent title="New contact" className="max-w-xl">
           {draft ? (
             <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); save(); }}>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Pharmacy name" htmlFor="oc-name" required>
-                  <Input id="oc-name" value={draft.pharmacyName} onChange={(e) => setDraft({ ...draft, pharmacyName: e.target.value })} required />
+                <Field label="Pharmacy name" htmlFor="nc-name" required>
+                  <Input id="nc-name" value={draft.pharmacyName} onChange={(e) => setDraft({ ...draft, pharmacyName: e.target.value })} required />
                 </Field>
-                <Field label="City" htmlFor="oc-city" optional>
-                  <Input id="oc-city" value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} />
+                <Field label="City" htmlFor="nc-city" optional hint="Used for the rate-card link.">
+                  <Input id="nc-city" value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} />
                 </Field>
               </div>
-
-              <Field label="Public email" htmlFor="oc-email" optional hint="Their published business address. Only used so you know who you wrote to.">
-                <Input id="oc-email" type="email" value={draft.contactEmail} onChange={(e) => setDraft({ ...draft, contactEmail: e.target.value })} />
+              <Field label="Public email" htmlFor="nc-email" optional hint="Their published business address.">
+                <Input id="nc-email" type="email" value={draft.contactEmail} onChange={(e) => setDraft({ ...draft, contactEmail: e.target.value })} />
               </Field>
-
-              <Field label="Outcome" htmlFor="oc-outcome" hint="Your read on the conversation. The stage beside it works itself out.">
-                <Select id="oc-outcome" value={draft.outcome} onChange={(e) => setDraft({ ...draft, outcome: e.target.value as Outcome })}>
+              <Field label="Outcome" htmlFor="nc-outcome">
+                <Select id="nc-outcome" value={draft.outcome} onChange={(e) => setDraft({ ...draft, outcome: e.target.value as Outcome })}>
                   {OUTCOMES.map((o) => <option key={o} value={o}>{OUTCOME_LABELS[o]}</option>)}
                 </Select>
               </Field>
-
-              <Field label="Notes" htmlFor="oc-notes" optional>
-                <Textarea id="oc-notes" rows={3} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />
+              <Field label="Notes" htmlFor="nc-notes" optional>
+                <Textarea id="nc-notes" rows={3} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />
               </Field>
-
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => setDraft(null)}>Cancel</Button>
-                <Button type="submit" loading={pending}>Save</Button>
+                <Button type="submit" loading={pending}>Add contact</Button>
               </div>
             </form>
           ) : null}

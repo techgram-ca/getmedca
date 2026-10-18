@@ -31,17 +31,14 @@ export default async function TrackingPage() {
       manualSignedUpAt: c.manual_signed_up_at,
     });
     return {
-      ...c,
+      id: c.id,
+      token: c.token,
+      pharmacy_name: c.pharmacy_name,
+      city: c.city,
+      unsubscribed_at: c.unsubscribed_at,
       stage,
       confirmed,
-      pharmacyName: pharmacy?.name ?? null,
-      visits: {
-        human: summary.human,
-        bot: summary.bot,
-        days: summary.days,
-        byDestination: summary.byDestination,
-        lastHuman: summary.lastHuman ? summary.lastHuman.toISOString() : null,
-      },
+      visits: { human: summary.human, days: summary.days },
     };
   });
 
@@ -56,12 +53,7 @@ export default async function TrackingPage() {
         pharmacyUrl={process.env.NEXT_PUBLIC_PHARMACY_URL ?? "https://pharmacy.getmed.ca"}
         patientUrl={process.env.NEXT_PUBLIC_PATIENT_URL ?? "https://getmed.ca"}
       />
-      <TrackingTable
-        rules={(rules ?? []).map((r) => ({ slug: r.slug, label: r.label, appends_rest: r.appends_rest }))}
-        rows={rows}
-        pharmacies={(pharmacies ?? []).map((p) => ({ id: p.id, name: p.name ?? p.email ?? "Unnamed", status: p.status }))}
-        pharmacyUrl={process.env.NEXT_PUBLIC_PHARMACY_URL ?? "https://pharmacy.getmed.ca"}
-      />
+      <TrackingTable rows={rows} pharmacyUrl={process.env.NEXT_PUBLIC_PHARMACY_URL ?? "https://pharmacy.getmed.ca"} />
     </div>
   );
 }
