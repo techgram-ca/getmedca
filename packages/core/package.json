@@ -15,6 +15,7 @@
     "./invoices": "./src/invoices/index.ts",
     "./consultations": "./src/consultations/index.ts",
     "./pricing": "./src/pricing/index.ts",
+    "./outreach": "./src/outreach/index.ts",
     "./theme": "./src/theme/index.ts",
     "./auth": "./src/auth/index.ts",
     "./auth/signup-result": "./src/auth/signup-result.ts",

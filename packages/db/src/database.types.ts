@@ -311,6 +311,34 @@ export type NotificationTemplateRow = {
   updated_at: string;
 };
 
+export type OutreachContactRow = {
+  id: string;
+  token: string;
+  pharmacy_name: string;
+  contact_email: string | null;
+  city: string | null;
+  destination_path: string;
+  sent_at: string | null;
+  pharmacy_id: string | null;
+  manual_signed_up_at: string | null;
+  outcome: string;
+  notes: string | null;
+  unsubscribed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OutreachVisitRow = {
+  id: string;
+  contact_id: string;
+  kind: string;
+  path: string | null;
+  user_agent: string | null;
+  ip: string | null;
+  likely_bot: boolean;
+  created_at: string;
+};
+
 export type DeliveryRateCardRow = {
   id: string;
   city: string;
@@ -542,6 +570,8 @@ export type Database = {
       support_messages: Tbl<SupportMessageRow, Pick<SupportMessageRow, "name" | "message"> & Partial<SupportMessageRow>>;
       delivery_rate_cards: Tbl<DeliveryRateCardRow, Pick<DeliveryRateCardRow, "city" | "slug"> & Partial<DeliveryRateCardRow>>;
       delivery_rate_rows: Tbl<DeliveryRateRowRow, Pick<DeliveryRateRowRow, "card_id" | "destination" | "price"> & Partial<DeliveryRateRowRow>>;
+      outreach_contacts: Tbl<OutreachContactRow, Pick<OutreachContactRow, "token" | "pharmacy_name"> & Partial<OutreachContactRow>>;
+      outreach_visits: Tbl<OutreachVisitRow, Pick<OutreachVisitRow, "contact_id"> & Partial<OutreachVisitRow>>;
     };
     Views: {
       pharmacies_public: { Row: PharmacyPublicRow; Relationships: [] };
