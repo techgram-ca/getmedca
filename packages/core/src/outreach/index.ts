@@ -196,34 +196,66 @@ export const OUTCOME_LABELS: Record<Outcome, string> = {
 };
 
 /**
- * What an invite link's suffix means.
+ * A rule for where one invite-link suffix sends people.
  *
- * `/i/<token>` goes to the pitch; `/i/<token>/signup` to the form;
- * `/i/<token>/rates/bolton` to that rate card; `/i/<token>/demo` to the demo
- * page on the patient site. Several of them can go in one email, and which
- * one gets opened says more than whether anything did — a pharmacy that reads
- * the pricing twice and never opens the form is telling you what to write
- * next.
+ * `/i/<token>` follows the rule slugged `""`, `/i/<token>/signup` the one
+ * slugged `signup`. A rule that appends takes whatever follows its slug and
+ * puts it on the end, which is how one `rates` rule covers every rate card
+ * that will ever exist.
  *
- * The suffix is a keyword, not a path. A page can move without breaking a
- * link that is already sitting in somebody's inbox.
+ * `site` is a choice between two known apps, never a host. A rule that could
+ * name its own origin would make every invite link an open redirect on a
+ * domain pharmacies are being asked to trust — and a forwarded pitch email
+ * hands a working token to anyone who wants one.
  */
-export type InviteDestination = {
-  /** For the admin list and the stored visit row: short and readable. */
-  key: string;
-  /** Relative to the pharmacy app, unless `patient` says otherwise. */
+export type LinkRule = {
+  slug: string;
+  site: "pharmacy" | "patient";
   path: string;
-  /** Lives on the patient site, so it needs that app's origin. */
-  patient?: boolean;
+  appends_rest: boolean;
   label: string;
 };
 
-export const INVITE_LINKS = [
-  { suffix: "", key: "home", label: "The pitch (pharmacy home)" },
-  { suffix: "signup", key: "signup", label: "Sign-up form" },
-  { suffix: "demo", key: "demo", label: "Demo pharmacy page" },
-  { suffix: "rates/<city>", key: "rates", label: "A delivery rate card" },
-] as const;
+export type InviteDestination = {
+  /** For the admin list and the stored visit row: short and readable. */
+  key: string;
+  /** Rooted path, relative to whichever site the rule names. */
+  path: string;
+  site: "pharmacy" | "patient";
+  label: string;
+};
+
+const FALLBACK: InviteDestination = { key: "home", path: "/", site: "pharmacy", label: "The pitch" };
+
+/**
+ * Whether a stored path is safe to redirect to.
+ *
+ * Rooted, single-slashed, no traversal, no scheme and no host. The database
+ * checks the same shape, and so does the admin form; this is the one that
+ * runs immediately before a redirect, where it actually matters.
+ */
+export function isSafeRulePath(path: string): boolean {
+  if (!path.startsWith("/")) return false;
+  if (path.startsWith("//")) return false;
+  if (path.includes("://") || path.includes(":")) return false;
+  if (path.includes("..")) return false;
+  if (path.includes("\\")) return false;
+  return true;
+}
+
+/**
+ * Keeps a segment that came out of somebody's URL from escaping the path.
+ *
+ * These arrive from whoever clicked, so `..`, a slash or an encoded one would
+ * otherwise let a crafted link walk out of the intended page — the difference
+ * between a rate card and an open redirect.
+ */
+function safeSegment(segment: string): string | null {
+  const raw = segment.trim();
+  if (!raw || raw === "." || raw === "..") return null;
+  if (/[\\/]/.test(raw) || raw.includes("%2f") || raw.includes("%2F")) return null;
+  return encodeURIComponent(raw);
+}
 
 /**
  * Turns the bit after the token into somewhere to send them.
@@ -232,26 +264,29 @@ export const INVITE_LINKS = [
  * mangled by a mail client is still a pharmacy who clicked, and landing them
  * on the home page keeps both the visit and the person.
  */
-export function resolveInviteDestination(segments: string[] | undefined): InviteDestination {
-  const [first, ...rest] = segments ?? [];
-  switch (first) {
-    case undefined:
-    case "":
-      return { key: "home", path: "/", label: "The pitch" };
-    case "signup":
-      return { key: "signup", path: "/signup", label: "Sign-up form" };
-    case "demo":
-      return { key: "demo", path: "/p/demo-pharmacy", patient: true, label: "Demo pharmacy page" };
-    case "rates": {
-      const city = rest[0]?.trim();
-      // No city named: the rate cards have no index, so the pitch is better
-      // than a 404 on a link somebody has already been sent.
-      if (!city) return { key: "home", path: "/", label: "The pitch" };
-      return { key: `rates/${city}`, path: `/delivery-rates/${encodeURIComponent(city)}`, label: `Rate card: ${city}` };
-    }
-    default:
-      return { key: "home", path: "/", label: "The pitch" };
+export function resolveInviteDestination(rules: LinkRule[], segments: string[] | undefined): InviteDestination {
+  const [first, ...rest] = (segments ?? []).filter((s) => s !== "");
+  const slug = first ?? "";
+  const rule = rules.find((r) => r.slug === slug);
+  if (!rule || !isSafeRulePath(rule.path)) return FALLBACK;
+
+  const base = { site: rule.site, label: rule.label };
+  if (!rule.appends_rest || rest.length === 0) {
+    return { ...base, key: slug || "home", path: rule.path };
   }
+
+  const extra = rest.map(safeSegment);
+  // One bad segment and the whole tail is dropped rather than half-applied:
+  // /delivery-rates with no city is a 404, so the pitch is the better answer.
+  if (extra.some((s) => s === null)) return FALLBACK;
+
+  const tail = extra.join("/");
+  return {
+    ...base,
+    key: `${slug}/${rest.join("/")}`,
+    path: `${rule.path.replace(/\/+$/, "")}/${tail}`,
+    label: `${rule.label}: ${rest.join("/")}`,
+  };
 }
 
 /** Joins a base URL to a path without the double slash a trailing / leaves. */

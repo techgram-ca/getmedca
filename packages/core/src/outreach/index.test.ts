@@ -6,6 +6,7 @@ import {
   isLikelyBot,
   joinUrl,
   outreachStage,
+  isSafeRulePath,
   resolveInviteDestination,
   summariseVisits,
 } from "./index.ts";
@@ -159,44 +160,6 @@ test("a scanner-only hit does not promote anyone to visited", () => {
   assert.equal(outreachStage({ ...base, sentAt: SENT, humanVisits: 0 }).stage, "sent");
 });
 
-// ---------------- resolveInviteDestination ----------------
-
-test("a bare invite goes to the pitch", () => {
-  assert.deepEqual(resolveInviteDestination(undefined), { key: "home", path: "/", label: "The pitch" });
-  assert.deepEqual(resolveInviteDestination([]), { key: "home", path: "/", label: "The pitch" });
-});
-
-test("each suffix lands where it says", () => {
-  assert.equal(resolveInviteDestination(["signup"]).path, "/signup");
-  assert.equal(resolveInviteDestination(["rates", "bolton"]).path, "/delivery-rates/bolton");
-  assert.equal(resolveInviteDestination(["rates", "bolton"]).key, "rates/bolton");
-});
-
-test("the demo page is on the patient site, not this one", () => {
-  // The bug this replaces: a relative /p/... resolved against the pharmacy
-  // app, which has no such page, so the proxy bounced it to /login.
-  const d = resolveInviteDestination(["demo"]);
-  assert.equal(d.patient, true);
-  assert.equal(d.path, "/p/demo-pharmacy");
-});
-
-test("only the demo link is on the patient site", () => {
-  for (const segs of [undefined, ["signup"], ["rates", "bolton"]]) {
-    assert.notEqual(resolveInviteDestination(segs as string[] | undefined).patient, true);
-  }
-});
-
-test("a mangled suffix still lands somewhere useful", () => {
-  // A link broken by a mail client is still a pharmacy who clicked.
-  assert.equal(resolveInviteDestination(["nonsense"]).key, "home");
-  assert.equal(resolveInviteDestination(["rates"]).key, "home");
-  assert.equal(resolveInviteDestination([""]).key, "home");
-});
-
-test("a city is escaped on its way into a path", () => {
-  assert.equal(resolveInviteDestination(["rates", "st catharines"]).path, "/delivery-rates/st%20catharines");
-});
-
 // ---------------- joinUrl ----------------
 
 test("a base URL with a trailing slash does not produce a double slash", () => {
@@ -216,4 +179,97 @@ test("the summary says which of the links in the email they opened", () => {
   ]);
   // The scanner's hit on /signup is not a preference for signing up.
   assert.deepEqual(s.byDestination, { "rates/bolton": 2, home: 1 });
+});
+
+// ---------------- resolveInviteDestination ----------------
+
+const RULES = [
+  { slug: "", site: "pharmacy" as const, path: "/", appends_rest: false, label: "The pitch" },
+  { slug: "signup", site: "pharmacy" as const, path: "/signup", appends_rest: false, label: "Sign-up form" },
+  { slug: "rates", site: "pharmacy" as const, path: "/delivery-rates", appends_rest: true, label: "Rate card" },
+  { slug: "demo", site: "patient" as const, path: "/p/demo-pharmacy", appends_rest: false, label: "Demo page" },
+];
+
+test("a bare invite follows the empty-slug rule", () => {
+  for (const segs of [undefined, [], [""]]) {
+    const d = resolveInviteDestination(RULES, segs);
+    assert.equal(d.path, "/");
+    assert.equal(d.key, "home");
+  }
+});
+
+test("each slug lands where its rule says", () => {
+  assert.equal(resolveInviteDestination(RULES, ["signup"]).path, "/signup");
+  assert.equal(resolveInviteDestination(RULES, ["demo"]).path, "/p/demo-pharmacy");
+  assert.equal(resolveInviteDestination(RULES, ["demo"]).site, "patient");
+});
+
+test("only the rule's own site is used, never the caller's", () => {
+  assert.equal(resolveInviteDestination(RULES, ["signup"]).site, "pharmacy");
+  assert.equal(resolveInviteDestination(RULES, []).site, "pharmacy");
+});
+
+test("an appending rule puts what follows on the end", () => {
+  const d = resolveInviteDestination(RULES, ["rates", "bolton"]);
+  assert.equal(d.path, "/delivery-rates/bolton");
+  assert.equal(d.key, "rates/bolton");
+});
+
+test("an appending rule takes more than one segment", () => {
+  assert.equal(resolveInviteDestination(RULES, ["rates", "on", "bolton"]).path, "/delivery-rates/on/bolton");
+});
+
+test("a rule that does not append ignores the tail rather than 404ing", () => {
+  // /signup/nonsense is not a page. The sign-up form is what they wanted.
+  assert.equal(resolveInviteDestination(RULES, ["signup", "nonsense"]).path, "/signup");
+});
+
+test("an appending rule with nothing to append stays on its own path", () => {
+  assert.equal(resolveInviteDestination(RULES, ["rates"]).path, "/delivery-rates");
+});
+
+test("an unknown slug falls back to the pitch", () => {
+  assert.equal(resolveInviteDestination(RULES, ["nonsense"]).key, "home");
+  assert.equal(resolveInviteDestination([], ["signup"]).key, "home");
+});
+
+test("a clicker cannot walk out of the path with the bit they control", () => {
+  // The appended segments come from whoever opened the link, so this is the
+  // difference between a rate card and an open redirect on our own domain.
+  for (const tail of [["..", "..", "evil"], ["%2e%2e%2fevil"], ["a/b"], ["a%2fb"], ["."], [""], ["  "]]) {
+    const d = resolveInviteDestination(RULES, ["rates", ...tail]);
+    assert.equal(d.path.includes(".."), false, tail.join("|"));
+    assert.match(d.path, /^\/[a-zA-Z0-9\-/%._]*$/, tail.join("|"));
+  }
+});
+
+test("a traversal attempt is dropped whole, not half-applied", () => {
+  assert.equal(resolveInviteDestination(RULES, ["rates", "bolton", ".."]).key, "home");
+});
+
+test("a city with a space is escaped on its way into the path", () => {
+  assert.equal(resolveInviteDestination(RULES, ["rates", "st catharines"]).path, "/delivery-rates/st%20catharines");
+});
+
+test("a rule whose stored path is unsafe is refused at the last moment", () => {
+  // The column and the admin form both check; this is the check that runs
+  // immediately before the redirect, where it actually counts.
+  const bad = [
+    { slug: "x", site: "pharmacy" as const, path: "//evil.com", appends_rest: false, label: "x" },
+    { slug: "y", site: "pharmacy" as const, path: "https://evil.com", appends_rest: false, label: "y" },
+    { slug: "z", site: "pharmacy" as const, path: "/a/../../b", appends_rest: false, label: "z" },
+    { slug: "w", site: "pharmacy" as const, path: "signup", appends_rest: false, label: "w" },
+  ];
+  for (const rule of bad) assert.equal(resolveInviteDestination([rule], [rule.slug]).key, "home", rule.path);
+});
+
+// ---------------- isSafeRulePath ----------------
+
+test("a safe path is rooted, single-slashed and has no host in it", () => {
+  for (const ok of ["/", "/signup", "/delivery-rates", "/p/demo-pharmacy", "/a/b/c"]) {
+    assert.equal(isSafeRulePath(ok), true, ok);
+  }
+  for (const bad of ["signup", "//evil.com", "https://evil.com", "/a/../b", "/a\\b", "mailto:x@y.z", "/x:y"]) {
+    assert.equal(isSafeRulePath(bad), false, bad);
+  }
 });

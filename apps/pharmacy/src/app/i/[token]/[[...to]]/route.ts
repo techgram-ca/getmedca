@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isLikelyBot, joinUrl, resolveInviteDestination } from "@getmed/core/outreach";
+import { isLikelyBot, joinUrl, resolveInviteDestination, type LinkRule } from "@getmed/core/outreach";
 import { createServiceClient } from "@getmed/db/service";
 
 /** How long the attribution cookie outlives the click. */
@@ -28,14 +28,13 @@ export async function GET(
 ) {
   const { token, to } = await params;
   const origin = request.nextUrl.origin;
-  const destination = resolveInviteDestination(to);
 
   const db = createServiceClient();
-  const { data: contact } = await db
-    .from("outreach_contacts")
-    .select("id, sent_at")
-    .eq("token", token)
-    .maybeSingle();
+  const [{ data: contact }, { data: rules }] = await Promise.all([
+    db.from("outreach_contacts").select("id, sent_at").eq("token", token).maybeSingle(),
+    db.from("outreach_link_rules").select("slug, site, path, appends_rest, label"),
+  ]);
+  const destination = resolveInviteDestination((rules ?? []) as LinkRule[], to);
 
   // An unknown token goes to the pitch rather than a 404. Someone mangled a
   // link out of an email; the front page is better than an error.
@@ -54,10 +53,11 @@ export async function GET(
     likely_bot: isLikelyBot({ sentAt: contact.sent_at, at: new Date(), userAgent }),
   });
 
-  // The demo page is the one destination on the patient site. Sending it to
-  // this app's origin instead lands on a path the proxy does not know, and
-  // bounces the pharmacy to a login form it has no account for.
-  const base = destination.patient ? (process.env.NEXT_PUBLIC_PATIENT_URL ?? "https://getmed.ca") : origin;
+  // Which app, never which host: the rule names one of two known sites and
+  // the origin comes from here. A rule that could name its own host would
+  // make every invite link an open redirect on a domain we are asking
+  // pharmacies to trust.
+  const base = destination.site === "patient" ? (process.env.NEXT_PUBLIC_PATIENT_URL ?? "https://getmed.ca") : origin;
   const target = joinUrl(base, destination.path);
 
   const response = NextResponse.redirect(target);
