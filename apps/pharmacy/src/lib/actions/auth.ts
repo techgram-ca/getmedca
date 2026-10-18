@@ -13,6 +13,7 @@ import {
 } from "@getmed/core/auth/signup-result";
 import { createClient } from "@getmed/db/server";
 import { createServiceClient } from "@getmed/db/service";
+import { linkSignupToInvite } from "./outreach";
 
 export type AuthState = {
   error?: string;
@@ -150,7 +151,15 @@ export async function signup(_prev: AuthState, fd: FormData): Promise<AuthState>
   if (!data.user) return { error: "Could not create your account" };
 
   // Create the pharmacy draft row (one login per pharmacy).
-  await db.from("pharmacies").upsert({ owner_user_id: data.user.id, email: parsed.data.email, status: "pending", signup_step: 1 }, { onConflict: "owner_user_id" });
+  const { data: pharmacy } = await db
+    .from("pharmacies")
+    .upsert({ owner_user_id: data.user.id, email: parsed.data.email, status: "pending", signup_step: 1 }, { onConflict: "owner_user_id" })
+    .select("id")
+    .maybeSingle();
+
+  // Credit the pitch email that brought them, if a tracked link did. Silent
+  // and best-effort: outreach bookkeeping never gets to block a signup.
+  if (pharmacy) await linkSignupToInvite(pharmacy.id);
 
   if (!data.session) {
     // `expired` means there was an account here already, waiting on a link
