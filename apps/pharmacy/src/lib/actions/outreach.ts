@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { z } from "zod";
 import { isLikelyBot } from "@getmed/core/outreach";
 import { createServiceClient } from "@getmed/db/service";
-import { REFERRAL_COOKIE } from "@/app/i/[token]/route";
+import { REFERRAL_COOKIE } from "@/app/i/[token]/[[...to]]/route";
 
 type R = { ok?: true; error?: string } | null;
 

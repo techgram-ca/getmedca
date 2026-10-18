@@ -3,10 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { BadgeCheck, Check, Copy, Pencil, Plus, Send, Trash2 } from "lucide-react";
-import {
-  DESTINATIONS, OUTCOMES, OUTCOME_LABELS, STAGE_LABELS,
-  type Outcome, type OutreachStage,
-} from "@getmed/core/outreach";
+import { OUTCOMES, OUTCOME_LABELS, STAGE_LABELS, joinUrl, type Outcome, type OutreachStage } from "@getmed/core/outreach";
+import { slugify } from "@getmed/core/format";
 import {
   Badge, Button, Dialog, DialogContent, Field, Input, Select, TBody, TD, TH, THead, TR, Table, Textarea, toast,
 } from "@getmed/ui";
@@ -14,18 +12,15 @@ import { deleteContact, linkPharmacy, markSent, markSignedUp, saveContact, setUn
 
 type Row = {
   id: string; token: string; pharmacy_name: string; contact_email: string | null; city: string | null;
-  destination_path: string; sent_at: string | null; pharmacy_id: string | null; manual_signed_up_at: string | null;
+  sent_at: string | null; pharmacy_id: string | null; manual_signed_up_at: string | null;
   outcome: string; notes: string | null; unsubscribed_at: string | null;
   stage: OutreachStage; confirmed: boolean; pharmacyName: string | null;
-  visits: { human: number; bot: number; days: number; lastHuman: string | null };
+  visits: { human: number; bot: number; days: number; byDestination: Record<string, number>; lastHuman: string | null };
 };
 type Pharmacy = { id: string; name: string; status: string };
-type Draft = {
-  id?: string; pharmacyName: string; contactEmail: string; city: string;
-  destinationPath: string; outcome: Outcome; notes: string;
-};
+type Draft = { id?: string; pharmacyName: string; contactEmail: string; city: string; outcome: Outcome; notes: string };
 
-const EMPTY: Draft = { pharmacyName: "", contactEmail: "", city: "", destinationPath: "/", outcome: "new", notes: "" };
+const EMPTY: Draft = { pharmacyName: "", contactEmail: "", city: "", outcome: "new", notes: "" };
 
 const STAGE_TONE: Record<OutreachStage, "neutral" | "brand" | "success" | "warning"> = {
   new: "neutral", sent: "neutral", visited: "warning", signed_up: "brand", submitted: "brand", approved: "success",
@@ -35,14 +30,13 @@ export function TrackingTable({ rows, pharmacies, pharmacyUrl }: { rows: Row[]; 
   const router = useRouter();
   const [pending, start] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [cityFor, setCityFor] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   // Deleting throws away a token that is already sitting in somebody's inbox,
   // turning their link into a dead one. Too easy to hit beside the pencil.
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  const inviteUrl = (token: string) => `${pharmacyUrl}/i/${token}`;
-  const unsubUrl = (token: string) => `${pharmacyUrl}/u/${token}`;
+  const inviteUrl = (token: string, suffix = "") => joinUrl(pharmacyUrl, `i/${token}${suffix ? `/${suffix}` : ""}`);
+  const unsubUrl = (token: string) => joinUrl(pharmacyUrl, `u/${token}`);
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
     start(async () => {
@@ -51,46 +45,34 @@ export function TrackingTable({ rows, pharmacies, pharmacyUrl }: { rows: Row[]; 
       else toast.error(r.error ?? "Failed");
     });
 
-  const copy = async (token: string) => {
-    await navigator.clipboard.writeText(`${inviteUrl(token)}\n${unsubUrl(token)}`);
-    setCopied(token);
-    toast.success("Invite and unsubscribe links copied");
-    setTimeout(() => setCopied(null), 2000);
+  const copy = async (id: string, url: string, what: string) => {
+    await navigator.clipboard.writeText(url);
+    setCopied(id);
+    toast.success(`${what} copied`);
+    setTimeout(() => setCopied(null), 1600);
   };
 
   const save = () =>
     start(async () => {
       if (!draft) return;
-      const destinationPath =
-        draft.destinationPath === "/delivery-rates/" ? `/delivery-rates/${cityFor.trim()}` : draft.destinationPath;
-      if (destinationPath === "/delivery-rates/") {
-        toast.error("Pick a city for the rate card");
-        return;
-      }
-      const r = await saveContact({ ...draft, destinationPath });
+      const r = await saveContact(draft);
       if (r.ok) {
         toast.success("Saved");
         setDraft(null);
-        setCityFor("");
         router.refresh();
       } else toast.error(r.error);
     });
 
-  const open = (c?: Row) => {
-    const known = c && DESTINATIONS.some((d) => d.path === c.destination_path);
-    const isRate = c?.destination_path.startsWith("/delivery-rates/");
-    setCityFor(isRate ? c!.destination_path.replace("/delivery-rates/", "") : "");
+  const open = (c?: Row) =>
     setDraft(
       c
         ? {
             id: c.id, pharmacyName: c.pharmacy_name, contactEmail: c.contact_email ?? "", city: c.city ?? "",
-            destinationPath: isRate ? "/delivery-rates/" : known ? c.destination_path : "/",
             outcome: (OUTCOMES as readonly string[]).includes(c.outcome) ? (c.outcome as Outcome) : "new",
             notes: c.notes ?? "",
           }
         : EMPTY,
     );
-  };
 
   return (
     <div>
@@ -147,6 +129,13 @@ export function TrackingTable({ rows, pharmacies, pharmacyUrl }: { rows: Row[]; 
                           {c.visits.human} hit{c.visits.human === 1 ? "" : "s"}
                           {c.visits.bot > 0 ? `, ${c.visits.bot} bot` : ""}
                         </p>
+                        {/* Which of the links in the email they went for. */}
+                        <p className="mt-0.5 text-xs font-medium text-brand-700">
+                          {Object.entries(c.visits.byDestination)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([k, n]) => `${k}${n > 1 ? ` ×${n}` : ""}`)
+                            .join(", ")}
+                        </p>
                       </>
                     )}
                   </TD>
@@ -157,10 +146,33 @@ export function TrackingTable({ rows, pharmacies, pharmacyUrl }: { rows: Row[]; 
                   </TD>
 
                   <TD>
-                    <Button size="sm" variant="outline" onClick={() => copy(c.token)}>
-                      {copied === c.token ? <Check /> : <Copy />} Copy
-                    </Button>
-                    <p className="mt-1 font-mono text-[0.68rem] text-ink-400">/i/{c.token}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => copy(`${c.id}:pitch`, inviteUrl(c.token), "Pitch link")}>
+                        {copied === `${c.id}:pitch` ? <Check /> : <Copy />} Pitch link
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => copy(`${c.id}:unsub`, unsubUrl(c.token), "Unsubscribe link")}>
+                        {copied === `${c.id}:unsub` ? <Check /> : <Copy />} Unsub link
+                      </Button>
+                    </div>
+                    {/* The same token, pointed somewhere else. Several can go in
+                        one email, and which gets opened is the real signal. */}
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {([
+                        ["signup", "signup"],
+                        ["demo", "demo"],
+                        ...(c.city ? ([[`rates/${slugify(c.city)}`, "rates"]] as [string, string][]) : []),
+                      ] as [string, string][]).map(([suffix, label]) => (
+                        <button
+                          key={suffix}
+                          type="button"
+                          title={`Copy ${inviteUrl(c.token, suffix)}`}
+                          onClick={() => copy(`${c.id}:${suffix}`, inviteUrl(c.token, suffix), `${label} link`)}
+                          className="rounded-md border border-ink-200 px-1.5 py-0.5 font-mono text-[0.65rem] text-ink-500 transition-soft hover:border-brand-600 hover:text-brand-700"
+                        >
+                          {copied === `${c.id}:${suffix}` ? "copied" : `+${label}`}
+                        </button>
+                      ))}
+                    </div>
                   </TD>
 
                   <TD className="whitespace-nowrap text-right">
@@ -245,18 +257,6 @@ export function TrackingTable({ rows, pharmacies, pharmacyUrl }: { rows: Row[]; 
               <Field label="Public email" htmlFor="oc-email" optional hint="Their published business address. Only used so you know who you wrote to.">
                 <Input id="oc-email" type="email" value={draft.contactEmail} onChange={(e) => setDraft({ ...draft, contactEmail: e.target.value })} />
               </Field>
-
-              <Field label="The link takes them to" htmlFor="oc-dest" required>
-                <Select id="oc-dest" value={draft.destinationPath} onChange={(e) => setDraft({ ...draft, destinationPath: e.target.value })}>
-                  {DESTINATIONS.map((d) => <option key={d.path} value={d.path}>{d.label}</option>)}
-                </Select>
-              </Field>
-
-              {draft.destinationPath === "/delivery-rates/" ? (
-                <Field label="Which rate card" htmlFor="oc-ratecity" required hint="The city slug, as it appears in the rate card's own link.">
-                  <Input id="oc-ratecity" placeholder="bolton" value={cityFor} onChange={(e) => setCityFor(e.target.value)} />
-                </Field>
-              ) : null}
 
               <Field label="Outcome" htmlFor="oc-outcome" hint="Your read on the conversation. The stage beside it works itself out.">
                 <Select id="oc-outcome" value={draft.outcome} onChange={(e) => setDraft({ ...draft, outcome: e.target.value as Outcome })}>

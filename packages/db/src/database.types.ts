@@ -317,7 +317,6 @@ export type OutreachContactRow = {
   pharmacy_name: string;
   contact_email: string | null;
   city: string | null;
-  destination_path: string;
   sent_at: string | null;
   pharmacy_id: string | null;
   manual_signed_up_at: string | null;

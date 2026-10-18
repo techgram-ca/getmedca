@@ -4,7 +4,9 @@ import {
   BOT_WINDOW_MS,
   generateOutreachToken,
   isLikelyBot,
+  joinUrl,
   outreachStage,
+  resolveInviteDestination,
   summariseVisits,
 } from "./index.ts";
 
@@ -102,7 +104,7 @@ test("an invite only a scanner touched reads as untouched", () => {
 });
 
 test("nothing at all summarises to nothing", () => {
-  assert.deepEqual(summariseVisits([]), { human: 0, bot: 0, days: 0, firstHuman: null, lastHuman: null });
+  assert.deepEqual(summariseVisits([]), { human: 0, bot: 0, days: 0, byDestination: {}, firstHuman: null, lastHuman: null });
 });
 
 // ---------------- outreachStage ----------------
@@ -155,4 +157,63 @@ test("signing up without ever being marked sent still counts", () => {
 test("a scanner-only hit does not promote anyone to visited", () => {
   // summariseVisits has already filtered; humanVisits is what reaches here.
   assert.equal(outreachStage({ ...base, sentAt: SENT, humanVisits: 0 }).stage, "sent");
+});
+
+// ---------------- resolveInviteDestination ----------------
+
+test("a bare invite goes to the pitch", () => {
+  assert.deepEqual(resolveInviteDestination(undefined), { key: "home", path: "/", label: "The pitch" });
+  assert.deepEqual(resolveInviteDestination([]), { key: "home", path: "/", label: "The pitch" });
+});
+
+test("each suffix lands where it says", () => {
+  assert.equal(resolveInviteDestination(["signup"]).path, "/signup");
+  assert.equal(resolveInviteDestination(["rates", "bolton"]).path, "/delivery-rates/bolton");
+  assert.equal(resolveInviteDestination(["rates", "bolton"]).key, "rates/bolton");
+});
+
+test("the demo page is on the patient site, not this one", () => {
+  // The bug this replaces: a relative /p/... resolved against the pharmacy
+  // app, which has no such page, so the proxy bounced it to /login.
+  const d = resolveInviteDestination(["demo"]);
+  assert.equal(d.patient, true);
+  assert.equal(d.path, "/p/demo-pharmacy");
+});
+
+test("only the demo link is on the patient site", () => {
+  for (const segs of [undefined, ["signup"], ["rates", "bolton"]]) {
+    assert.notEqual(resolveInviteDestination(segs as string[] | undefined).patient, true);
+  }
+});
+
+test("a mangled suffix still lands somewhere useful", () => {
+  // A link broken by a mail client is still a pharmacy who clicked.
+  assert.equal(resolveInviteDestination(["nonsense"]).key, "home");
+  assert.equal(resolveInviteDestination(["rates"]).key, "home");
+  assert.equal(resolveInviteDestination([""]).key, "home");
+});
+
+test("a city is escaped on its way into a path", () => {
+  assert.equal(resolveInviteDestination(["rates", "st catharines"]).path, "/delivery-rates/st%20catharines");
+});
+
+// ---------------- joinUrl ----------------
+
+test("a base URL with a trailing slash does not produce a double slash", () => {
+  // What the deployed env var actually had, and what it put in every link.
+  assert.equal(joinUrl("https://qapharmacy.getmed.ca/", "/i/abc"), "https://qapharmacy.getmed.ca/i/abc");
+  assert.equal(joinUrl("https://qapharmacy.getmed.ca//", "i/abc"), "https://qapharmacy.getmed.ca/i/abc");
+  assert.equal(joinUrl("https://qapharmacy.getmed.ca", "/i/abc"), "https://qapharmacy.getmed.ca/i/abc");
+  assert.equal(joinUrl("https://qapharmacy.getmed.ca", "i/abc"), "https://qapharmacy.getmed.ca/i/abc");
+});
+
+test("the summary says which of the links in the email they opened", () => {
+  const s = summariseVisits([
+    { created_at: "2026-10-18T14:00:00Z", likely_bot: false, path: "rates/bolton" },
+    { created_at: "2026-10-19T09:00:00Z", likely_bot: false, path: "rates/bolton" },
+    { created_at: "2026-10-19T09:01:00Z", likely_bot: false, path: "home" },
+    { created_at: "2026-10-18T09:00:01Z", likely_bot: true, path: "signup" },
+  ]);
+  // The scanner's hit on /signup is not a preference for signing up.
+  assert.deepEqual(s.byDestination, { "rates/bolton": 2, home: 1 });
 });
