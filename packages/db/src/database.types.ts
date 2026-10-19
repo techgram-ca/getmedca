@@ -44,6 +44,8 @@ export type PharmacyRow = {
   owner_user_id: string | null;
   slug: string | null;
   status: PharmacyStatus;
+  /** False hides an approved pharmacy from search and disables ordering on its public page. */
+  listed: boolean;
   name: string | null;
   email: string | null;
   phone: string | null;
@@ -455,6 +457,7 @@ export type PharmacyPublicRow = {
   bio: string | null;
   gallery_paths: string[];
   theme_color: string | null;
+  listed: boolean;
 };
 
 /**

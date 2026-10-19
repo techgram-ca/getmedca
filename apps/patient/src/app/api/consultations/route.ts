@@ -24,8 +24,16 @@ export const POST = handler(async (req: Request) => {
   const settings = await getPlatformSettings(db);
   if (!isLaunched(settings)) throw new AppError("GetMed is not open for consultations yet", 403);
 
-  const { data: pharmacy } = await db.from("pharmacies").select("id, status, offers_consultation").eq("id", input.pharmacyId).maybeSingle();
-  if (!pharmacy || pharmacy.status !== "approved") throw new AppError("This pharmacy is not accepting requests", 400);
+  const { data: pharmacy } = await db
+    .from("pharmacies")
+    .select("id, status, listed, offers_consultation")
+    .eq("id", input.pharmacyId)
+    .maybeSingle();
+  // An unlisted pharmacy shows a preview page with its buttons disabled; this
+  // is the refusal behind that, for anyone arriving by direct link.
+  if (!pharmacy || pharmacy.status !== "approved" || !pharmacy.listed) {
+    throw new AppError("This pharmacy is not accepting requests", 400);
+  }
 
   const { data: config } = await db.from("form_field_config").select("*").eq("applies_to", "consultation");
   const fieldErrors = applyConsultationFieldConfig(input, config ?? []);
