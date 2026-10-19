@@ -13,6 +13,7 @@ import {
 } from "@getmed/core/auth/signup-result";
 import { createClient } from "@getmed/db/server";
 import { createServiceClient } from "@getmed/db/service";
+import { linkSignupToInvite } from "./outreach";
 
 export type AuthState = {
   error?: string;
@@ -150,7 +151,15 @@ export async function signup(_prev: AuthState, fd: FormData): Promise<AuthState>
   if (!data.user) return { error: "Could not create your account" };
 
   // Create the pharmacy draft row (one login per pharmacy).
-  await db.from("pharmacies").upsert({ owner_user_id: data.user.id, email: parsed.data.email, status: "pending", signup_step: 1 }, { onConflict: "owner_user_id" });
+  const { data: pharmacy } = await db
+    .from("pharmacies")
+    .upsert({ owner_user_id: data.user.id, email: parsed.data.email, status: "pending", signup_step: 1 }, { onConflict: "owner_user_id" })
+    .select("id")
+    .maybeSingle();
+
+  // Credit the pitch email that brought them, if a tracked link did. Silent
+  // and best-effort: outreach bookkeeping never gets to block a signup.
+  if (pharmacy) await linkSignupToInvite(pharmacy.id);
 
   if (!data.session) {
     // `expired` means there was an account here already, waiting on a link
@@ -294,4 +303,47 @@ export async function setNewPassword(_prev: AuthState, fd: FormData): Promise<Au
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) return { error: error.message };
   redirect("/login?reset=1");
+}
+
+const newEmailSchema = z.object({ email: z.string().trim().email("Enter a valid email address") });
+
+/**
+ * Changes the address this pharmacy signs in with.
+ *
+ * Separate from the pharmacy's contact address on purpose: one is a person
+ * who holds a password, the other is wherever the shop wants order alerts to
+ * land. They are commonly different, and the trouble has only ever been that
+ * nobody could tell them apart or move the first one.
+ *
+ * Supabase emails the new address a confirmation, and with Secure Email
+ * Change on — the default — the old one too. Nothing moves until those are
+ * opened, which is what stops a borrowed laptop becoming a stolen account.
+ */
+export async function changeLoginEmail(_prev: AuthState, fd: FormData): Promise<AuthState> {
+  const parsed = newEmailSchema.safeParse(Object.fromEntries(fd.entries()));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Enter a valid email" };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sign in again, then try once more." };
+  if (user.email?.toLowerCase() === parsed.data.email.toLowerCase()) {
+    return { error: "That is already your sign-in email." };
+  }
+
+  const origin = await appOrigin();
+  const { error } = await supabase.auth.updateUser(
+    { email: parsed.data.email },
+    { emailRedirectTo: `${origin}/api/auth/callback?next=/settings` },
+  );
+  if (isAddressTaken(error ? { error } : {})) {
+    return { error: "Another GetMed account already uses that address." };
+  }
+  if (isSendingTooOften(error)) {
+    return { error: "We have just sent a confirmation. Give it a minute and check your inbox." };
+  }
+  if (error) return { error: error.message };
+
+  return {
+    message: `Check ${parsed.data.email} and open the link to finish the change. Until then, keep signing in with your current address — and if we also email your old address, that link has to be opened too.`,
+  };
 }

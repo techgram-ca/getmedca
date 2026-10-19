@@ -4,7 +4,7 @@ Two ways to get a database, depending on whether you already have one.
 
 ## Fresh setup — `fresh/`
 
-`fresh/init.sql` is the complete schema including every change to date, and
+`fresh/init.sql` is the schema up to `migrations/0015_launch_state.sql`, and
 `fresh/seed.sql` is its matching reference data. Use these for a brand-new
 project. Run the init first, then the seed:
 
@@ -14,6 +14,11 @@ psql "$DATABASE_URL" -f supabase/fresh/seed.sql
 ```
 
 In the Supabase dashboard, paste each file into the SQL Editor and run it.
+
+`fresh/` has not been kept up with `migrations/` since 0015: `0016`–`0020` are
+not folded in, so a project built from `fresh/` still needs those applied
+afterwards. Fold a change into `fresh/` as well as adding the migration, or
+this gap grows.
 
 ## Existing database — `migrations/`
 
@@ -48,7 +53,32 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0013_handling_requirements.sql` | Refrigeration, narcotics and cash-to-collect on an order, and the refrigeration fee that bills |
 | `migrations/0014_pharmacy_slug_postal_code.sql` | Rebuilds public pharmacy slugs as `name-postalcode`, so one chain can have many branches |
 | `migrations/0015_launch_state.sql` | Whether the patient site is open, and the message shown before it is |
+| `migrations/0016_email_signup_state.sql` | `email_signup_state()`, so sign-up can tell a pending confirmation from a finished account |
+| `migrations/0017_delivery_rate_cards.sql` | Admin-edited public delivery rate cards, one per city |
+| `migrations/0018_outreach_tracking.sql` | Pitched pharmacies, and what happened after they clicked |
+| `migrations/0019_drop_outreach_destination.sql` | Drops the per-contact destination 0018 added |
+| `migrations/0020_outreach_link_rules.sql` | Admin-editable mapping from an invite link's slug to where it sends people |
+| `prod/outreach-12.sql` | 0018–0020 as one repeatable script, for applying outreach tracking in one go |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
+
+## One change in one go — `prod/`
+
+`prod/` holds a single consolidated script per feature, for applying one
+feature to a live database without walking the numbered migrations one at a
+time. Each is written to be repeatable, so running it on a database that is
+part-way through the migrations it replaces lands in the same place as running
+it on one that has none of them:
+
+```bash
+psql "$DATABASE_URL" -f supabase/prod/outreach-12.sql
+```
+
+`prod/outreach-12.sql` is `migrations/0018`, `0019` and `0020` clubbed
+together — the outreach tables, their RLS policies and the four seeded invite
+link rules. It never creates the `destination_path` column 0019 removes, but
+drops it if an earlier 0018 run left it behind. The numbered migrations stay
+where they are: they are the history a database created from `0001_init.sql`
+follows, and `supabase db push` tracks them by name.
 
 After any schema change, regenerate the TypeScript types with `pnpm db:types`.
 

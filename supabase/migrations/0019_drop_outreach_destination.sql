@@ -1,0 +1,12 @@
+-- Where an invite link goes is now decided by the link, not by the contact.
+--
+-- `/i/<token>` goes to the pitch, `/i/<token>/signup` to the form,
+-- `/i/<token>/rates/<city>` to a rate card, `/i/<token>/demo` to the demo
+-- page. Several can go in one email under one token, so what gets recorded
+-- is which of them was opened — better evidence than a destination chosen in
+-- advance on the pharmacy's behalf.
+--
+-- The column that held that choice now has no reader. Left in place it would
+-- read, to whoever finds it next, as something that still decides where
+-- people land.
+alter table public.outreach_contacts drop column if exists destination_path;
