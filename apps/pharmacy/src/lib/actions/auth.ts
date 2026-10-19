@@ -304,3 +304,46 @@ export async function setNewPassword(_prev: AuthState, fd: FormData): Promise<Au
   if (error) return { error: error.message };
   redirect("/login?reset=1");
 }
+
+const newEmailSchema = z.object({ email: z.string().trim().email("Enter a valid email address") });
+
+/**
+ * Changes the address this pharmacy signs in with.
+ *
+ * Separate from the pharmacy's contact address on purpose: one is a person
+ * who holds a password, the other is wherever the shop wants order alerts to
+ * land. They are commonly different, and the trouble has only ever been that
+ * nobody could tell them apart or move the first one.
+ *
+ * Supabase emails the new address a confirmation, and with Secure Email
+ * Change on — the default — the old one too. Nothing moves until those are
+ * opened, which is what stops a borrowed laptop becoming a stolen account.
+ */
+export async function changeLoginEmail(_prev: AuthState, fd: FormData): Promise<AuthState> {
+  const parsed = newEmailSchema.safeParse(Object.fromEntries(fd.entries()));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Enter a valid email" };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sign in again, then try once more." };
+  if (user.email?.toLowerCase() === parsed.data.email.toLowerCase()) {
+    return { error: "That is already your sign-in email." };
+  }
+
+  const origin = await appOrigin();
+  const { error } = await supabase.auth.updateUser(
+    { email: parsed.data.email },
+    { emailRedirectTo: `${origin}/api/auth/callback?next=/settings` },
+  );
+  if (isAddressTaken(error ? { error } : {})) {
+    return { error: "Another GetMed account already uses that address." };
+  }
+  if (isSendingTooOften(error)) {
+    return { error: "We have just sent a confirmation. Give it a minute and check your inbox." };
+  }
+  if (error) return { error: error.message };
+
+  return {
+    message: `Check ${parsed.data.email} and open the link to finish the change. Until then, keep signing in with your current address — and if we also email your old address, that link has to be opened too.`,
+  };
+}

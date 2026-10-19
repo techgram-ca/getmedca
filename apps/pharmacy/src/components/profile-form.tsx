@@ -27,7 +27,7 @@ import { UploadField } from "./upload-field";
  * the public page that had to be kept in step with the real one by hand; the
  * real page is one click away below.
  */
-export function ProfileForm({ data, patientUrl }: { data: ProfileData; patientUrl: string }) {
+export function ProfileForm({ data, patientUrl, signInEmail }: { data: ProfileData; patientUrl: string; signInEmail?: string }) {
   const p = data.pharmacy;
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -60,7 +60,18 @@ export function ProfileForm({ data, patientUrl }: { data: ProfileData; patientUr
             <AddressAutocomplete id="address" value={addressText} onChange={setAddressText} onSelect={(a) => { setF((s) => ({ ...s, addressLine: a.line, city: a.city ?? "", postalCode: a.postalCode ?? "", lat: a.lat ?? null, lng: a.lng ?? null })); }} />
           </Field>
           <Field label="Phone" htmlFor="phone" required><Input id="phone" type="tel" value={f.phone} onChange={(e) => up("phone", e.target.value)} required /></Field>
-          <Field label="Contact email" htmlFor="email" required><Input id="email" type="email" value={f.email} onChange={(e) => up("email", e.target.value)} required /></Field>
+          <Field
+            label="Email for orders and patients"
+            htmlFor="email"
+            required
+            hint={
+              signInEmail && signInEmail.toLowerCase() !== f.email.trim().toLowerCase()
+                ? `You sign in with ${signInEmail}. Changing this does not change that — Settings does.`
+                : "Where order alerts go. It does not have to be the address you sign in with."
+            }
+          >
+            <Input id="email" type="email" value={f.email} onChange={(e) => up("email", e.target.value)} required />
+          </Field>
         </CardContent>
       </Card>
 
