@@ -111,7 +111,14 @@ export function SignupWizard({ data }: { data: ProfileData }) {
                     <AddressAutocomplete id="address" value={addressText} onChange={setAddressText} onSelect={(a) => setS1({ ...s1, addressLine: a.line, city: a.city ?? "", postalCode: a.postalCode ?? "", lat: a.lat ?? null, lng: a.lng ?? null })} />
                   </Field>
                   <Field label="Phone" htmlFor="phone" required><Input id="phone" type="tel" value={s1.phone} onChange={(e) => setS1({ ...s1, phone: e.target.value })} /></Field>
-                  <Field label="Email" htmlFor="email" required><Input id="email" type="email" value={s1.email} onChange={(e) => setS1({ ...s1, email: e.target.value })} /></Field>
+                  <Field
+                    label="Email for orders"
+                    htmlFor="email"
+                    required
+                    hint="Where order alerts go. Your sign-in address stays as it is."
+                  >
+                    <Input id="email" type="email" value={s1.email} onChange={(e) => setS1({ ...s1, email: e.target.value })} />
+                  </Field>
                 </div>
               </StepCard>
             ) : null}

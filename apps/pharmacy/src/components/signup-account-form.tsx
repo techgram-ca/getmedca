@@ -43,7 +43,16 @@ export function SignupAccountForm() {
     <form action={action} className="mt-5 space-y-4">
       <FormError message={state?.error} title="We couldn't create your account" />
       <Field label="Your name" htmlFor="fullName"><Input id="fullName" name="fullName" autoComplete="name" required /></Field>
-      <Field label="Work email" htmlFor="email"><Input id="email" name="email" type="email" autoComplete="email" required /></Field>
+      {/* Named for what it does. "Work email" read as "an address at work",
+          so people gave a personal one, later typed the shop's address into
+          their profile, and could not see why that one would not log them in. */}
+      <Field
+        label="Sign-in email"
+        htmlFor="email"
+        hint="This is what you will log in with. Use an address you will keep access to — you can change it later from Settings."
+      >
+        <Input id="email" name="email" type="email" autoComplete="email" placeholder="rx@yourpharmacy.ca" required />
+      </Field>
       <Field label="Password" htmlFor="password" hint="At least 10 characters."><Input id="password" name="password" type="password" autoComplete="new-password" minLength={10} required /></Field>
       <Button type="submit" size="lg" className="w-full" loading={pending} loadingText="Creating your account…">Create account</Button>
       <p className="text-xs text-ink-500">By continuing you agree to list your pharmacy on GetMed and to the flat per-delivery fee model.</p>

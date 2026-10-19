@@ -314,3 +314,25 @@ export async function setSelfPaused(paused: boolean): Promise<R> {
   revalidatePath("/settings");
   return { ok: true };
 }
+
+const notificationEmailSchema = z.object({ email: z.string().trim().email("Enter a valid email address") });
+
+/**
+ * Changes where order alerts are sent.
+ *
+ * Not the sign-in address — this one is usually a shared shop inbox, and the
+ * two being allowed to differ is the point. Changing it needs no confirmation
+ * because it grants nothing: the worst a typo does is stop alerts arriving,
+ * which the pharmacy notices and fixes.
+ */
+export async function saveNotificationEmail(input: unknown): Promise<R> {
+  try {
+    const d = notificationEmailSchema.parse(input);
+    const { pharmacy, db } = await requirePharmacy();
+    const { error } = await db.from("pharmacies").update({ email: d.email }).eq("id", pharmacy.id);
+    if (error) throw error;
+    revalidatePath("/settings");
+    revalidatePath("/profile");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
