@@ -115,8 +115,14 @@ export async function createOrder(input: OrderInsert, ctx: Ctx = {}): Promise<Or
   const settings = await getPlatformSettings(db);
   if (!isLaunched(settings)) throw new AppError("GetMed is not open for orders yet", 403);
 
-  const { data: pharmacy } = await db.from("pharmacies").select("id, status").eq("id", input.pharmacy_id).maybeSingle();
-  if (!pharmacy || pharmacy.status !== "approved") throw new AppError("This pharmacy is not accepting orders", 400);
+  // `listed` is the per-pharmacy version of the same switch: an unlisted
+  // pharmacy is approved and working, but its public page is a preview and
+  // the buttons on it are disabled. This is what makes that true rather than
+  // cosmetic, the same way the launch check above does.
+  const { data: pharmacy } = await db.from("pharmacies").select("id, status, listed").eq("id", input.pharmacy_id).maybeSingle();
+  if (!pharmacy || pharmacy.status !== "approved" || !pharmacy.listed) {
+    throw new AppError("This pharmacy is not accepting orders", 400);
+  }
 
   const { data, error } = await db.from("orders").insert(input).select("*").single();
   if (error) throw error;

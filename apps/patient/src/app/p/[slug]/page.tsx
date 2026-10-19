@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import {
   Accessibility,
   ArrowRight,
-  BadgeCheck,
   CalendarClock,
   CheckCircle2,
   Clock,
@@ -21,11 +20,12 @@ import { distanceToPharmacy } from "@getmed/core/geo";
 import { DAY_KEYS, DAY_LABELS, formatTime, type WeeklyHours } from "@getmed/core/hours";
 import { formatCurrency, formatDistance, formatDuration } from "@getmed/core/format";
 import { DEFAULT_THEME_COLOR, themeStyle } from "@getmed/core/theme";
-import { Avatar, Badge, Button, ImageWithFallback, ScrollReveal, cn } from "@getmed/ui";
+import { Badge, Button, ImageWithFallback, ScrollReveal, cn } from "@getmed/ui";
 import { PharmacyFooter, PharmacyHeader, StickyOrderBar, type ChromePharmacy } from "@/components/pharmacy/pharmacy-chrome";
 import { getPublicPharmacy } from "@/lib/pharmacy";
 import { getLaunchState } from "@/lib/launch";
 import { ActionButton } from "@/components/pharmacy/action-button";
+import { PharmacistGrid } from "@/components/pharmacy/pharmacist-grid";
 
 export const dynamic = "force-dynamic";
 
@@ -55,8 +55,6 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
     address && p.lat != null && p.lng != null ? await distanceToPharmacy(address, { lat: p.lat, lng: p.lng }).catch(() => null) : null;
 
   const hours = (p.hours ?? {}) as WeeklyHours;
-  const main = p.pharmacists.find((s) => s.is_main) ?? p.pharmacists[0];
-  const others = p.pharmacists.filter((s) => s.id !== main?.id);
   const fullAddress = [p.address_line, p.city, p.province, p.postal_code].filter(Boolean).join(", ");
   const orderParams = new URLSearchParams({ pharmacyId: p.id });
   if (address) orderParams.set("address", address);
@@ -66,10 +64,18 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
     orderParams.set("lng", lngParam);
   }
   const orderHref = `/order/new?${orderParams}`;
-  // Before launch the page is shown in full but nothing on it can be acted on.
-  const { launched } = await getLaunchState();
-  const preLaunch = !launched;
   const consultHref = `/consultation/request?pharmacyId=${p.id}`;
+
+  // Two reasons this page is read-only, one effect. Before launch nothing on
+  // the patient site can be acted on; an unlisted pharmacy is the per-pharmacy
+  // version of the same thing — approved and working, but kept out of search
+  // and shown to prospects rather than patients. Either way the page renders
+  // in full and every button on it is disabled. The APIs refuse separately.
+  const { launched } = await getLaunchState();
+  const preview = !launched || !p.listed;
+  const previewNotice = !launched
+    ? "GetMed opens soon. This page is a preview — ordering and consultations are not available yet."
+    : "This page is a preview — ordering and consultations are not available yet.";
 
   const chrome: ChromePharmacy = {
     id: p.id,
@@ -103,10 +109,10 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
 
   return (
     <div style={theme} className="flex min-h-screen flex-col bg-ink-50">
-      <PharmacyHeader pharmacy={chrome} links={navLinks} orderHref={orderHref} preLaunch={preLaunch} />
-      {preLaunch ? (
+      <PharmacyHeader pharmacy={chrome} links={navLinks} orderHref={orderHref} preview={preview} />
+      {preview ? (
         <p className="border-b border-brand-600/20 bg-brand-100 px-6 py-3 text-center text-sm font-medium text-brand-900">
-          GetMed opens soon. This page is a preview — ordering and consultations are not available yet.
+          {previewNotice}
         </p>
       ) : null}
 
@@ -127,9 +133,9 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
-                <ActionButton size="lg" href={orderHref} disabled={preLaunch}><FileText /> Order prescription</ActionButton>
+                <ActionButton size="lg" href={orderHref} disabled={preview}><FileText /> Order prescription</ActionButton>
                 {p.offers_consultation ? (
-                  <ActionButton size="lg" variant="outline" href={consultHref} disabled={preLaunch}><Stethoscope /> Ask a pharmacist</ActionButton>
+                  <ActionButton size="lg" variant="outline" href={consultHref} disabled={preview}><Stethoscope /> Ask a pharmacist</ActionButton>
                 ) : null}
               </div>
 
@@ -237,7 +243,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
                     </li>
                   ))}
                 </ol>
-                <ActionButton className="mt-7 w-full" href={orderHref} disabled={preLaunch}>Start your order <ArrowRight /></ActionButton>
+                <ActionButton className="mt-7 w-full" href={orderHref} disabled={preview}>Start your order <ArrowRight /></ActionButton>
               </div>
             </ScrollReveal>
           </div>
@@ -245,51 +251,19 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
       </section>
 
       {/* ── Team ─────────────────────────────────────────────── */}
-      {main ? (
+      {p.pharmacists.length ? (
         <section id="team" className="scroll-mt-20 border-y border-ink-200 bg-brand-50 py-20">
           <div className="mx-auto max-w-[1200px] px-6">
             <ScrollReveal>
               <p className="mb-3 text-center text-xs font-bold uppercase tracking-widest text-brand-600">Our team</p>
-              <h2 className="text-center text-3xl font-extrabold tracking-tight text-ink-950">Meet your pharmacists</h2>
+              <h2 className="text-center text-3xl font-extrabold tracking-tight text-ink-950">
+                {p.pharmacists.length === 1 ? "Meet your pharmacist" : "Meet your pharmacists"}
+              </h2>
               <p className="mx-auto mt-3 max-w-[520px] text-center text-ink-500">
                 Real people you can call, not a call centre. We know our patients by name.
               </p>
             </ScrollReveal>
-
-            <ScrollReveal delay={100}>
-              <div className="mx-auto mt-12 max-w-3xl rounded-2xl border border-ink-200 bg-white p-8">
-                <div className="flex flex-col gap-6 sm:flex-row">
-                  <Avatar src={main.photoUrl} name={main.name} size={112} className="shrink-0 rounded-2xl" />
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-xl font-extrabold text-ink-950">{main.name}</p>
-                      <Badge tone="brand"><BadgeCheck className="size-3" /> Pharmacist in charge</Badge>
-                    </div>
-                    <p className="mt-1 text-sm text-ink-500">
-                      {[main.credentials, main.years_experience != null ? `${main.years_experience} years of experience` : null].filter(Boolean).join(" · ")}
-                    </p>
-                    {main.bio ? <p className="mt-3 leading-relaxed text-ink-600">{main.bio}</p> : null}
-                    {main.languages.length ? <p className="mt-3 text-sm text-ink-500">Speaks {main.languages.join(", ")}</p> : null}
-                  </div>
-                </div>
-              </div>
-            </ScrollReveal>
-
-            {others.length ? (
-              <div className="mx-auto mt-6 grid max-w-3xl gap-4 sm:grid-cols-2">
-                {others.map((s, i) => (
-                  <ScrollReveal key={s.id} delay={140 + i * 60}>
-                    <div className="flex items-center gap-4 rounded-2xl border border-ink-200 bg-white p-4">
-                      <Avatar src={s.photoUrl} name={s.name} size={52} className="rounded-xl" />
-                      <div className="min-w-0">
-                        <p className="truncate font-bold text-ink-950">{s.name}</p>
-                        <p className="truncate text-sm text-ink-500">{s.credentials ?? "Pharmacist"}</p>
-                      </div>
-                    </div>
-                  </ScrollReveal>
-                ))}
-              </div>
-            ) : null}
+            <PharmacistGrid members={p.pharmacists} />
           </div>
         </section>
       ) : null}
@@ -327,9 +301,9 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
             </ScrollReveal>
 
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <ActionButton size="lg" href={orderHref} disabled={preLaunch}><FileText /> Order prescription</ActionButton>
+              <ActionButton size="lg" href={orderHref} disabled={preview}><FileText /> Order prescription</ActionButton>
               {p.offers_consultation ? (
-                <ActionButton size="lg" variant="outline" href={consultHref} disabled={preLaunch}><Stethoscope /> Ask a pharmacist</ActionButton>
+                <ActionButton size="lg" variant="outline" href={consultHref} disabled={preview}><Stethoscope /> Ask a pharmacist</ActionButton>
               ) : null}
             </div>
           </div>
@@ -352,7 +326,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
                 <ul className="flex flex-wrap gap-2">
                   {p.issues.map((i) => (
                     <li key={i.id}>
-                      {preLaunch ? (
+                      {preview ? (
                         <span className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-full border border-ink-200 bg-ink-50 px-4 py-2 text-sm font-medium text-ink-400">
                           <Stethoscope className="size-3.5 text-ink-400" />
                           {i.name}
@@ -392,11 +366,21 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
       {/* ── Visit us ─────────────────────────────────────────── */}
       <section id="visit" className="scroll-mt-20 border-t border-ink-200 bg-ink-50 py-20">
         <div className="mx-auto max-w-[1200px] px-6">
-          <div className="grid gap-10 lg:grid-cols-2">
+          {/* The heading sits above the grid rather than inside its left
+              column. Inside, it pushed the opening hours a heading's height
+              down the page while the cards beside them started at the top,
+              and the two columns never lined up. */}
+          <ScrollReveal>
+            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-brand-600">Visit us</p>
+            <h2 className="text-3xl font-extrabold tracking-tight text-ink-950">Where to find us</h2>
+          </ScrollReveal>
+          <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
             <ScrollReveal>
-              <p className="mb-3 text-xs font-bold uppercase tracking-widest text-brand-600">Visit us</p>
-              <h2 className="text-3xl font-extrabold tracking-tight text-ink-950">Opening hours</h2>
-              <dl className="mt-6 divide-y divide-ink-200 overflow-hidden rounded-2xl border border-ink-200 bg-white">
+              <dl className="divide-y divide-ink-200 overflow-hidden rounded-2xl border border-ink-200 bg-white">
+                <div className="flex items-center justify-between bg-ink-50/60 px-5 py-3">
+                  <dt className="text-xs font-bold uppercase tracking-widest text-ink-500">Opening hours</dt>
+                  <dd className="text-xs font-semibold text-ink-500">{p.openNow.open ? "Open now" : "Closed now"}</dd>
+                </div>
                 {DAY_KEYS.map((d) => {
                   const h = hours[d];
                   const closed = !h || h.closed;
@@ -413,8 +397,9 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
             </ScrollReveal>
 
             <ScrollReveal delay={120}>
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="rounded-2xl border border-ink-200 bg-white p-6">
+                  <p className="mb-4 text-xs font-bold uppercase tracking-widest text-ink-500">Address &amp; contact</p>
                   <p className="flex items-start gap-3 text-ink-700">
                     <MapPin className="mt-0.5 size-5 shrink-0 text-brand-600" />
                     <span>{fullAddress}</span>
@@ -472,7 +457,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
             Send us your prescription in under two minutes. We&#39;ll take care of the rest and bring it right to your door.
           </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <ActionButton size="lg" variant="white" href={orderHref} disabled={preLaunch}>Order prescription <ArrowRight /></ActionButton>
+            <ActionButton size="lg" variant="white" href={orderHref} disabled={preview}>Order prescription <ArrowRight /></ActionButton>
             {p.phone ? (
               <Button asChild size="lg" variant="outline" className="border-white/40 bg-transparent text-white hover:border-white hover:text-white">
                 <a href={`tel:${p.phone}`}><Phone /> Call {p.phone}</a>
@@ -483,7 +468,7 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
       </section>
 
       <PharmacyFooter pharmacy={chrome} address={fullAddress} />
-      <StickyOrderBar pharmacy={chrome} orderHref={orderHref} preLaunch={preLaunch} />
+      <StickyOrderBar pharmacy={chrome} orderHref={orderHref} preview={preview} />
       <div className="h-16 md:hidden" />
     </div>
   );

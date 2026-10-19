@@ -35,3 +35,25 @@ export async function setPharmacyStatus(pharmacyId: string, status: "approved" |
   revalidatePath(`/pharmacies/${pharmacyId}`);
   return { ok: true };
 }
+
+/**
+ * Takes an approved pharmacy in or out of patient search.
+ *
+ * Separate from `setPharmacyStatus` because it answers a separate question.
+ * The pharmacy stays approved: it signs in, its dashboard works, its public
+ * page still loads for anyone holding the link. What changes is that patients
+ * cannot find it and cannot order from it — the page renders as a preview
+ * with its buttons disabled, and the order and consultation APIs refuse.
+ *
+ * No email goes out. Unlike approval or going inactive, this is not a decision
+ * about the pharmacy's standing, and the one pharmacy it exists for — the demo
+ * page shown to prospects — has nobody to tell.
+ */
+export async function setPharmacyListed(pharmacyId: string, listed: boolean): Promise<R> {
+  const { db } = await requireAdmin();
+  const { error } = await db.from("pharmacies").update({ listed }).eq("id", pharmacyId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/pharmacies");
+  revalidatePath(`/pharmacies/${pharmacyId}`);
+  return { ok: true };
+}

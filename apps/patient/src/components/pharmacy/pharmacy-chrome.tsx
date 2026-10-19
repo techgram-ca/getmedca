@@ -23,13 +23,14 @@ export function PharmacyHeader({
   pharmacy,
   links = [],
   orderHref,
-  preLaunch,
+  preview,
 }: {
   pharmacy: ChromePharmacy;
   links?: { href: string; label: string }[];
   orderHref?: string;
-  /** Before launch the page is shown in full, but nothing on it can be acted on. */
-  preLaunch?: boolean;
+  /** The page is shown in full, but nothing on it can be acted on — before
+   *  launch, or because this pharmacy is unlisted. */
+  preview?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const href = orderHref ?? `/order/new?pharmacyId=${pharmacy.id}`;
@@ -55,7 +56,7 @@ export function PharmacyHeader({
               <Phone className="size-4" /> Call
             </a>
           ) : null}
-          <ActionButton size="sm" href={href} disabled={preLaunch}>Order prescription</ActionButton>
+          <ActionButton size="sm" href={href} disabled={preview}>Order prescription</ActionButton>
         </nav>
 
         <button className="cursor-pointer border-none bg-transparent p-2 text-ink-950 md:hidden" onClick={() => setOpen(!open)} aria-label="Menu" aria-expanded={open}>
@@ -69,7 +70,7 @@ export function PharmacyHeader({
             <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="text-sm font-medium text-ink-600 no-underline">{l.label}</a>
           ))}
           {pharmacy.phone ? <a href={`tel:${pharmacy.phone}`} className="text-sm font-semibold text-ink-950 no-underline">Call {pharmacy.phone}</a> : null}
-          <ActionButton size="sm" className="w-fit" href={href} disabled={preLaunch}>Order prescription</ActionButton>
+          <ActionButton size="sm" className="w-fit" href={href} disabled={preview}>Order prescription</ActionButton>
         </div>
       ) : null}
     </header>
@@ -98,13 +99,13 @@ export function PharmacyFooter({ pharmacy, address }: { pharmacy: ChromePharmacy
 }
 
 /** Mobile action bar pinned to the bottom of pharmacy-owned pages. */
-export function StickyOrderBar({ pharmacy, className, orderHref, preLaunch }: { pharmacy: ChromePharmacy; className?: string; orderHref?: string; preLaunch?: boolean }) {
+export function StickyOrderBar({ pharmacy, className, orderHref, preview }: { pharmacy: ChromePharmacy; className?: string; orderHref?: string; preview?: boolean }) {
   return (
     <div className={cn("fixed inset-x-0 bottom-0 z-40 border-t border-ink-200 bg-white/95 px-4 py-3 backdrop-blur md:hidden", className)}>
       <div className="flex gap-2">
-        <ActionButton className="flex-1" href={orderHref ?? `/order/new?pharmacyId=${pharmacy.id}`} disabled={preLaunch}>Order prescription</ActionButton>
+        <ActionButton className="flex-1" href={orderHref ?? `/order/new?pharmacyId=${pharmacy.id}`} disabled={preview}>Order prescription</ActionButton>
         {pharmacy.offersConsultation ? (
-          <ActionButton variant="outline" className="flex-1" href={`/consultation/request?pharmacyId=${pharmacy.id}`} disabled={preLaunch}>Ask a pharmacist</ActionButton>
+          <ActionButton variant="outline" className="flex-1" href={`/consultation/request?pharmacyId=${pharmacy.id}`} disabled={preview}>Ask a pharmacist</ActionButton>
         ) : null}
       </div>
     </div>

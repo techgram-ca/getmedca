@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { FileText } from "lucide-react";
+import { EyeOff, FileText } from "lucide-react";
 import { requireAdmin } from "@getmed/core/auth";
 import { formatCurrency, formatDate } from "@getmed/core/format";
 import { DAY_KEYS, DAY_LABELS, formatTime, type WeeklyHours } from "@getmed/core/hours";
@@ -32,9 +32,18 @@ export default async function PharmacyDetail({ params }: { params: Promise<{ pha
       <PageHeader
         title={<span className="flex items-center gap-3"><Avatar src={logoUrl} name={p.name ?? "P"} size={40} className="rounded-lg" />{p.name ?? "Unnamed pharmacy"}<Badge tone={p.status === "approved" ? "success" : p.status === "pending" ? "warning" : "neutral"} className="capitalize">{p.status}</Badge></span>}
         description={`${[p.address_line, p.city, p.postal_code].filter(Boolean).join(", ")} · submitted ${formatDate(p.submitted_at)}`}
-        actions={<PharmacyStatusActions pharmacyId={p.id} status={p.status} />}
+        actions={<PharmacyStatusActions pharmacyId={p.id} status={p.status} listed={p.listed} />}
       />
       {p.inactive_reason ? <p className="mb-4 rounded-lg bg-warning-100 px-3 py-2 text-sm text-amber-900">Inactive reason: {p.inactive_reason}</p> : null}
+      {/* Approved and hidden is an easy state to forget a pharmacy is in — it
+          looks live everywhere else on this page. */}
+      {p.status === "approved" && !p.listed ? (
+        <p className="mb-4 flex items-start gap-2 rounded-lg bg-warning-100 px-3 py-2 text-sm text-amber-900">
+          <EyeOff className="mt-0.5 size-4 shrink-0" />
+          Hidden from patient search. Its public page still loads for anyone with the link, but as a preview — ordering and
+          consultations are disabled.
+        </p>
+      ) : null}
       <Alert tone={taggedAreas === 0 ? "warning" : "info"} className="mb-6">
         <span className="flex flex-wrap items-center justify-between gap-3">
           <span>

@@ -58,8 +58,19 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0018_outreach_tracking.sql` | Pitched pharmacies, and what happened after they clicked |
 | `migrations/0019_drop_outreach_destination.sql` | Drops the per-contact destination 0018 added |
 | `migrations/0020_outreach_link_rules.sql` | Admin-editable mapping from an invite link's slug to where it sends people |
+| `migrations/0021_pharmacy_listed.sql` | `pharmacies.listed`: approved, but kept out of search with ordering disabled |
 | `prod/outreach-12.sql` | 0018–0020 as one repeatable script, for applying outreach tracking in one go |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
+
+`migrations/0021_pharmacy_listed.sql` adds `pharmacies.listed`. `status` says where a pharmacy sits in
+the approval lifecycle; whether patients can find it is a separate question, and answering both with a
+fourth status value would have meant teaching every `status = 'approved'` check — the public view, the
+pharmacists and services read policies, `pharmacy_is_approved`, the dashboard gate, the order and
+consultation APIs — a new value, with the ones missed silently locking a pharmacy out of its own
+account. `listed = false` leaves the pharmacy approved and working and only stops patients arriving:
+`pharmacies_near` skips it, and `/p/[slug]` still renders in full but as a preview, with every button
+disabled and the APIs refusing behind them. The migration sets it on the demo pharmacy, which exists to
+be shown to prospects rather than ordered from. The default is true, so nothing already live changes.
 
 ## One change in one go — `prod/`
 
