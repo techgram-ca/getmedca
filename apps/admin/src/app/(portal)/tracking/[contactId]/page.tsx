@@ -10,14 +10,15 @@ export default async function ContactPage({ params }: { params: Promise<{ contac
   const { data: contact } = await db.from("outreach_contacts").select("*").eq("id", contactId).maybeSingle();
   if (!contact) notFound();
 
-  const [{ data: visitRows }, { data: pharmacies }, { data: rules }] = await Promise.all([
+  const [{ data: visitRows }, { data: pharmacies }, { data: rules }, { data: templates }] = await Promise.all([
     db
       .from("outreach_visits")
       .select("id, created_at, likely_bot, kind, path, user_agent")
       .eq("contact_id", contact.id)
       .order("created_at", { ascending: false }),
     db.from("pharmacies").select("id, name, status, submitted_at, email").order("name"),
-    db.from("outreach_link_rules").select("slug, label, appends_rest").order("sort_order").order("slug"),
+    db.from("outreach_link_rules").select("*").order("sort_order").order("slug"),
+    db.from("outreach_email_templates").select("*").order("is_default", { ascending: false }).order("name"),
   ]);
 
   const visits = visitRows ?? [];
@@ -53,7 +54,8 @@ export default async function ContactPage({ params }: { params: Promise<{ contac
         user_agent: v.user_agent,
       }))}
       pharmacies={(pharmacies ?? []).map((p) => ({ id: p.id, name: p.name ?? p.email ?? "Unnamed" }))}
-      rules={(rules ?? []).map((r) => ({ slug: r.slug, label: r.label, appends_rest: r.appends_rest }))}
+      rules={(rules ?? []).map((r) => ({ slug: r.slug, site: r.site, path: r.path, appends_rest: r.appends_rest, label: r.label }))}
+      templates={templates ?? []}
       pharmacyUrl={process.env.NEXT_PUBLIC_PHARMACY_URL ?? "https://pharmacy.getmed.ca"}
     />
   );

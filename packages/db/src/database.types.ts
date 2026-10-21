@@ -341,6 +341,17 @@ export type OutreachLinkRuleRow = {
   updated_at: string;
 };
 
+export type OutreachEmailTemplateRow = {
+  id: string;
+  name: string;
+  subject: string;
+  /** HTML with `[pharmacy-name]`-style placeholders the app resolves. */
+  body: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type OutreachVisitRow = {
   id: string;
   contact_id: string;
@@ -587,6 +598,7 @@ export type Database = {
       outreach_contacts: Tbl<OutreachContactRow, Pick<OutreachContactRow, "token" | "pharmacy_name"> & Partial<OutreachContactRow>>;
       outreach_visits: Tbl<OutreachVisitRow, Pick<OutreachVisitRow, "contact_id"> & Partial<OutreachVisitRow>>;
       outreach_link_rules: Tbl<OutreachLinkRuleRow, Pick<OutreachLinkRuleRow, "slug" | "path" | "label"> & Partial<OutreachLinkRuleRow>>;
+      outreach_email_templates: Tbl<OutreachEmailTemplateRow, Pick<OutreachEmailTemplateRow, "name"> & Partial<OutreachEmailTemplateRow>>;
     };
     Views: {
       pharmacies_public: { Row: PharmacyPublicRow; Relationships: [] };

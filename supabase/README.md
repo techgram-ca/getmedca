@@ -59,6 +59,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0019_drop_outreach_destination.sql` | Drops the per-contact destination 0018 added |
 | `migrations/0020_outreach_link_rules.sql` | Admin-editable mapping from an invite link's slug to where it sends people |
 | `migrations/0021_pharmacy_listed.sql` | `pharmacies.listed`: approved, but kept out of search with ordering disabled |
+| `migrations/0022_outreach_email_templates.sql` | Reusable pitch-email templates, and one outreach contact per email address |
 | `prod/outreach-12.sql` | 0018–0020 as one repeatable script, for applying outreach tracking in one go |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
@@ -71,6 +72,17 @@ account. `listed = false` leaves the pharmacy approved and working and only stop
 `pharmacies_near` skips it, and `/p/[slug]` still renders in full but as a preview, with every button
 disabled and the APIs refusing behind them. The migration sets it on the demo pharmacy, which exists to
 be shown to prospects rather than ordered from. The default is true, so nothing already live changes.
+
+`migrations/0022_outreach_email_templates.sql` adds `outreach_email_templates` and makes outreach
+contact emails unique. A template holds the pitch HTML once; the admin UI substitutes the per-pharmacy
+parts (`[pharmacy-name]`, `[pharmacy-city]`, and one `[<slug>-link]` per row in
+`outreach_link_rules`) and hands back finished HTML to paste into a mail client — see
+`packages/core/src/outreach/email.ts`. Link placeholders resolve to whole URLs rather than to a raw
+token, so no template contains an origin and the same one works against staging. A partial unique
+index allows exactly one default template. The contact email index is on
+`lower(trim(contact_email))` and partial, since a contact with no published address is normal; the
+migration refuses with the offending addresses named if a database already holds duplicates, rather
+than deciding for itself which of two rows has already been emailed.
 
 ## One change in one go — `prod/`
 
