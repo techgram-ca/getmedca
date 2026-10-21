@@ -19,6 +19,7 @@ test("every link rule becomes a placeholder, named after its slug", () => {
   const keys = outreachPlaceholders(CONTACT, RULES, URL).map((p) => p.key);
   assert.deepEqual(keys, [
     "[pharmacy-name]",
+    "[pharmacy-city-caps]",
     "[pharmacy-city]",
     "[pitch-link]",
     "[signup-link]",
@@ -47,6 +48,30 @@ test("an appending rule takes the contact's city, slugified", () => {
   assert.equal(by.get("[rates-link]"), "https://pharmacy.getmed.ca/i/aB3kD9xQ2mZp/rates/richmond-hill");
 });
 
+test("the two city forms suit the two uses: a sentence and a URL", () => {
+  const by = new Map(
+    outreachPlaceholders({ ...CONTACT, city: "richmond hill" }, RULES, URL).map((p) => [p.key, p.example]),
+  );
+  assert.equal(by.get("[pharmacy-city-caps]"), "Richmond Hill");
+  assert.equal(by.get("[pharmacy-city]"), "richmond-hill");
+});
+
+test("a city typed in any case comes out right both ways", () => {
+  for (const typed of ["BOLTON", "bolton", "Bolton", "  bolton  "]) {
+    const by = new Map(outreachPlaceholders({ ...CONTACT, city: typed }, RULES, URL).map((p) => [p.key, p.example]));
+    assert.equal(by.get("[pharmacy-city-caps]"), "Bolton", typed);
+    assert.equal(by.get("[pharmacy-city]"), "bolton", typed);
+  }
+});
+
+test("the link form of the city matches what the rate-card link uses", () => {
+  const by = new Map(
+    outreachPlaceholders({ ...CONTACT, city: "Richmond Hill" }, RULES, URL).map((p) => [p.key, p.example]),
+  );
+  // A hand-built URL and the generated one must not disagree about the city.
+  assert.ok(by.get("[rates-link]")!.endsWith(`/${by.get("[pharmacy-city]")}`));
+});
+
 test("a contact with no city is not offered a rate-card link that would 404", () => {
   const keys = outreachPlaceholders({ ...CONTACT, city: null }, RULES, URL).map((p) => p.key);
   assert.ok(!keys.includes("[rates-link]"));
@@ -68,7 +93,7 @@ test("name, city and links are substituted in body and subject alike", () => {
     URL,
   );
   assert.equal(r.subject, "Delivery for Bolton Rx");
-  assert.equal(r.html, '<a href="https://pharmacy.getmed.ca/i/aB3kD9xQ2mZp/signup">Join</a> in Bolton');
+  assert.equal(r.html, '<a href="https://pharmacy.getmed.ca/i/aB3kD9xQ2mZp/signup">Join</a> in bolton');
   assert.deepEqual(r.unknown, []);
 });
 
@@ -118,6 +143,13 @@ test("the default template renders with no unknown placeholders", () => {
 test("the default template leaves no token or raw bracket in the subject", () => {
   const r = renderOutreachEmail(DEFAULT_TEMPLATE, CONTACT, RULES, URL);
   assert.equal(r.subject, "Delivery for Bolton Rx, run by GetMed");
+});
+
+test("the default template reads the city as prose, not as a slug", () => {
+  const r = renderOutreachEmail(DEFAULT_TEMPLATE, { ...CONTACT, city: "richmond hill" }, RULES, URL);
+  assert.ok(r.html.includes("pharmacies in Richmond Hill"), "the body is a sentence");
+  assert.ok(!r.html.includes("pharmacies in richmond-hill"));
+  assert.ok(r.html.includes("/rates/richmond-hill"), "the link is still a slug");
 });
 
 test("the default template carries an unsubscribe link, which it is sent under", () => {

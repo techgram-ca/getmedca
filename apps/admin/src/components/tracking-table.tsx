@@ -31,20 +31,30 @@ export const STAGE_TONE: Record<OutreachStage, "neutral" | "brand" | "success" |
   new: "neutral", sent: "neutral", visited: "warning", signed_up: "brand", submitted: "brand", approved: "success",
 };
 
-/** Which timestamp the date window applies to. */
-type DateField = "sent_at" | "created_at";
-
 type Filters = {
   q: string;
   city: string;
   stage: string;
-  outcome: string;
-  dateField: DateField;
-  from: string;
-  to: string;
+  /** One calendar day, local, matched against the send date. */
+  sentOn: string;
 };
 
-const NO_FILTERS: Filters = { q: "", city: "", stage: "", outcome: "", dateField: "sent_at", from: "", to: "" };
+const NO_FILTERS: Filters = { q: "", city: "", stage: "", sentOn: "" };
+
+/**
+ * The local calendar day a timestamp falls on.
+ *
+ * `sent_at` is stored UTC and the date input speaks the admin's local
+ * calendar. Slicing the ISO string compares the two directly, so an email
+ * marked sent at 9pm in Toronto is filed under the following day and a filter
+ * for the day it was actually sent finds nothing.
+ */
+function localDay(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 /**
  * The list is five columns on purpose.
@@ -157,28 +167,13 @@ export function TrackingTable({
             <option value="__unsub">Unsubscribed</option>
           </FilterSelect>
 
-          <FilterSelect value={f.outcome} onChange={(v) => set("outcome", v)} label="Outcome">
-            <option value="">Any outcome</option>
-            {OUTCOMES.map((o) => <option key={o} value={o}>{o === "new" ? "No outcome yet" : OUTCOME_LABELS[o]}</option>)}
-          </FilterSelect>
-
-          {/* The three date controls wrap as one block. Split across a line
-              break they read as a stray select and an orphaned "to".
-              Which date is being filtered is a real question here — "added"
-              and "sent" are days or weeks apart — so it is asked, not guessed. */}
+          {/* One day, not a window. Picking a range to answer "who did I email
+              on Tuesday" meant setting both ends to the same date. */}
           <div className="flex items-center gap-1.5">
-            <FilterSelect value={f.dateField} onChange={(v) => set("dateField", v as DateField)} label="Date field">
-              <option value="sent_at">Sent</option>
-              <option value="created_at">Added</option>
-            </FilterSelect>
+            <span className="text-sm text-ink-500">Sent on</span>
             <Input
-              type="date" value={f.from} max={f.to || undefined} aria-label="From date"
-              className="h-9 w-[9.5rem] text-sm" onChange={(e) => set("from", e.target.value)}
-            />
-            <span className="text-sm text-ink-400">to</span>
-            <Input
-              type="date" value={f.to} min={f.from || undefined} aria-label="To date"
-              className="h-9 w-[9.5rem] text-sm" onChange={(e) => set("to", e.target.value)}
+              type="date" value={f.sentOn} aria-label="Sent on"
+              className="h-9 w-[9.5rem] text-sm" onChange={(e) => set("sentOn", e.target.value)}
             />
           </div>
 
@@ -194,7 +189,7 @@ export function TrackingTable({
           ) : (
             <>Showing <span className="font-semibold text-ink-950">{shown.length}</span> of {rows.length}</>
           )}
-          {(f.from || f.to) && f.dateField === "sent_at" ? " · contacts never sent are excluded by a sent-date window" : null}
+          {f.sentOn ? " · contacts never sent are excluded by a sent-on date" : null}
         </p>
       </div>
 
@@ -326,9 +321,9 @@ export function TrackingTable({
 /**
  * Whether one row survives the filters.
  *
- * A date window on "sent" drops anything never sent: a contact with no send
- * date did not happen in that period, or in any other. The filter bar says so
- * rather than leaving it to be discovered.
+ * A sent-on date drops anything never sent: a contact with no send date was
+ * not sent that day, or any other. The filter bar says so rather than leaving
+ * it to be discovered.
  */
 function matches(r: Row, f: Filters): boolean {
   if (f.q) {
@@ -344,14 +339,9 @@ function matches(r: Row, f: Filters): boolean {
     if (!r.unsubscribed_at) return false;
   } else if (f.stage && r.stage !== f.stage) return false;
 
-  if (f.outcome && r.outcome !== f.outcome) return false;
-
-  if (f.from || f.to) {
-    const stamp = f.dateField === "sent_at" ? r.sent_at : r.created_at;
-    if (!stamp) return false;
-    const day = stamp.slice(0, 10);
-    if (f.from && day < f.from) return false;
-    if (f.to && day > f.to) return false;
+  if (f.sentOn) {
+    if (!r.sent_at) return false;
+    if (localDay(r.sent_at) !== f.sentOn) return false;
   }
   return true;
 }
