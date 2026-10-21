@@ -1,17 +1,20 @@
 import { requireAdmin } from "@getmed/core/auth";
 import { outreachStage, summariseVisits, type Visit } from "@getmed/core/outreach";
 import { PageHeader } from "@getmed/ui";
+import { EmailTemplateEditor } from "@/components/email-template-editor";
 import { LinkRulesEditor } from "@/components/link-rules-editor";
 import { TrackingTable } from "@/components/tracking-table";
 
 export default async function TrackingPage() {
   const { db } = await requireAdmin();
-  const [{ data: contacts }, { data: visits }, { data: pharmacies }, { data: rules }] = await Promise.all([
-    db.from("outreach_contacts").select("*").order("created_at", { ascending: false }),
-    db.from("outreach_visits").select("contact_id, created_at, likely_bot, kind, path").order("created_at"),
-    db.from("pharmacies").select("id, name, status, submitted_at, email").order("name"),
-    db.from("outreach_link_rules").select("*").order("sort_order").order("slug"),
-  ]);
+  const [{ data: contacts }, { data: visits }, { data: pharmacies }, { data: rules }, { data: templates }] =
+    await Promise.all([
+      db.from("outreach_contacts").select("*").order("created_at", { ascending: false }),
+      db.from("outreach_visits").select("contact_id, created_at, likely_bot, kind, path").order("created_at"),
+      db.from("pharmacies").select("id, name, status, submitted_at, email").order("name"),
+      db.from("outreach_link_rules").select("*").order("sort_order").order("slug"),
+      db.from("outreach_email_templates").select("*").order("is_default", { ascending: false }).order("name"),
+    ]);
 
   const byContact = new Map<string, Visit[]>();
   for (const v of visits ?? []) {
@@ -34,13 +37,19 @@ export default async function TrackingPage() {
       id: c.id,
       token: c.token,
       pharmacy_name: c.pharmacy_name,
+      contact_email: c.contact_email,
       city: c.city,
       unsubscribed_at: c.unsubscribed_at,
+      outcome: c.outcome,
+      sent_at: c.sent_at,
+      created_at: c.created_at,
       stage,
       confirmed,
       visits: { human: summary.human, days: summary.days },
     };
   });
+
+  const pharmacyUrl = process.env.NEXT_PUBLIC_PHARMACY_URL ?? "https://pharmacy.getmed.ca";
 
   return (
     <div className="max-w-6xl">
@@ -48,12 +57,13 @@ export default async function TrackingPage() {
         title="Tracking"
         description="Pharmacies pitched by email, and what came of it. Nothing here sends anything — you write the emails, this records what happens after the link is clicked."
       />
+      <EmailTemplateEditor templates={templates ?? []} rules={rules ?? []} pharmacyUrl={pharmacyUrl} />
       <LinkRulesEditor
         rules={rules ?? []}
-        pharmacyUrl={process.env.NEXT_PUBLIC_PHARMACY_URL ?? "https://pharmacy.getmed.ca"}
+        pharmacyUrl={pharmacyUrl}
         patientUrl={process.env.NEXT_PUBLIC_PATIENT_URL ?? "https://getmed.ca"}
       />
-      <TrackingTable rows={rows} pharmacyUrl={process.env.NEXT_PUBLIC_PHARMACY_URL ?? "https://pharmacy.getmed.ca"} />
+      <TrackingTable rows={rows} templates={templates ?? []} rules={rules ?? []} pharmacyUrl={pharmacyUrl} />
     </div>
   );
 }

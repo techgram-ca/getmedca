@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { ArrowLeft, BadgeCheck, Ban, Check, Copy, Pencil, Save, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Ban, Check, Copy, Mail, Pencil, Save, Send, Trash2 } from "lucide-react";
 import { slugify } from "@getmed/core/format";
-import { joinUrl, OUTCOMES, OUTCOME_LABELS, STAGE_LABELS, type Outcome, type OutreachStage } from "@getmed/core/outreach";
+import { joinUrl, OUTCOMES, OUTCOME_LABELS, STAGE_LABELS, type LinkRule, type Outcome, type OutreachStage } from "@getmed/core/outreach";
 import {
   Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Dialog, DialogContent,
   Field, Input, Select, TBody, TD, TH, THead, TR, Table, Textarea, toast,
 } from "@getmed/ui";
 import { deleteContact, linkPharmacy, markSent, markSignedUp, saveContact, setUnsubscribed } from "@/lib/actions/outreach";
+import { EmailBuilderDialog } from "./email-builder-dialog";
+import type { Template } from "./email-template-editor";
 import { STAGE_TONE } from "./tracking-table";
 
 type Contact = {
@@ -23,13 +25,12 @@ type Summary = {
   byDestination: Record<string, number>; firstHuman: string | null; lastHuman: string | null;
 };
 type VisitRow = { id: string; created_at: string; likely_bot: boolean; kind: string; path: string | null; user_agent: string | null };
-type Rule = { slug: string; label: string; appends_rest: boolean };
 
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
 
 export function ContactDetail({
-  contact, stage, confirmed, linkedPharmacyName, summary, visits, pharmacies, rules, pharmacyUrl,
+  contact, stage, confirmed, linkedPharmacyName, summary, visits, pharmacies, rules, templates, pharmacyUrl,
 }: {
   contact: Contact;
   stage: OutreachStage;
@@ -38,7 +39,8 @@ export function ContactDetail({
   summary: Summary;
   visits: VisitRow[];
   pharmacies: { id: string; name: string }[];
-  rules: Rule[];
+  rules: LinkRule[];
+  templates: Template[];
   pharmacyUrl: string;
 }) {
   const router = useRouter();
@@ -46,6 +48,7 @@ export function ContactDetail({
   const [copied, setCopied] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const [outcome, setOutcome] = useState(contact.outcome as Outcome);
   const [notes, setNotes] = useState(contact.notes ?? "");
   const [draft, setDraft] = useState({
@@ -127,6 +130,7 @@ export function ContactDetail({
           </div>
         </div>
         <div className="flex gap-2">
+          <Button size="sm" onClick={() => setEmailOpen(true)}><Mail /> Get full email</Button>
           <Button size="sm" variant="outline" onClick={() => setEditing(true)}><Pencil /> Edit</Button>
           {confirmDelete ? (
             <>
@@ -324,6 +328,15 @@ export function ContactDetail({
           </Card>
         </div>
       </div>
+
+      <EmailBuilderDialog
+        contact={contact}
+        templates={templates}
+        rules={rules}
+        pharmacyUrl={pharmacyUrl}
+        open={emailOpen}
+        onOpenChange={setEmailOpen}
+      />
 
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogContent title="Edit contact" className="max-w-lg">

@@ -293,3 +293,13 @@ export function resolveInviteDestination(rules: LinkRule[], segments: string[] |
 export function joinUrl(base: string, path: string): string {
   return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 }
+
+export {
+  DEFAULT_TEMPLATE,
+  outreachPlaceholders,
+  renderOutreachEmail,
+  type EmailTemplate,
+  type Placeholder,
+  type RenderedEmail,
+  type TemplateContact,
+} from "./email";
