@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { Check, ChevronRight, Copy, Mail, Plus, RotateCcw } from "lucide-react";
+import { Check, ChevronRight, Code2, Copy, Mail, Plus, RotateCcw } from "lucide-react";
 import {
-  OUTCOMES, OUTREACH_STAGES, joinUrl, STAGE_LABELS,
+  OUTCOMES, OUTREACH_STAGES, joinUrl, renderOutreachEmail, STAGE_LABELS,
   type LinkRule, type Outcome, type OutreachStage,
 } from "@getmed/core/outreach";
 import {
@@ -82,11 +82,42 @@ export function TrackingTable({
   const shown = useMemo(() => rows.filter((r) => matches(r, f)), [rows, f]);
   const active = JSON.stringify(f) !== JSON.stringify(NO_FILTERS);
 
-  const copy = async (id: string, token: string) => {
-    await navigator.clipboard.writeText(joinUrl(pharmacyUrl, `i/${token}`));
-    setCopied(id);
-    toast.success("Pitch link copied");
+  // Which template Source uses without asking. The dialog is for choosing a
+  // different one; this button is for the common case, which is the default.
+  const fallbackTemplate = templates.find((t) => t.is_default) ?? templates[0] ?? null;
+
+  const flash = (key: string) => {
+    setCopied(key);
     setTimeout(() => setCopied(null), 1600);
+  };
+
+  const copyLink = async (id: string, token: string) => {
+    await navigator.clipboard.writeText(joinUrl(pharmacyUrl, `i/${token}`));
+    flash(`${id}:link`);
+    toast.success("Pitch link copied");
+  };
+
+  /**
+   * The finished HTML for this pharmacy, in one click.
+   *
+   * The dialog can do this too, but reaching it is open, read, copy, close for
+   * something done once per pharmacy down a list of thirty. A placeholder that
+   * did not resolve still copies — refusing would be worse than letting it
+   * through — but says so, because this path has no preview to notice it in.
+   */
+  const copySource = async (c: Row) => {
+    if (!fallbackTemplate) {
+      toast.error("No email template yet. Write one under Email template at the top of this page.");
+      return;
+    }
+    const r = renderOutreachEmail(fallbackTemplate, c, rules, pharmacyUrl);
+    await navigator.clipboard.writeText(r.html);
+    flash(`${c.id}:source`);
+    if (r.unknown.length) {
+      toast.error(`Copied, but ${r.unknown.join(" ")} did not resolve — fix it before sending.`);
+    } else {
+      toast.success(`HTML source copied — ${fallbackTemplate.name}`);
+    }
   };
 
   const save = () =>
@@ -216,11 +247,19 @@ export function TrackingTable({
                   </TD>
 
                   <TD>
-                    <div className="flex gap-1.5">
-                      <Button size="sm" variant="outline" onClick={() => copy(c.id, c.token)}>
-                        {copied === c.id ? <Check /> : <Copy />} Link
+                    <div className="flex flex-wrap gap-1.5">
+                      <Button size="sm" variant="outline" title="Copy the pitch link" onClick={() => copyLink(c.id, c.token)}>
+                        {copied === `${c.id}:link` ? <Check /> : <Copy />} Link
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setEmailFor(c)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        title={fallbackTemplate ? `Copy the HTML body — ${fallbackTemplate.name}` : "No template yet"}
+                        onClick={() => copySource(c)}
+                      >
+                        {copied === `${c.id}:source` ? <Check /> : <Code2 />} Source
+                      </Button>
+                      <Button size="sm" variant="outline" title="Preview, pick a template, copy for Gmail" onClick={() => setEmailFor(c)}>
                         <Mail /> Email
                       </Button>
                     </div>
