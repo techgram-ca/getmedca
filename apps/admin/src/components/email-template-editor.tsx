@@ -4,9 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ChevronDown, FileText, Mail, Plus, Save, Star, Trash2 } from "lucide-react";
 import { DEFAULT_TEMPLATE, outreachPlaceholders, type LinkRule } from "@getmed/core/outreach";
-import {
-  Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, Select, Textarea, toast,
-} from "@getmed/ui";
+import { Badge, Button, Field, Input, Select, Textarea, toast } from "@getmed/ui";
 import { deleteEmailTemplate, saveEmailTemplate } from "@/lib/actions/outreach";
 
 export type Template = { id: string; name: string; subject: string; body: string; is_default: boolean };
@@ -36,6 +34,7 @@ export function EmailTemplateEditor({
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(templates.find((t) => t.is_default)?.id ?? templates[0]?.id ?? "");
   const selected = templates.find((t) => t.id === selectedId) ?? null;
+  const defaultName = templates.find((t) => t.is_default)?.name ?? null;
 
   const [draft, setDraft] = useState<Template | null>(null);
   const editing = draft ?? selected;
@@ -103,24 +102,31 @@ export function EmailTemplateEditor({
   const dirty = draft !== null && (selected === null || JSON.stringify(draft) !== JSON.stringify(selected));
 
   return (
-    <Card className="mb-5">
-      <CardHeader className="cursor-pointer select-none" onClick={() => setOpen((o) => !o)}>
-        <CardTitle className="flex items-center justify-between gap-3 text-base">
-          <span className="flex items-center gap-2">
-            <Mail className="size-4 text-brand-600" />
-            Email template
-            <span className="text-sm font-normal text-ink-500">
-              {templates.length === 0
-                ? "none yet"
-                : `${templates.length} saved${selected?.is_default ? " · default first" : ""}`}
-            </span>
+    // Same shape as Link destinations below it, rather than a Card: a
+    // CardHeader has no bottom padding, because it expects a CardContent under
+    // it to supply one. Collapsed there is no content, and the title sits hard
+    // against the bottom edge.
+    <div className="surface mb-5 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left transition-soft hover:bg-ink-50"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <Mail className="size-4 shrink-0 text-brand-600" />
+          <span className="text-sm font-semibold text-ink-900">Email template</span>
+          <span className="truncate text-xs text-ink-500">
+            {templates.length === 0
+              ? "none yet — the pitch HTML, written once"
+              : `${templates.length} saved${defaultName ? ` — ${defaultName} by default` : ""}`}
           </span>
-          <ChevronDown className={`size-4 shrink-0 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`} />
-        </CardTitle>
-      </CardHeader>
+        </span>
+        <ChevronDown className={`size-4 shrink-0 text-ink-500 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
 
       {open ? (
-        <CardContent className="space-y-4 border-t border-ink-100 pt-5">
+        <div className="space-y-4 border-t border-ink-200 p-5">
           <div className="flex flex-wrap items-end gap-2">
             <Field label="Template" htmlFor="tpl-pick" className="min-w-56 flex-1">
               <Select id="tpl-pick" value={selectedId} onChange={(e) => pick(e.target.value)} disabled={pending}>
@@ -220,8 +226,8 @@ export function EmailTemplateEditor({
               </div>
             </div>
           )}
-        </CardContent>
+        </div>
       ) : null}
-    </Card>
+    </div>
   );
 }

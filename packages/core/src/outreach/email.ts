@@ -34,8 +34,23 @@ export type Placeholder = {
   example: string;
 };
 
-/** The three that are not links. */
-const FIELD_KEYS = ["pharmacy-name", "pharmacy-city", "pharmacy-token"] as const;
+/** The ones that are not links. */
+const FIELD_KEYS = ["pharmacy-name", "pharmacy-city", "pharmacy-city-caps", "pharmacy-token"] as const;
+
+/**
+ * A city as it should read in a sentence.
+ *
+ * Cities are typed into the contact form by hand, so they arrive as "bolton",
+ * "BOLTON" and "Richmond hill" as often as not, and a pitch email that opens
+ * "pharmacies in bolton" looks automated in exactly the way these are trying
+ * not to.
+ */
+function titleCaseCity(city: string): string {
+  return city
+    .trim()
+    .toLowerCase()
+    .replace(/(^|[\s\-/])([a-z])/g, (_, lead: string, letter: string) => lead + letter.toUpperCase());
+}
 
 /** `[anything-here]`, so a misspelt placeholder can be spotted rather than sent. */
 const PLACEHOLDER_PATTERN = /\[([a-z0-9][a-z0-9-]*)\]/gi;
@@ -53,9 +68,14 @@ export function outreachPlaceholders(
   rules: LinkRule[],
   pharmacyUrl: string,
 ): Placeholder[] {
+  const city = contact.city?.trim() ?? "";
   const out: Placeholder[] = [
     { key: "[pharmacy-name]", label: "Pharmacy name", example: contact.pharmacy_name },
-    { key: "[pharmacy-city]", label: "City", example: contact.city ?? "" },
+    // Two forms of the same city, because the two uses want different ones.
+    // The slug is what survives being put in a URL by hand — "Richmond Hill"
+    // in a path is a broken link, "richmond-hill" is the rate card.
+    { key: "[pharmacy-city-caps]", label: "City, for a sentence", example: titleCaseCity(city) },
+    { key: "[pharmacy-city]", label: "City, for a link", example: slugify(city) },
     { key: "[pitch-link]", label: "Pitch link", example: joinUrl(pharmacyUrl, `i/${contact.token}`) },
   ];
 
@@ -158,7 +178,7 @@ export const DEFAULT_TEMPLATE: EmailTemplate = {
 
   <p>
     I am getting in touch about <strong>[pharmacy-name]</strong>. GetMed gives
-    pharmacies in [pharmacy-city] prescription delivery without hiring a driver
+    pharmacies in [pharmacy-city-caps] prescription delivery without hiring a driver
     or signing up to a gig app &mdash; our own team runs every delivery, and you
     pay a flat fee per delivered order.
   </p>
@@ -169,7 +189,7 @@ export const DEFAULT_TEMPLATE: EmailTemplate = {
 
   <ul style="padding-left:18px">
     <li><a href="[pitch-link]">How it works</a></li>
-    <li><a href="[rates-link]">What delivery costs in [pharmacy-city]</a></li>
+    <li><a href="[rates-link]">What delivery costs in [pharmacy-city-caps]</a></li>
     <li><a href="[demo-link]">A sample pharmacy page</a>, which is what your own would look like</li>
   </ul>
 
