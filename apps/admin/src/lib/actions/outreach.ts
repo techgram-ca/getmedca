@@ -25,14 +25,42 @@ const contactSchema = z.object({
  * Creates or edits a contact. The token is minted once, on creation, and never
  * changes — it is in an email somebody already has, and a rotated token would
  * turn their link into a dead one.
+ *
+ * One contact per address. Adding a pharmacy twice splits its history across
+ * two tokens, so the visits land on one row while the follow-up goes out
+ * quoting the other, and there is no way to tell afterwards which link they
+ * actually clicked. The database enforces this too; the check here exists to
+ * name the row already holding the address, which a constraint violation
+ * cannot.
  */
 export async function saveContact(input: unknown): Promise<R> {
   try {
     const d = contactSchema.parse(input);
     const { db } = await requireAdmin();
+
+    const email = (d.contactEmail ?? "").trim();
+    if (email) {
+      // Case-insensitively, the way the index matches: the same address gets
+      // typed two ways and they are still the same pharmacy. `_` and `%` are
+      // legal in an address and are wildcards to ILIKE, so they are escaped
+      // and the match is confirmed in full afterwards — otherwise
+      // `a_b@rx.ca` would collide with `axb@rx.ca`.
+      const pattern = email.replace(/[\\%_]/g, (c) => `\\${c}`);
+      let q = db.from("outreach_contacts").select("id, pharmacy_name, contact_email").ilike("contact_email", pattern);
+      if (d.id) q = q.neq("id", d.id);
+      const { data: found } = await q.limit(5);
+      const clash = (found ?? []).find((c) => (c.contact_email ?? "").trim().toLowerCase() === email.toLowerCase());
+      if (clash) {
+        return {
+          ok: false,
+          error: `${email} is already on the list, under "${clash.pharmacy_name}". Open that contact instead — a second row would split their history across two tokens.`,
+        };
+      }
+    }
+
     const patch = {
       pharmacy_name: d.pharmacyName,
-      contact_email: d.contactEmail || null,
+      contact_email: email || null,
       city: d.city || null,
       outcome: d.outcome,
       notes: d.notes || null,
@@ -40,7 +68,14 @@ export async function saveContact(input: unknown): Promise<R> {
     const { error } = d.id
       ? await db.from("outreach_contacts").update(patch).eq("id", d.id)
       : await db.from("outreach_contacts").insert({ ...patch, token: generateOutreachToken() });
-    if (error) throw error;
+    // The index is the one that cannot be raced past. Its message names a
+    // constraint, so it gets translated back into something readable.
+    if (error) {
+      if (error.code === "23505" && error.message.includes("outreach_contacts_email_unique")) {
+        return { ok: false, error: `${email} is already on the list. Open that contact instead.` };
+      }
+      throw error;
+    }
     revalidatePath("/tracking");
     return { ok: true };
   } catch (e) {
@@ -162,6 +197,55 @@ export async function deleteLinkRule(id: string): Promise<R> {
   // is where it points anyway, so losing it quietly is worse than refusing.
   if (rule?.slug === "") return { ok: false, error: "The bare link rule cannot be removed — every invite uses it." };
   const { error } = await db.from("outreach_link_rules").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/tracking");
+  return { ok: true };
+}
+
+
+// ---------------- Email templates ----------------
+
+const templateSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(2, "Give the template a name").max(80),
+  subject: z.string().trim().max(200),
+  body: z.string().max(60_000),
+  isDefault: z.boolean().optional(),
+});
+
+/**
+ * Saves an email template.
+ *
+ * Promoting one to default demotes the rest first, because the partial unique
+ * index allows exactly one and would otherwise reject the save. Done in this
+ * order rather than relying on the index to sort it out: a half-applied swap
+ * would leave the list with no default at all.
+ */
+export async function saveEmailTemplate(input: unknown): Promise<R> {
+  try {
+    const d = templateSchema.parse(input);
+    const { db } = await requireAdmin();
+    if (d.isDefault) {
+      let clear = db.from("outreach_email_templates").update({ is_default: false }).eq("is_default", true);
+      if (d.id) clear = clear.neq("id", d.id);
+      const { error } = await clear;
+      if (error) throw error;
+    }
+    const patch = { name: d.name, subject: d.subject, body: d.body, is_default: d.isDefault ?? false };
+    const { error } = d.id
+      ? await db.from("outreach_email_templates").update(patch).eq("id", d.id)
+      : await db.from("outreach_email_templates").insert(patch);
+    if (error) throw error;
+    revalidatePath("/tracking");
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteEmailTemplate(id: string): Promise<R> {
+  const { db } = await requireAdmin();
+  const { error } = await db.from("outreach_email_templates").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/tracking");
   return { ok: true };
