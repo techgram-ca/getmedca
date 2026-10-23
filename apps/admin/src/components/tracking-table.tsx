@@ -3,29 +3,30 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { Check, ChevronRight, Code2, Copy, Mail, Plus, RotateCcw } from "lucide-react";
+import { Check, ChevronRight, Code2, Copy, Mail, Plus, RotateCcw, Send } from "lucide-react";
 import {
-  OUTCOMES, OUTREACH_STAGES, joinUrl, renderOutreachEmail, STAGE_LABELS,
-  type LinkRule, type Outcome, type OutreachStage,
+  OUTREACH_STAGES, joinUrl, renderOutreachEmail, STAGE_LABELS,
+  type LinkRule, type OutreachStage,
 } from "@getmed/core/outreach";
 import {
-  Badge, Button, Dialog, DialogContent, Field, FilterSelect, Input, Select,
+  Alert, Badge, Button, Dialog, DialogContent, Field, FilterSelect, Input, Select,
   TBody, TD, TH, THead, TR, Table, Textarea, toast,
 } from "@getmed/ui";
 import { saveContact } from "@/lib/actions/outreach";
-import { OUTCOME_LABELS } from "@getmed/core/outreach";
+import { sendOutreachEmails, type SendOutcome } from "@/lib/actions/outreach-send";
 import { EmailBuilderDialog } from "./email-builder-dialog";
 import type { Template } from "./email-template-editor";
 
 type Row = {
   id: string; token: string; pharmacy_name: string; contact_email: string | null; city: string | null;
-  unsubscribed_at: string | null; stage: OutreachStage; confirmed: boolean;
-  outcome: string; sent_at: string | null; created_at: string;
+  unsubscribed_at: string | null; stage: OutreachStage;
+  sent_at: string | null; created_at: string;
   visits: { human: number; days: number };
 };
-type Draft = { pharmacyName: string; contactEmail: string; city: string; outcome: Outcome; notes: string };
+type Draft = { pharmacyName: string; contactEmail: string; city: string; notes: string };
+export type SenderConfig = { ready: boolean; from: string | null; replyTo: string | null };
 
-const EMPTY: Draft = { pharmacyName: "", contactEmail: "", city: "", outcome: "new", notes: "" };
+const EMPTY: Draft = { pharmacyName: "", contactEmail: "", city: "", notes: "" };
 
 export const STAGE_TONE: Record<OutreachStage, "neutral" | "brand" | "success" | "warning"> = {
   new: "neutral", sent: "neutral", visited: "warning", signed_up: "brand", submitted: "brand", approved: "success",
@@ -70,12 +71,13 @@ function localDay(iso: string): string {
  * the refresh that follows an edit.
  */
 export function TrackingTable({
-  rows, templates, rules, pharmacyUrl,
+  rows, templates, rules, pharmacyUrl, sender,
 }: {
   rows: Row[];
   templates: Template[];
   rules: LinkRule[];
   pharmacyUrl: string;
+  sender: SenderConfig;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -83,6 +85,11 @@ export function TrackingTable({
   const [copied, setCopied] = useState<string | null>(null);
   const [emailFor, setEmailFor] = useState<Row | null>(null);
   const [f, setF] = useState<Filters>(NO_FILTERS);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  // The send confirmation, and afterwards the per-pharmacy report.
+  const [sendPlan, setSendPlan] = useState<Row[] | null>(null);
+  const [sendTemplateId, setSendTemplateId] = useState("");
+  const [report, setReport] = useState<SendOutcome[] | null>(null);
 
   const cities = useMemo(
     () => [...new Set(rows.map((r) => r.city?.trim()).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b)),
@@ -100,6 +107,57 @@ export function TrackingTable({
     setCopied(key);
     setTimeout(() => setCopied(null), 1600);
   };
+
+  const sendable = (c: Row) => !c.unsubscribed_at && !!c.contact_email?.trim();
+  const pickedRows = shown.filter((c) => picked.has(c.id));
+  const pickedSendable = pickedRows.filter(sendable);
+  const allShownPicked = shown.length > 0 && shown.every((c) => picked.has(c.id));
+
+  const toggle = (id: string) =>
+    setPicked((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // Only what is on screen: ticking the header while a filter is on should
+  // not quietly select the pharmacies the filter is hiding.
+  const toggleAll = () =>
+    setPicked((s) => {
+      const next = new Set(s);
+      if (allShownPicked) for (const c of shown) next.delete(c.id);
+      else for (const c of shown) next.add(c.id);
+      return next;
+    });
+
+  const openSend = (targets: Row[]) => {
+    if (!templates.length) {
+      toast.error("No email template yet. Write one under Email template at the top of this page.");
+      return;
+    }
+    setSendTemplateId(fallbackTemplate?.id ?? templates[0]!.id);
+    setReport(null);
+    setSendPlan(targets);
+  };
+
+  const confirmSend = () =>
+    start(async () => {
+      if (!sendPlan) return;
+      const r = await sendOutreachEmails(sendPlan.map((c) => c.id), sendTemplateId);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      const sent = r.outcomes.filter((o) => o.status === "sent").length;
+      // The report stays on screen: a toast saying "9 sent, 3 skipped" is
+      // useless without knowing which three, and why.
+      setReport(r.outcomes);
+      setPicked(new Set());
+      if (sent) toast.success(`${sent} email${sent === 1 ? "" : "s"} sent`);
+      else toast.error("Nothing was sent");
+      router.refresh();
+    });
 
   const copyLink = async (id: string, token: string) => {
     await navigator.clipboard.writeText(joinUrl(pharmacyUrl, `i/${token}`));
@@ -180,7 +238,21 @@ export function TrackingTable({
           <Button size="sm" variant="ghost" onClick={() => setF(NO_FILTERS)} disabled={!active}>
             <RotateCcw /> Reset
           </Button>
-          <Button size="sm" onClick={() => setDraft(EMPTY)}><Plus /> New contact</Button>
+          <Button size="sm" variant="outline" onClick={() => setDraft(EMPTY)}><Plus /> New contact</Button>
+          <Button
+            size="sm"
+            disabled={!sender.ready || pickedSendable.length === 0}
+            title={
+              !sender.ready
+                ? "Sending is not configured"
+                : pickedSendable.length === 0
+                  ? "Tick the pharmacies to send to"
+                  : `Send to ${pickedSendable.length}`
+            }
+            onClick={() => openSend(pickedSendable)}
+          >
+            <Send /> Send to selected{pickedSendable.length ? ` (${pickedSendable.length})` : ""}
+          </Button>
         </div>
 
         <p className="mt-2 text-xs text-ink-500">
@@ -190,7 +262,19 @@ export function TrackingTable({
             <>Showing <span className="font-semibold text-ink-950">{shown.length}</span> of {rows.length}</>
           )}
           {f.sentOn ? " · contacts never sent are excluded by a sent-on date" : null}
+          {picked.size ? <> · <span className="font-semibold text-ink-950">{picked.size}</span> selected</> : null}
+          {picked.size > pickedSendable.length ? (
+            <> ({picked.size - pickedSendable.length} cannot be sent to)</>
+          ) : null}
         </p>
+
+        {!sender.ready ? (
+          <Alert tone="warning" className="mt-3">
+            Sending is off. Set <code className="font-mono">OUTREACH_FROM_EMAIL</code> and{" "}
+            <code className="font-mono">RESEND_API_KEY</code> to send from here — copying the HTML still works
+            without them.
+          </Alert>
+        ) : null}
       </div>
 
       {rows.length === 0 ? (
@@ -205,11 +289,33 @@ export function TrackingTable({
         <div className="surface overflow-hidden">
           <Table>
             <THead>
-              <TR><TH>Pharmacy</TH><TH>Stage</TH><TH>Visits</TH><TH>Links &amp; email</TH><TH /></TR>
+              <TR>
+                <TH className="w-10">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all shown"
+                    className="cursor-pointer"
+                    checked={allShownPicked}
+                    onChange={toggleAll}
+                  />
+                </TH>
+                <TH>Pharmacy</TH><TH>Stage</TH><TH>Visits</TH><TH>Send &amp; copy</TH><TH />
+              </TR>
             </THead>
             <TBody>
               {shown.map((c) => (
                 <TR key={c.id} className={c.unsubscribed_at ? "opacity-55" : undefined}>
+                  <TD>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${c.pharmacy_name}`}
+                      className="cursor-pointer disabled:cursor-not-allowed"
+                      checked={picked.has(c.id)}
+                      disabled={!sendable(c)}
+                      title={sendable(c) ? undefined : c.unsubscribed_at ? "Unsubscribed" : "No email address"}
+                      onChange={() => toggle(c.id)}
+                    />
+                  </TD>
                   <TD>
                     <p className="font-medium">{c.pharmacy_name}</p>
                     {/* City and address on one line: between them they are how
@@ -224,12 +330,9 @@ export function TrackingTable({
 
                   <TD>
                     <Badge tone={STAGE_TONE[c.stage]}>{STAGE_LABELS[c.stage]}</Badge>
-                    {!c.confirmed && (c.stage === "signed_up" || c.stage === "submitted" || c.stage === "approved") ? (
-                      <p className="mt-1 text-xs text-ink-500">marked by hand</p>
-                    ) : null}
                   </TD>
 
-                  <TD className="text-sm">
+                  <TD className="whitespace-nowrap text-sm">
                     {c.visits.human === 0 ? (
                       <span className="text-ink-400">none</span>
                     ) : (
@@ -242,19 +345,37 @@ export function TrackingTable({
                   </TD>
 
                   <TD>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Button size="sm" variant="outline" title="Copy the pitch link" onClick={() => copyLink(c.id, c.token)}>
+                    <div className="flex flex-nowrap gap-1.5">
+                      <Button
+                        size="sm"
+                        className="shrink-0"
+                        disabled={!sender.ready || !sendable(c)}
+                        title={
+                          !sender.ready
+                            ? "Sending is not configured"
+                            : c.unsubscribed_at
+                              ? "They asked not to be contacted"
+                              : !c.contact_email
+                                ? "No email address on file"
+                                : `Send ${fallbackTemplate?.name ?? "the pitch"} to ${c.contact_email}`
+                        }
+                        onClick={() => openSend([c])}
+                      >
+                        <Send /> {c.sent_at ? "Resend" : "Send"}
+                      </Button>
+                      <Button size="sm" variant="outline" className="shrink-0" title="Copy the pitch link" onClick={() => copyLink(c.id, c.token)}>
                         {copied === `${c.id}:link` ? <Check /> : <Copy />} Link
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
+                        className="shrink-0"
                         title={fallbackTemplate ? `Copy the HTML body — ${fallbackTemplate.name}` : "No template yet"}
                         onClick={() => copySource(c)}
                       >
                         {copied === `${c.id}:source` ? <Check /> : <Code2 />} Source
                       </Button>
-                      <Button size="sm" variant="outline" title="Preview, pick a template, copy for Gmail" onClick={() => setEmailFor(c)}>
+                      <Button size="sm" variant="outline" className="shrink-0" title="Preview, pick a template, copy for Gmail" onClick={() => setEmailFor(c)}>
                         <Mail /> Email
                       </Button>
                     </div>
@@ -271,6 +392,72 @@ export function TrackingTable({
           </Table>
         </div>
       )}
+
+      {/* Sending is the one thing on this page that cannot be undone, so it
+          asks first and then says, per pharmacy, what happened. */}
+      <Dialog open={sendPlan !== null} onOpenChange={(o) => !o && (setSendPlan(null), setReport(null))}>
+        <DialogContent title={report ? "What was sent" : sendPlan?.length === 1 ? "Send this pitch" : `Send to ${sendPlan?.length ?? 0} pharmacies`} className="max-w-xl">
+          {report ? (
+            <div className="space-y-3">
+              <ul className="max-h-80 list-none space-y-1.5 overflow-auto">
+                {report.map((o) => (
+                  <li key={o.contactId} className="flex items-start gap-2.5 text-sm">
+                    <Badge tone={o.status === "sent" ? "success" : o.status === "skipped" ? "warning" : "danger"}>
+                      {o.status}
+                    </Badge>
+                    <span className="min-w-0">
+                      <span className="font-medium text-ink-950">{o.pharmacyName}</span>
+                      {o.detail ? <span className="block text-xs text-ink-500">{o.detail}</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex justify-end">
+                <Button onClick={() => { setSendPlan(null); setReport(null); }}>Done</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <Field label="Template" htmlFor="send-tpl">
+                <Select id="send-tpl" value={sendTemplateId} onChange={(e) => setSendTemplateId(e.target.value)}>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}{t.is_default ? " (default)" : ""}</option>
+                  ))}
+                </Select>
+              </Field>
+
+              <div className="rounded-lg border border-ink-200 bg-ink-50 p-3 text-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Going to</p>
+                <ul className="mt-1.5 max-h-44 list-none space-y-0.5 overflow-auto">
+                  {(sendPlan ?? []).map((c) => (
+                    <li key={c.id} className="truncate">
+                      <span className="font-medium text-ink-950">{c.pharmacy_name}</span>
+                      <span className="text-ink-500"> — {c.contact_email}</span>
+                      {c.sent_at ? <Badge tone="warning" className="ml-2">already sent once</Badge> : null}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-ink-500">
+                  From {sender.from}
+                  {sender.replyTo ? <> · replies go to {sender.replyTo}</> : <> · no reply-to set</>}
+                </p>
+              </div>
+
+              <p className="text-xs text-ink-500">
+                Anything that cannot be sent — a missing city for the rate-card link, a typo in a placeholder — is
+                skipped and named afterwards rather than going out broken.
+              </p>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setSendPlan(null)}>Cancel</Button>
+                <Button loading={pending} loadingText="Sending…" onClick={confirmSend}>
+                  <Send /> Send {sendPlan?.length === 1 ? "it" : `all ${sendPlan?.length}`}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {emailFor ? (
         <EmailBuilderDialog
@@ -297,11 +484,6 @@ export function TrackingTable({
               </div>
               <Field label="Public email" htmlFor="nc-email" optional hint="Their published business address. One contact per address.">
                 <Input id="nc-email" type="email" value={draft.contactEmail} onChange={(e) => setDraft({ ...draft, contactEmail: e.target.value })} />
-              </Field>
-              <Field label="Outcome" htmlFor="nc-outcome">
-                <Select id="nc-outcome" value={draft.outcome} onChange={(e) => setDraft({ ...draft, outcome: e.target.value as Outcome })}>
-                  {OUTCOMES.map((o) => <option key={o} value={o}>{OUTCOME_LABELS[o]}</option>)}
-                </Select>
               </Field>
               <Field label="Notes" htmlFor="nc-notes" optional>
                 <Textarea id="nc-notes" rows={3} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />

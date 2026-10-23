@@ -110,54 +110,29 @@ test("nothing at all summarises to nothing", () => {
 
 // ---------------- outreachStage ----------------
 
-const base = { sentAt: null, humanVisits: 0, pharmacy: null, manualSignedUpAt: null };
+const base = { sentAt: null, humanVisits: 0, pharmacy: null };
 
 test("the stages climb as the facts arrive", () => {
-  assert.deepEqual(outreachStage(base), { stage: "new", confirmed: false });
-  assert.deepEqual(outreachStage({ ...base, sentAt: SENT }), { stage: "sent", confirmed: false });
-  assert.deepEqual(outreachStage({ ...base, sentAt: SENT, humanVisits: 1 }), { stage: "visited", confirmed: false });
+  assert.equal(outreachStage(base), "new");
+  assert.equal(outreachStage({ ...base, sentAt: SENT }), "sent");
+  assert.equal(outreachStage({ ...base, sentAt: SENT, humanVisits: 1 }), "visited");
 });
 
 test("a linked pharmacy carries the rest of the funnel on its own", () => {
   const linked = { ...base, sentAt: SENT, humanVisits: 2 };
-  assert.deepEqual(outreachStage({ ...linked, pharmacy: { status: "pending", submitted_at: null } }), {
-    stage: "signed_up",
-    confirmed: true,
-  });
-  assert.deepEqual(outreachStage({ ...linked, pharmacy: { status: "pending", submitted_at: SENT } }), {
-    stage: "submitted",
-    confirmed: true,
-  });
-  assert.deepEqual(outreachStage({ ...linked, pharmacy: { status: "approved", submitted_at: SENT } }), {
-    stage: "approved",
-    confirmed: true,
-  });
-});
-
-test("marking one signed up by hand reaches the stage but is not confirmed", () => {
-  const s = outreachStage({ ...base, sentAt: SENT, manualSignedUpAt: SENT });
-  assert.deepEqual(s, { stage: "signed_up", confirmed: false });
-});
-
-test("a linked row outranks the hand-marked flag", () => {
-  // Both set: the row is the better evidence and gets to speak.
-  const s = outreachStage({
-    ...base,
-    manualSignedUpAt: SENT,
-    pharmacy: { status: "approved", submitted_at: SENT },
-  });
-  assert.deepEqual(s, { stage: "approved", confirmed: true });
+  assert.equal(outreachStage({ ...linked, pharmacy: { status: "pending", submitted_at: null } }), "signed_up");
+  assert.equal(outreachStage({ ...linked, pharmacy: { status: "pending", submitted_at: SENT } }), "submitted");
+  assert.equal(outreachStage({ ...linked, pharmacy: { status: "approved", submitted_at: SENT } }), "approved");
 });
 
 test("signing up without ever being marked sent still counts", () => {
   // The pre-existing pharmacy, linked by hand. No send, no visits, no token.
-  const s = outreachStage({ ...base, pharmacy: { status: "approved", submitted_at: SENT } });
-  assert.equal(s.stage, "approved");
+  assert.equal(outreachStage({ ...base, pharmacy: { status: "approved", submitted_at: SENT } }), "approved");
 });
 
 test("a scanner-only hit does not promote anyone to visited", () => {
   // summariseVisits has already filtered; humanVisits is what reaches here.
-  assert.equal(outreachStage({ ...base, sentAt: SENT, humanVisits: 0 }).stage, "sent");
+  assert.equal(outreachStage({ ...base, sentAt: SENT, humanVisits: 0 }), "sent");
 });
 
 // ---------------- joinUrl ----------------

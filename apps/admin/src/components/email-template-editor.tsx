@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { ChevronDown, FileText, Mail, Plus, Save, Star, Trash2 } from "lucide-react";
+import { ChevronDown, Copy, FileText, Image as ImageIcon, Mail, Paperclip, Plus, Save, Star, Trash2, Upload, X } from "lucide-react";
 import { DEFAULT_TEMPLATE, outreachPlaceholders, type LinkRule } from "@getmed/core/outreach";
 import { Badge, Button, Field, Input, Select, Textarea, toast } from "@getmed/ui";
 import { deleteEmailTemplate, saveEmailTemplate } from "@/lib/actions/outreach";
+import { addTemplateFile, deleteTemplateFile } from "@/lib/actions/outreach-files";
 
 export type Template = { id: string; name: string; subject: string; body: string; is_default: boolean };
 
@@ -20,12 +21,24 @@ export type Template = { id: string; name: string; subject: string; body: string
  * Collapsed by default. It is edited once a month and the list under it is
  * read every day.
  */
+export type TemplateFile = {
+  id: string;
+  template_id: string;
+  kind: "attachment" | "image";
+  path: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+};
+
 export function EmailTemplateEditor({
   templates,
+  files,
   rules,
   pharmacyUrl,
 }: {
   templates: Template[];
+  files: TemplateFile[];
   rules: LinkRule[];
   pharmacyUrl: string;
 }) {
@@ -35,6 +48,53 @@ export function EmailTemplateEditor({
   const [selectedId, setSelectedId] = useState(templates.find((t) => t.is_default)?.id ?? templates[0]?.id ?? "");
   const selected = templates.find((t) => t.id === selectedId) ?? null;
   const defaultName = templates.find((t) => t.is_default)?.name ?? null;
+  const myFiles = files.filter((fl) => fl.template_id === selectedId);
+  const attachments = myFiles.filter((fl) => fl.kind === "attachment");
+  const images = myFiles.filter((fl) => fl.kind === "image");
+  const [uploading, setUploading] = useState<"attachment" | "image" | null>(null);
+
+  /**
+   * Uploads straight away rather than on save.
+   *
+   * The file has to exist in storage before its URL can be pasted into the
+   * body, so deferring it would mean saving the template to find out what to
+   * write in it.
+   */
+  const upload = (kind: "attachment" | "image", file: File) => {
+    if (!selectedId) {
+      toast.error("Save the template first — files belong to a saved one.");
+      return;
+    }
+    setUploading(kind);
+    start(async () => {
+      const form = new FormData();
+      form.set("templateId", selectedId);
+      form.set("kind", kind);
+      form.set("file", file);
+      const r = await addTemplateFile(form);
+      setUploading(null);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      if (kind === "image" && r.url) {
+        await navigator.clipboard.writeText(`<img src="${r.url}" alt="" style="max-width:100%" />`);
+        toast.success("Image uploaded — the <img> tag is on your clipboard");
+      } else {
+        toast.success("Attachment added — it rides with every send of this template");
+      }
+      router.refresh();
+    });
+  };
+
+  const removeFile = (id: string) =>
+    start(async () => {
+      const r = await deleteTemplateFile(id);
+      if (r.ok) {
+        toast.success("Removed");
+        router.refresh();
+      } else toast.error(r.error);
+    });
 
   const [draft, setDraft] = useState<Template | null>(null);
   const editing = draft ?? selected;
@@ -189,6 +249,37 @@ export function EmailTemplateEditor({
                 </p>
               </div>
 
+              {/* Files hang off the saved template, so they only appear once
+                  there is one to hang off. */}
+              {selectedId ? (
+                <div className="grid gap-4 border-t border-ink-100 pt-4 sm:grid-cols-2">
+                  <FileList
+                    title="Attachments"
+                    hint="Sent with every email from this template. JPEG, PNG, WebP, GIF or PDF, up to 5 MB."
+                    files={attachments}
+                    busy={uploading === "attachment"}
+                    accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                    onPick={(file) => upload("attachment", file)}
+                    onRemove={removeFile}
+                  />
+                  <FileList
+                    title="Images in the body"
+                    hint="Uploaded, then the <img> tag is copied for you to paste. Images only."
+                    files={images}
+                    busy={uploading === "image"}
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onPick={(file) => upload("image", file)}
+                    onRemove={removeFile}
+                    onCopyTag={(f) => {
+                      void navigator.clipboard.writeText(
+                        `<img src="${imageUrl(pharmacyUrl, f.path)}" alt="" style="max-width:100%" />`,
+                      );
+                      toast.success("<img> tag copied");
+                    }}
+                  />
+                </div>
+              ) : null}
+
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -228,6 +319,77 @@ export function EmailTemplateEditor({
           )}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The public URL of an uploaded image.
+ *
+ * Built here from the Supabase URL rather than carried from the server with
+ * every row: it is a fixed shape for a public bucket, and the alternative is
+ * a signed URL that expires inside an email somebody kept.
+ */
+function imageUrl(_pharmacyUrl: string, path: string): string {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  return `${base.replace(/\/+$/, "")}/storage/v1/object/public/outreach-media/${path}`;
+}
+
+function FileList({
+  title, hint, files, busy, accept, onPick, onRemove, onCopyTag,
+}: {
+  title: string;
+  hint: string;
+  files: TemplateFile[];
+  busy: boolean;
+  accept: string;
+  onPick: (file: File) => void;
+  onRemove: (id: string) => void;
+  onCopyTag?: (file: TemplateFile) => void;
+}) {
+  const inputId = `up-${title.replace(/\W+/g, "-").toLowerCase()}`;
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">{title}</p>
+      <p className="mt-1 text-xs text-ink-500">{hint}</p>
+
+      {files.length ? (
+        <ul className="mt-2.5 list-none space-y-1.5">
+          {files.map((f) => (
+            <li key={f.id} className="flex items-center gap-2 rounded-lg border border-ink-200 px-2.5 py-1.5">
+              {f.kind === "image" ? <ImageIcon className="size-3.5 shrink-0 text-ink-400" /> : <Paperclip className="size-3.5 shrink-0 text-ink-400" />}
+              <span className="min-w-0 flex-1 truncate text-xs text-ink-700" title={f.filename}>{f.filename}</span>
+              <span className="shrink-0 text-[0.68rem] text-ink-400">{(f.size_bytes / 1024).toFixed(0)} KB</span>
+              {onCopyTag ? (
+                <button type="button" className="shrink-0 cursor-pointer text-ink-400 hover:text-brand-700" title="Copy the <img> tag" onClick={() => onCopyTag(f)}>
+                  <Copy className="size-3.5" />
+                </button>
+              ) : null}
+              <button type="button" className="shrink-0 cursor-pointer text-ink-400 hover:text-danger-500" title="Remove" onClick={() => onRemove(f.id)}>
+                <X className="size-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      <label htmlFor={inputId} className="mt-2.5 inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-ink-200 px-3 py-1.5 text-xs font-medium text-ink-700 transition-soft hover:border-brand-600 hover:text-brand-700">
+        <Upload className="size-3.5" />
+        {busy ? "Uploading…" : "Add file"}
+      </label>
+      <input
+        id={inputId}
+        type="file"
+        accept={accept}
+        className="hidden"
+        disabled={busy}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onPick(file);
+          // Cleared so picking the same file twice still fires a change.
+          e.target.value = "";
+        }}
+      />
     </div>
   );
 }
