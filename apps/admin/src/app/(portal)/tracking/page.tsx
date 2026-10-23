@@ -49,11 +49,16 @@ export default async function TrackingPage() {
 
   const pharmacyUrl = process.env.NEXT_PUBLIC_PHARMACY_URL ?? "https://pharmacy.getmed.ca";
   // Read here rather than in the browser: the UI says plainly that sending is
-  // unconfigured instead of offering a button that throws.
+  // unconfigured instead of offering a button that throws. The mailbox wins
+  // over Resend when both are set, which is what the send path does too.
+  const viaSmtp = !!process.env.OUTREACH_SMTP_HOST?.trim() && !!process.env.OUTREACH_SMTP_USER?.trim() && !!process.env.OUTREACH_SMTP_PASSWORD;
+  const via = viaSmtp ? ("smtp" as const) : process.env.RESEND_API_KEY ? ("resend" as const) : null;
   const sender = {
-    ready: !!process.env.OUTREACH_FROM_EMAIL?.trim() && !!process.env.RESEND_API_KEY,
+    ready: !!process.env.OUTREACH_FROM_EMAIL?.trim() && via !== null,
     from: process.env.OUTREACH_FROM_EMAIL?.trim() ?? null,
     replyTo: process.env.OUTREACH_REPLY_TO_EMAIL?.trim() ?? null,
+    via,
+    smtpHost: viaSmtp ? (process.env.OUTREACH_SMTP_HOST?.trim() ?? null) : null,
   };
 
   return (

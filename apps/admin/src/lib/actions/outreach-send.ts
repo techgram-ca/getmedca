@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@getmed/core/auth";
-import { sendHtmlEmail, type EmailAttachment } from "@getmed/core/notifications";
+import { sendHtmlEmail, smtpConfigFromEnv, type EmailAttachment } from "@getmed/core/notifications";
 import {
   dropUnresolvedLinks,
   htmlToPlainText,
@@ -34,11 +34,20 @@ const MAX_PER_BATCH = 50;
  * to is not a pitch, and sending both from one address means a pharmacy's
  * answer lands wherever order alerts bounce to.
  */
-function senderConfig(): { from: string; replyTo: string | undefined } {
+function senderConfig() {
   const from = process.env.OUTREACH_FROM_EMAIL?.trim();
   const replyTo = process.env.OUTREACH_REPLY_TO_EMAIL?.trim();
   if (!from) throw new Error("OUTREACH_FROM_EMAIL is not set — outreach has no address to send from.");
-  return { from, replyTo: replyTo || undefined };
+
+  // The mailbox wins when it is configured. It is the reason this exists:
+  // the same HTML from the same address lands in Gmail's Primary tab sent
+  // from the Zoho mailbox and in Promotions through Resend. Transactional
+  // mail never looks at this and stays on Resend.
+  const smtp = smtpConfigFromEnv();
+  if (!smtp && !process.env.RESEND_API_KEY) {
+    throw new Error("Neither a mailbox nor Resend is configured — outreach has no way to send.");
+  }
+  return { from, replyTo: replyTo || undefined, smtp, transport: smtp ? ("smtp" as const) : ("resend" as const) };
 }
 
 /** Pulls the template's attachments out of storage, once per batch. */
@@ -88,7 +97,7 @@ export async function sendOutreachEmails(contactIds: string[], templateId: strin
     }
 
     const { db } = await requireAdmin();
-    const { from, replyTo } = senderConfig();
+    const { from, replyTo, smtp, transport } = senderConfig();
 
     const [{ data: template }, { data: rules }, { data: contacts }] = await Promise.all([
       db.from("outreach_email_templates").select("*").eq("id", templateId).maybeSingle(),
@@ -131,6 +140,7 @@ export async function sendOutreachEmails(contactIds: string[], templateId: strin
           from,
           replyTo,
           attachments,
+          smtp,
         });
         await db.from("outreach_sends").insert({
           contact_id: contact.id,
@@ -139,6 +149,7 @@ export async function sendOutreachEmails(contactIds: string[], templateId: strin
           to_email: to,
           subject: rendered.subject,
           status: "sent",
+          transport,
           provider_message_id: id,
           attachment_count: attachments.length,
         });
@@ -158,6 +169,7 @@ export async function sendOutreachEmails(contactIds: string[], templateId: strin
           to_email: to,
           subject: rendered.subject,
           status: "failed",
+          transport,
           error: detail.slice(0, 500),
           attachment_count: attachments.length,
         });
@@ -174,9 +186,16 @@ export async function sendOutreachEmails(contactIds: string[], templateId: strin
 }
 
 /** Whether sending is configured at all, so the UI can say so before trying. */
-export async function outreachSenderReady(): Promise<{ ready: boolean; from: string | null; replyTo: string | null }> {
+export async function outreachSenderReady(): Promise<{
+  ready: boolean;
+  from: string | null;
+  replyTo: string | null;
+  via: "smtp" | "resend" | null;
+}> {
   await requireAdmin();
   const from = process.env.OUTREACH_FROM_EMAIL?.trim() || null;
   const replyTo = process.env.OUTREACH_REPLY_TO_EMAIL?.trim() || null;
-  return { ready: !!from && !!process.env.RESEND_API_KEY, from, replyTo };
+  const smtp = smtpConfigFromEnv();
+  const via = smtp ? ("smtp" as const) : process.env.RESEND_API_KEY ? ("resend" as const) : null;
+  return { ready: !!from && via !== null, from, replyTo, via };
 }

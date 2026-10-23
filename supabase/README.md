@@ -61,6 +61,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0021_pharmacy_listed.sql` | `pharmacies.listed`: approved, but kept out of search with ordering disabled |
 | `migrations/0022_outreach_email_templates.sql` | Reusable pitch-email templates, and one outreach contact per email address |
 | `migrations/0023_outreach_sending.sql` | Sending pitch emails from admin: a send log, template files, a public media bucket |
+| `migrations/0024_outreach_send_transport.sql` | Records whether a pitch left through Resend or a mailbox |
 | `prod/outreach-contacts-vaughan.sql` | Loads 29 gathered Vaughan-area pharmacies into Tracking, skipping addresses already there |
 | `prod/outreach-12.sql` | 0018–0020 as one repeatable script, for applying outreach tracking in one go |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
@@ -110,6 +111,13 @@ it on one that has none of them:
 ```bash
 psql "$DATABASE_URL" -f supabase/prod/outreach-12.sql
 ```
+
+`migrations/0024_outreach_send_transport.sql` adds `outreach_sends.transport`. Outreach can leave by
+two routes — Resend, like everything else, or an ordinary mailbox over SMTP when the
+`OUTREACH_SMTP_*` variables are set. The second exists because of a measured difference: the same HTML
+from the same address reaches Gmail's Primary tab from the Zoho mailbox and Promotions through Resend.
+Recording which route a message took is what makes a placement question answerable afterwards.
+Transactional mail is unaffected and stays on Resend.
 
 `prod/outreach-contacts-vaughan.sql` is data rather than schema: a hand-gathered list of Vaughan-area
 pharmacies loaded into `outreach_contacts`. It inserts only addresses not already on the list, mints

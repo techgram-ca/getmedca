@@ -32,6 +32,7 @@
   "dependencies": {
     "@getmed/db": "workspace:*",
     "inngest": "^4.20.0",
+    "nodemailer": "^10.2.1",
     "pdf-lib": "^1.17.1",
     "resend": "^6.28.1",
     "twilio": "^6.1.1",
@@ -45,6 +46,7 @@
   "devDependencies": {
     "@getmed/tsconfig": "workspace:*",
     "@types/node": "^22.19.0",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.3.0",
     "@types/web-push": "^3.6.4",
     "next": "^16.3.5",
