@@ -275,6 +275,7 @@ export function joinUrl(base: string, path: string): string {
 
 export {
   DEFAULT_TEMPLATE,
+  dropUnresolvedLinks,
   htmlToPlainText,
   outreachPlaceholders,
   outreachSendBlockers,

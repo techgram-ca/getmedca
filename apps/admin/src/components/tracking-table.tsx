@@ -444,8 +444,9 @@ export function TrackingTable({
               </div>
 
               <p className="text-xs text-ink-500">
-                Anything that cannot be sent — a missing city for the rate-card link, a typo in a placeholder — is
-                skipped and named afterwards rather than going out broken.
+                No link is required. One that cannot be built for a pharmacy — the rate card for a contact with no
+                city — is left out and the wording around it stays. A typo in a placeholder is a different thing: that
+                pharmacy is skipped and named afterwards.
               </p>
 
               <div className="flex justify-end gap-2">

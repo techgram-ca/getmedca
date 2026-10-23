@@ -221,11 +221,27 @@ export type SendableContact = TemplateContact & {
   unsubscribed_at?: string | null;
 };
 
+/** Whether an unresolved placeholder was meant to produce a link. */
+function isLinkPlaceholder(key: string): boolean {
+  return /-link\]$/i.test(key);
+}
+
 /**
  * Why this contact must not be sent to, if anything.
  *
  * Returns reasons rather than a boolean so a bulk send can say which pharmacy
  * it skipped and why, instead of reporting "3 of 12 failed".
+ *
+ * No link is required, including the unsubscribe one, and a link that cannot
+ * be built for this particular pharmacy — the rate card for a contact with no
+ * city — does not stop the email. `dropUnresolvedLinks` takes those out of the
+ * body first, so the sentence survives without the hyperlink rather than
+ * shipping `href="[rates-link]"` to a pharmacy.
+ *
+ * A misspelt *field* still blocks. `[pharmcy-name]` is a mistake in the
+ * template rather than a link that happens not to apply here, it would go out
+ * as literal brackets where a name should be, and it is wrong for everyone on
+ * the list rather than just this one.
  */
 export function outreachSendBlockers(
   contact: SendableContact,
@@ -237,16 +253,51 @@ export function outreachSendBlockers(
   if (contact.unsubscribed_at) reasons.push("they asked not to be contacted");
   if (!rendered.subject.trim()) reasons.push("the template has no subject line");
   if (!rendered.html.trim()) reasons.push("the template has no body");
-  if (rendered.unknown.length) {
-    reasons.push(`${rendered.unknown.join(", ")} did not resolve`);
-  }
-  // Canadian anti-spam law wants a working way out of every commercial email,
-  // and the unsubscribe token is per-contact, so it cannot be bolted on
-  // afterwards. Refusing here is cheaper than a complaint.
-  if (!/\[unsubscribe-link\]/i.test(template.body)) {
-    reasons.push("the template has no [unsubscribe-link]");
+
+  const brokenFields = rendered.unknown.filter((k) => !isLinkPlaceholder(k));
+  if (brokenFields.length) {
+    reasons.push(`${brokenFields.join(", ")} did not resolve`);
   }
   return reasons;
+}
+
+/**
+ * Takes out the links that could not be built for this pharmacy.
+ *
+ * An anchor is unwrapped rather than deleted, so "look at <a>our rates for
+ * your city</a>" becomes "look at our rates for your city" and the sentence
+ * still reads. A placeholder standing on its own — a bare URL in the text —
+ * is removed outright, since leaving `[rates-link]` in the middle of a
+ * paragraph is the thing this exists to prevent.
+ *
+ * Only ever called with placeholders that are already known to be unresolved.
+ */
+export function dropUnresolvedLinks(html: string, unresolved: string[]): string {
+  const links = unresolved.filter(isLinkPlaceholder);
+  if (links.length === 0) return html;
+
+  let out = html;
+  for (const key of links) {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const anchor = `<a\\b[^>]*href=["']\\s*${escaped}\\s*["'][^>]*>[\\s\\S]*?</a>`;
+
+    // A bullet or paragraph that was nothing but the link goes with it. The
+    // shipped template has one — "What delivery costs in Bolton", wholly a
+    // link to the rate card — and unwrapping it would leave a bullet that
+    // trails off mid-sentence, which reads worse than one fewer bullet.
+    out = out.replace(new RegExp(`<(li|p)\\b[^>]*>\\s*(?:${anchor})\\s*[.,;:·—-]*\\s*</\\1>`, "gi"), "");
+
+    // Everywhere else the words carry the sentence, so only the link goes.
+    out = out.replace(
+      new RegExp(`<a\\b[^>]*href=["']\\s*${escaped}\\s*["'][^>]*>([\\s\\S]*?)</a>`, "gi"),
+      "$1",
+    );
+    // Anything left of it is loose text, and reads as a mistake.
+    out = out.replace(new RegExp(escaped, "gi"), "");
+  }
+  // And anything that is now an empty shell.
+  out = out.replace(/<li[^>]*>\s*<\/li>/gi, "").replace(/<p[^>]*>\s*<\/p>/gi, "");
+  return out;
 }
 
 /**

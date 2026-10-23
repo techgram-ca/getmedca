@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@getmed/core/auth";
 import { sendHtmlEmail, type EmailAttachment } from "@getmed/core/notifications";
 import {
+  dropUnresolvedLinks,
   htmlToPlainText,
   outreachSendBlockers,
   renderOutreachEmail,
@@ -118,12 +119,15 @@ export async function sendOutreachEmails(contactIds: string[], templateId: strin
       }
 
       const to = contact.contact_email!.trim();
+      // No link is required, so one that could not be built for this pharmacy
+      // comes out of the body rather than going out as href="[rates-link]".
+      const html = dropUnresolvedLinks(rendered.html, rendered.unknown);
       try {
         const { id } = await sendHtmlEmail({
           to,
           subject: rendered.subject,
-          html: rendered.html,
-          text: htmlToPlainText(rendered.html),
+          html,
+          text: htmlToPlainText(html),
           from,
           replyTo,
           attachments,
