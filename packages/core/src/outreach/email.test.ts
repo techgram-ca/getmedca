@@ -4,6 +4,7 @@ import {
   DEFAULT_TEMPLATE,
   htmlToPlainText,
   outreachPlaceholders,
+  dropUnresolvedLinks,
   outreachSendBlockers,
   renderOutreachEmail,
   type EmailTemplate,
@@ -186,20 +187,24 @@ test("an unsubscribed pharmacy is never sent to, whatever else is right", () => 
   ]);
 });
 
-test("an unresolved placeholder blocks the send rather than going out in brackets", () => {
-  const t = { subject: "Hi", body: "<p>Hello [pharmcy-name] [unsubscribe-link]</p>" };
+test("a misspelt field blocks the send rather than going out in brackets", () => {
+  const t = { subject: "Hi", body: "<p>Hello [pharmcy-name]</p>" };
   assert.deepEqual(outreachSendBlockers(SENDABLE, t, render(t)), ["[pharmcy-name] did not resolve"]);
 });
 
-test("a rate-card link with no city to put in it blocks the send", () => {
+test("a rate-card link with no city does not block: no link is required", () => {
   const c = { ...SENDABLE, city: null };
-  const reasons = outreachSendBlockers(c, DEFAULT_TEMPLATE, render(DEFAULT_TEMPLATE, c));
-  assert.deepEqual(reasons, ["[rates-link] did not resolve"]);
+  assert.deepEqual(outreachSendBlockers(c, DEFAULT_TEMPLATE, render(DEFAULT_TEMPLATE, c)), []);
 });
 
-test("a template with no unsubscribe link cannot be sent", () => {
+test("a misspelt link does not block either", () => {
+  const t = { subject: "Hi", body: '<p>See <a href="[rate-link]">rates</a></p>' };
+  assert.deepEqual(outreachSendBlockers(SENDABLE, t, render(t)), []);
+});
+
+test("a template with no unsubscribe link sends like any other", () => {
   const t = { subject: "Hi", body: "<p>Hello [pharmacy-name]</p>" };
-  assert.deepEqual(outreachSendBlockers(SENDABLE, t, render(t)), ["the template has no [unsubscribe-link]"]);
+  assert.deepEqual(outreachSendBlockers(SENDABLE, t, render(t)), []);
 });
 
 test("an empty subject or body blocks the send", () => {
@@ -210,8 +215,79 @@ test("an empty subject or body blocks the send", () => {
 
 test("every reason is reported at once, not one per attempt", () => {
   const c = { ...SENDABLE, contact_email: null, unsubscribed_at: "2026-10-02T10:00:00Z" };
-  const t = { subject: "Hi", body: "<p>[nope-link]</p>" };
-  assert.equal(outreachSendBlockers(c, t, render(t, c)).length, 4);
+  const t = { subject: "", body: "<p>[nope-field]</p>" };
+  const reasons = outreachSendBlockers(c, t, render(t, c));
+  assert.deepEqual(reasons, [
+    "no email address on file",
+    "they asked not to be contacted",
+    "the template has no subject line",
+    "[nope-field] did not resolve",
+  ]);
+});
+
+// ---------------- dropping links that could not be built ----------------
+
+test("an anchor whose link did not resolve is unwrapped, keeping the sentence", () => {
+  const html = 'Look at <a href="[rates-link]" style="color:red">our rates for your city</a> today.';
+  assert.equal(
+    dropUnresolvedLinks(html, ["[rates-link]"]),
+    "Look at our rates for your city today.",
+  );
+});
+
+test("a loose placeholder is removed rather than left mid-paragraph", () => {
+  assert.equal(dropUnresolvedLinks("<p>Rates: [rates-link]</p>", ["[rates-link]"]), "<p>Rates: </p>");
+});
+
+test("a list item that was nothing but the link goes with it", () => {
+  // Unwrapping would leave a bullet that trails off mid-sentence.
+  const html = '<ul><li><a href="[rates-link]">What delivery costs in </a></li><li>Kept</li></ul>';
+  assert.equal(dropUnresolvedLinks(html, ["[rates-link]"]), "<ul><li>Kept</li></ul>");
+  assert.equal(dropUnresolvedLinks("<ul><li>[rates-link]</li></ul>", ["[rates-link]"]), "<ul></ul>");
+});
+
+test("a list item with words around the link keeps them", () => {
+  const html = '<ul><li><a href="[demo-link]">A sample page</a>, which is what yours would look like</li></ul>';
+  assert.equal(
+    dropUnresolvedLinks(html, ["[demo-link]"]),
+    "<ul><li>A sample page, which is what yours would look like</li></ul>",
+  );
+});
+
+test("links that did resolve are left completely alone", () => {
+  const html = '<a href="https://pharmacy.getmed.ca/i/abc/signup">Join</a> and <a href="[rates-link]">rates</a>';
+  assert.equal(
+    dropUnresolvedLinks(html, ["[rates-link]"]),
+    '<a href="https://pharmacy.getmed.ca/i/abc/signup">Join</a> and rates',
+  );
+});
+
+test("a misspelt field is not touched by the link stripper", () => {
+  // It blocks the send instead, so it must still be visible when it is fixed.
+  assert.equal(dropUnresolvedLinks("<p>[pharmcy-name]</p>", ["[pharmcy-name]"]), "<p>[pharmcy-name]</p>");
+});
+
+test("the shipped template, sent to a contact with no city, loses only that bullet", () => {
+  const c = { ...SENDABLE, city: null };
+  const r = render(DEFAULT_TEMPLATE, c);
+  const html = dropUnresolvedLinks(r.html, r.unknown);
+  assert.ok(!html.includes("[rates-link]"), "no broken placeholder survives");
+  assert.ok(!html.includes('href=""'), "and no empty href either");
+  // That bullet was wholly a link to the rate card, so without the card it
+  // has nothing to say — "What delivery costs in " would trail off.
+  assert.ok(!html.includes("What delivery costs in"), "the half-sentence goes too");
+  assert.equal((html.match(/<li>/g) ?? []).length, 2, "the other two bullets stay");
+  assert.ok(html.includes("How it works"));
+  assert.ok(html.includes("A sample pharmacy page"));
+  assert.ok(html.includes("/i/aB3kD9xQ2mZp/signup"), "every other link is untouched");
+  assert.ok(html.includes("/u/aB3kD9xQ2mZp"), "including the unsubscribe one");
+});
+
+test("a contact that has a city keeps the rate-card bullet", () => {
+  const r = render(DEFAULT_TEMPLATE);
+  const html = dropUnresolvedLinks(r.html, r.unknown);
+  assert.equal(html, r.html, "nothing is stripped when nothing is broken");
+  assert.ok(html.includes("What delivery costs in Bolton"));
 });
 
 // ---------------- plain-text alternative ----------------

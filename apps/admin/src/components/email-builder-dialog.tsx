@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AlertTriangle, Check, ClipboardCopy, Code2, Eye } from "lucide-react";
-import { renderOutreachEmail, type LinkRule, type TemplateContact } from "@getmed/core/outreach";
+import { dropUnresolvedLinks, renderOutreachEmail, type LinkRule, type TemplateContact } from "@getmed/core/outreach";
 import { Alert, Badge, Button, Dialog, DialogContent, Field, Select, toast } from "@getmed/ui";
 import type { Template } from "./email-template-editor";
 
@@ -35,10 +35,17 @@ export function EmailBuilderDialog({
   const [copied, setCopied] = useState<string | null>(null);
 
   const template = templates.find((t) => t.id === templateId) ?? null;
-  const rendered = useMemo(
-    () => (template ? renderOutreachEmail(template, contact, rules, pharmacyUrl) : null),
-    [template, contact, rules, pharmacyUrl],
-  );
+  const rendered = useMemo(() => {
+    if (!template) return null;
+    const r = renderOutreachEmail(template, contact, rules, pharmacyUrl);
+    // What is previewed and copied is what Send would produce, byte for byte.
+    // A link that could not be built for this pharmacy is taken out of the
+    // body either way, so the two paths cannot disagree.
+    const html = dropUnresolvedLinks(r.html, r.unknown);
+    const dropped = r.unknown.filter((k) => /-link\]$/i.test(k));
+    const broken = r.unknown.filter((k) => !/-link\]$/i.test(k));
+    return { ...r, html, dropped, broken };
+  }, [template, contact, rules, pharmacyUrl]);
 
   const flash = (key: string, message: string) => {
     setCopied(key);
@@ -106,12 +113,23 @@ export function EmailBuilderDialog({
 
             {/* A placeholder that could not be filled would otherwise go out
                 as literal brackets in an email to a real pharmacy. */}
-            {rendered && rendered.unknown.length > 0 ? (
-              <Alert tone="warning" title="Some placeholders did not resolve">
+            {rendered && rendered.dropped.length > 0 ? (
+              <Alert tone="info" title="A link was left out">
                 <p>
-                  {rendered.unknown.map((u) => <code key={u} className="mr-1.5 font-mono">{u}</code>)}
-                  — left in the text as written. Check the spelling in the template, or add the city to this contact if
-                  it is the rate-card link.
+                  {rendered.dropped.map((u) => <code key={u} className="mr-1.5 font-mono">{u}</code>)}
+                  could not be built for this pharmacy, so the wording stays and the link goes. Add a city to the
+                  contact if it is the rate-card one.
+                </p>
+              </Alert>
+            ) : null}
+
+            {/* A misspelt field is a different thing: it is wrong for everyone
+                on the list, not just this one, and it stops a send. */}
+            {rendered && rendered.broken.length > 0 ? (
+              <Alert tone="warning" title="Check the template">
+                <p>
+                  {rendered.broken.map((u) => <code key={u} className="mr-1.5 font-mono">{u}</code>)}
+                  is not a placeholder — it would go out as written, and sending is blocked until it is fixed.
                 </p>
               </Alert>
             ) : null}
