@@ -10,7 +10,7 @@ export default async function ContactPage({ params }: { params: Promise<{ contac
   const { data: contact } = await db.from("outreach_contacts").select("*").eq("id", contactId).maybeSingle();
   if (!contact) notFound();
 
-  const [{ data: visitRows }, { data: pharmacies }, { data: rules }, { data: templates }] = await Promise.all([
+  const [{ data: visitRows }, { data: pharmacies }, { data: rules }, { data: templates }, { data: sends }] = await Promise.all([
     db
       .from("outreach_visits")
       .select("id, created_at, likely_bot, kind, path, user_agent")
@@ -19,23 +19,22 @@ export default async function ContactPage({ params }: { params: Promise<{ contac
     db.from("pharmacies").select("id, name, status, submitted_at, email").order("name"),
     db.from("outreach_link_rules").select("*").order("sort_order").order("slug"),
     db.from("outreach_email_templates").select("*").order("is_default", { ascending: false }).order("name"),
+    db.from("outreach_sends").select("*").eq("contact_id", contactId).order("created_at", { ascending: false }),
   ]);
 
   const visits = visitRows ?? [];
   const summary = summariseVisits(visits.map((v) => ({ created_at: v.created_at, likely_bot: v.likely_bot, kind: v.kind, path: v.path })));
   const pharmacy = contact.pharmacy_id ? (pharmacies ?? []).find((p) => p.id === contact.pharmacy_id) : null;
-  const { stage, confirmed } = outreachStage({
+  const stage = outreachStage({
     sentAt: contact.sent_at,
     humanVisits: summary.human,
     pharmacy: pharmacy ? { status: pharmacy.status, submitted_at: pharmacy.submitted_at } : null,
-    manualSignedUpAt: contact.manual_signed_up_at,
   });
 
   return (
     <ContactDetail
       contact={contact}
       stage={stage}
-      confirmed={confirmed}
       linkedPharmacyName={pharmacy?.name ?? pharmacy?.email ?? null}
       summary={{
         human: summary.human,
@@ -56,6 +55,8 @@ export default async function ContactPage({ params }: { params: Promise<{ contac
       pharmacies={(pharmacies ?? []).map((p) => ({ id: p.id, name: p.name ?? p.email ?? "Unnamed" }))}
       rules={(rules ?? []).map((r) => ({ slug: r.slug, site: r.site, path: r.path, appends_rest: r.appends_rest, label: r.label }))}
       templates={templates ?? []}
+      sends={sends ?? []}
+      senderReady={!!process.env.OUTREACH_FROM_EMAIL?.trim() && !!process.env.RESEND_API_KEY}
       pharmacyUrl={process.env.NEXT_PUBLIC_PHARMACY_URL ?? "https://pharmacy.getmed.ca"}
     />
   );

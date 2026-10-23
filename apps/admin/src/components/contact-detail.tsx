@@ -5,20 +5,25 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ArrowLeft, BadgeCheck, Ban, Check, Copy, Mail, Pencil, Save, Send, Trash2 } from "lucide-react";
 import { slugify } from "@getmed/core/format";
-import { joinUrl, OUTCOMES, OUTCOME_LABELS, STAGE_LABELS, type LinkRule, type Outcome, type OutreachStage } from "@getmed/core/outreach";
+import { joinUrl, STAGE_LABELS, type LinkRule, type OutreachStage } from "@getmed/core/outreach";
 import {
   Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Dialog, DialogContent,
   Field, Input, Select, TBody, TD, TH, THead, TR, Table, Textarea, toast,
 } from "@getmed/ui";
-import { deleteContact, linkPharmacy, markSent, markSignedUp, saveContact, setUnsubscribed } from "@/lib/actions/outreach";
+import { deleteContact, linkPharmacy, markSent, saveContact, setUnsubscribed } from "@/lib/actions/outreach";
+import { sendOutreachEmails } from "@/lib/actions/outreach-send";
 import { EmailBuilderDialog } from "./email-builder-dialog";
 import type { Template } from "./email-template-editor";
 import { STAGE_TONE } from "./tracking-table";
 
 type Contact = {
   id: string; token: string; pharmacy_name: string; contact_email: string | null; city: string | null;
-  sent_at: string | null; pharmacy_id: string | null; manual_signed_up_at: string | null;
-  outcome: string; notes: string | null; unsubscribed_at: string | null; created_at: string;
+  sent_at: string | null; pharmacy_id: string | null;
+  notes: string | null; unsubscribed_at: string | null; created_at: string;
+};
+type SendRow = {
+  id: string; template_name: string | null; to_email: string; subject: string;
+  status: string; error: string | null; attachment_count: number; created_at: string;
 };
 type Summary = {
   human: number; bot: number; days: number;
@@ -30,17 +35,18 @@ const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
 
 export function ContactDetail({
-  contact, stage, confirmed, linkedPharmacyName, summary, visits, pharmacies, rules, templates, pharmacyUrl,
+  contact, stage, linkedPharmacyName, summary, visits, pharmacies, rules, templates, sends, senderReady, pharmacyUrl,
 }: {
   contact: Contact;
   stage: OutreachStage;
-  confirmed: boolean;
   linkedPharmacyName: string | null;
   summary: Summary;
   visits: VisitRow[];
   pharmacies: { id: string; name: string }[];
   rules: LinkRule[];
   templates: Template[];
+  sends: SendRow[];
+  senderReady: boolean;
   pharmacyUrl: string;
 }) {
   const router = useRouter();
@@ -49,7 +55,11 @@ export function ContactDetail({
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
-  const [outcome, setOutcome] = useState(contact.outcome as Outcome);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [sendTemplateId, setSendTemplateId] = useState(
+    templates.find((t) => t.is_default)?.id ?? templates[0]?.id ?? "",
+  );
+  const canSend = senderReady && !contact.unsubscribed_at && !!contact.contact_email && templates.length > 0;
   const [notes, setNotes] = useState(contact.notes ?? "");
   const [draft, setDraft] = useState({
     pharmacyName: contact.pharmacy_name,
@@ -119,18 +129,32 @@ export function ContactDetail({
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
             <Badge tone={STAGE_TONE[stage]}>{STAGE_LABELS[stage]}</Badge>
             {signedUpStage ? (
-              confirmed ? (
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-success-500">
-                  <BadgeCheck className="size-3.5" /> linked to {linkedPharmacyName}
-                </span>
-              ) : (
-                <span className="text-xs text-ink-500">marked by hand, no account linked</span>
-              )
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-success-500">
+                <BadgeCheck className="size-3.5" /> linked to {linkedPharmacyName}
+              </span>
             ) : null}
           </div>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" onClick={() => setEmailOpen(true)}><Mail /> Get full email</Button>
+          <Button
+            size="sm"
+            disabled={!canSend || pending}
+            title={
+              !senderReady
+                ? "Sending is not configured"
+                : contact.unsubscribed_at
+                  ? "They asked not to be contacted"
+                  : !contact.contact_email
+                    ? "No email address on file"
+                    : templates.length === 0
+                      ? "No template yet"
+                      : `Send to ${contact.contact_email}`
+            }
+            onClick={() => setSendOpen(true)}
+          >
+            <Send /> {contact.sent_at ? "Resend" : "Send"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setEmailOpen(true)}><Mail /> Get full email</Button>
           <Button size="sm" variant="outline" onClick={() => setEditing(true)}><Pencil /> Edit</Button>
           {confirmDelete ? (
             <>
@@ -242,38 +266,10 @@ export function ContactDetail({
                   <option value="">Not linked to an account</option>
                   {pharmacies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </Select>
-                {!contact.pharmacy_id ? (
-                  <label className="mt-2 flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5"
-                      checked={!!contact.manual_signed_up_at}
-                      disabled={pending}
-                      onChange={(e) => run(() => markSignedUp(contact.id, e.target.checked), "Saved")}
-                    />
-                    <span>
-                      Mark signed up anyway
-                      <span className="block text-xs text-ink-500">For one you cannot match to an account.</span>
-                    </span>
-                  </label>
-                ) : null}
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Outcome</p>
-                <Select
-                  aria-label="Outcome"
-                  className="mt-1.5"
-                  value={outcome}
-                  disabled={pending}
-                  onChange={(e) => {
-                    const next = e.target.value as Outcome;
-                    setOutcome(next);
-                    run(() => saveContact({ ...draft, id: contact.id, outcome: next, notes }), "Saved");
-                  }}
-                >
-                  {OUTCOMES.map((o) => <option key={o} value={o}>{OUTCOME_LABELS[o]}</option>)}
-                </Select>
+                <p className="mt-1.5 text-xs text-ink-500">
+                  Linking the account is what moves this past &ldquo;opened the link&rdquo; — and it keeps itself up to
+                  date as they submit and get approved.
+                </p>
               </div>
 
               {!contact.unsubscribed_at ? (
@@ -299,7 +295,7 @@ export function ContactDetail({
                 size="sm"
                 className="mt-3"
                 disabled={pending || notes === (contact.notes ?? "")}
-                onClick={() => run(() => saveContact({ ...draft, id: contact.id, outcome, notes }), "Notes saved")}
+                onClick={() => run(() => saveContact({ ...draft, id: contact.id, notes }), "Notes saved")}
               >
                 <Save /> Save notes
               </Button>
@@ -326,8 +322,76 @@ export function ContactDetail({
               </p>
             </CardContent>
           </Card>
+
+          {/* Failures are listed alongside successes on purpose: a send Resend
+              rejected otherwise looks exactly like one never attempted. */}
+          <Card>
+            <CardHeader><CardTitle>Emails sent</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {sends.length === 0 ? (
+                <p className="text-sm text-ink-500">Nothing sent from here yet.</p>
+              ) : (
+                sends.slice(0, 20).map((sd) => (
+                  <div key={sd.id} className="flex items-start gap-2.5 text-sm">
+                    <Badge tone={sd.status === "sent" ? "success" : "danger"}>{sd.status}</Badge>
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-ink-900" title={sd.subject}>{sd.subject}</span>
+                      <span className="block text-xs text-ink-500">
+                        {when(sd.created_at)}
+                        {sd.template_name ? ` · ${sd.template_name}` : null}
+                        {sd.attachment_count ? ` · ${sd.attachment_count} attachment${sd.attachment_count === 1 ? "" : "s"}` : null}
+                      </span>
+                      {sd.error ? <span className="block text-xs text-danger-500">{sd.error}</span> : null}
+                    </span>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
+
+      <Dialog open={sendOpen} onOpenChange={setSendOpen}>
+        <DialogContent title={`Send to ${contact.pharmacy_name}`} className="max-w-lg">
+          <div className="space-y-4">
+            <Field label="Template" htmlFor="cd-send-tpl">
+              <Select id="cd-send-tpl" value={sendTemplateId} onChange={(e) => setSendTemplateId(e.target.value)}>
+                {templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_default ? " (default)" : ""}</option>)}
+              </Select>
+            </Field>
+            <p className="text-sm text-ink-600">
+              Going to <span className="font-medium text-ink-950">{contact.contact_email}</span>.
+              {contact.sent_at ? " This pharmacy has already had one — this would be another." : null}
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setSendOpen(false)}>Cancel</Button>
+              <Button
+                loading={pending}
+                loadingText="Sending…"
+                onClick={() =>
+                  start(async () => {
+                    const r = await sendOutreachEmails([contact.id], sendTemplateId);
+                    if (!r.ok) {
+                      toast.error(r.error);
+                      return;
+                    }
+                    const [outcome] = r.outcomes;
+                    if (outcome?.status === "sent") {
+                      toast.success("Sent");
+                      setSendOpen(false);
+                      router.refresh();
+                    } else {
+                      toast.error(outcome?.detail ?? "Not sent");
+                    }
+                  })
+                }
+              >
+                <Send /> Send it
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <EmailBuilderDialog
         contact={contact}
@@ -345,7 +409,7 @@ export function ContactDetail({
             onSubmit={(e) => {
               e.preventDefault();
               start(async () => {
-                const r = await saveContact({ ...draft, id: contact.id, outcome, notes });
+                const r = await saveContact({ ...draft, id: contact.id, notes });
                 if (r.ok) { toast.success("Saved"); setEditing(false); router.refresh(); }
                 else toast.error(r.error);
               });

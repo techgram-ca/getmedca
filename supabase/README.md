@@ -60,6 +60,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0020_outreach_link_rules.sql` | Admin-editable mapping from an invite link's slug to where it sends people |
 | `migrations/0021_pharmacy_listed.sql` | `pharmacies.listed`: approved, but kept out of search with ordering disabled |
 | `migrations/0022_outreach_email_templates.sql` | Reusable pitch-email templates, and one outreach contact per email address |
+| `migrations/0023_outreach_sending.sql` | Sending pitch emails from admin: a send log, template files, a public media bucket |
 | `prod/outreach-12.sql` | 0018–0020 as one repeatable script, for applying outreach tracking in one go |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
 
@@ -83,6 +84,19 @@ index allows exactly one default template. The contact email index is on
 `lower(trim(contact_email))` and partial, since a contact with no published address is normal; the
 migration refuses with the offending addresses named if a database already holds duplicates, rather
 than deciding for itself which of two rows has already been emailed.
+
+`migrations/0023_outreach_sending.sql` lets admin send the pitch itself rather than only producing
+HTML to paste. `outreach_sends` records every attempt including the failures, because a send Resend
+rejected otherwise looks identical to one never tried; it keeps `template_name` so the record stays
+readable after a template is deleted. `outreach_template_files` holds what a template carries — an
+`attachment` rides with the message, an `image` is linked from the body — in `outreach-media`, the
+only public bucket in the project. It has to be public: a mail client fetches an inline image from
+someone's inbox weeks later, with no session, so a signed URL would decay into a broken image.
+Nothing patient-related goes near it and keys are random UUIDs. The migration also drops
+`outreach_contacts.manual_signed_up_at` (a tick-box that let the list show a stage nothing backed
+up — linking the pharmacy says the same thing and stays true) and `outreach_contacts.outcome` (a
+dropdown nobody filled in; notes hold anything worth writing down). Sending needs
+`OUTREACH_FROM_EMAIL` and `OUTREACH_REPLY_TO_EMAIL` — see `.env.example`.
 
 ## One change in one go — `prod/`
 

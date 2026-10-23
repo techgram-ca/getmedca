@@ -321,8 +321,6 @@ export type OutreachContactRow = {
   city: string | null;
   sent_at: string | null;
   pharmacy_id: string | null;
-  manual_signed_up_at: string | null;
-  outcome: string;
   notes: string | null;
   unsubscribed_at: string | null;
   created_at: string;
@@ -350,6 +348,33 @@ export type OutreachEmailTemplateRow = {
   is_default: boolean;
   created_at: string;
   updated_at: string;
+};
+
+export type OutreachSendRow = {
+  id: string;
+  contact_id: string;
+  /** Null once the template is deleted; `template_name` keeps the record readable. */
+  template_id: string | null;
+  template_name: string | null;
+  to_email: string;
+  subject: string;
+  status: "sent" | "failed";
+  provider_message_id: string | null;
+  error: string | null;
+  attachment_count: number;
+  created_at: string;
+};
+
+export type OutreachTemplateFileRow = {
+  id: string;
+  template_id: string;
+  /** An attachment rides with the message; an image is linked from the body. */
+  kind: "attachment" | "image";
+  path: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
 };
 
 export type OutreachVisitRow = {
@@ -599,6 +624,8 @@ export type Database = {
       outreach_visits: Tbl<OutreachVisitRow, Pick<OutreachVisitRow, "contact_id"> & Partial<OutreachVisitRow>>;
       outreach_link_rules: Tbl<OutreachLinkRuleRow, Pick<OutreachLinkRuleRow, "slug" | "path" | "label"> & Partial<OutreachLinkRuleRow>>;
       outreach_email_templates: Tbl<OutreachEmailTemplateRow, Pick<OutreachEmailTemplateRow, "name"> & Partial<OutreachEmailTemplateRow>>;
+      outreach_sends: Tbl<OutreachSendRow, Pick<OutreachSendRow, "contact_id" | "to_email" | "subject"> & Partial<OutreachSendRow>>;
+      outreach_template_files: Tbl<OutreachTemplateFileRow, Pick<OutreachTemplateFileRow, "template_id" | "kind" | "path" | "filename" | "content_type"> & Partial<OutreachTemplateFileRow>>;
     };
     Views: {
       pharmacies_public: { Row: PharmacyPublicRow; Relationships: [] };

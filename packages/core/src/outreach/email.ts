@@ -206,3 +206,82 @@ export const DEFAULT_TEMPLATE: EmailTemplate = {
   </p>
 </div>`,
 };
+
+// ---------------------------------------------------------------------
+// Sending
+//
+// Everything above this line produces text for a person to paste. Below it,
+// the app sends on its own, and the checks get stricter: a preview has a
+// human looking at it who will notice a stray `[rates-link]`, and a bulk send
+// does not.
+// ---------------------------------------------------------------------
+
+export type SendableContact = TemplateContact & {
+  contact_email?: string | null;
+  unsubscribed_at?: string | null;
+};
+
+/**
+ * Why this contact must not be sent to, if anything.
+ *
+ * Returns reasons rather than a boolean so a bulk send can say which pharmacy
+ * it skipped and why, instead of reporting "3 of 12 failed".
+ */
+export function outreachSendBlockers(
+  contact: SendableContact,
+  template: EmailTemplate,
+  rendered: RenderedEmail,
+): string[] {
+  const reasons: string[] = [];
+  if (!contact.contact_email?.trim()) reasons.push("no email address on file");
+  if (contact.unsubscribed_at) reasons.push("they asked not to be contacted");
+  if (!rendered.subject.trim()) reasons.push("the template has no subject line");
+  if (!rendered.html.trim()) reasons.push("the template has no body");
+  if (rendered.unknown.length) {
+    reasons.push(`${rendered.unknown.join(", ")} did not resolve`);
+  }
+  // Canadian anti-spam law wants a working way out of every commercial email,
+  // and the unsubscribe token is per-contact, so it cannot be bolted on
+  // afterwards. Refusing here is cheaper than a complaint.
+  if (!/\[unsubscribe-link\]/i.test(template.body)) {
+    reasons.push("the template has no [unsubscribe-link]");
+  }
+  return reasons;
+}
+
+/**
+ * A readable plain-text alternative to the HTML body.
+ *
+ * Not a renderer and not trying to be. Some clients refuse HTML outright and
+ * some spam filters mark a message with no text part down, and either way an
+ * email whose text part is empty is worse than one that reads a bit flat.
+ */
+export function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    // A link's destination is the point of these emails, so it survives the
+    // tags rather than leaving the text part with bare, unclickable words.
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href: string, label: string) => {
+      const text = label.replace(/<[^>]+>/g, "").trim();
+      return text && text !== href ? `${text}: ${href}` : href;
+    })
+    // The opening <li> supplies the break, so the closing one must not: a
+    // list would otherwise come out double-spaced.
+    .replace(/<li[^>]*>/gi, "\n- ")
+    .replace(/<\/(p|div|h[1-6]|tr|ul|ol)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&mdash;/gi, "\u2014")
+    .replace(/&ndash;/gi, "\u2013")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
