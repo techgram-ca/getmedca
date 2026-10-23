@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@getmed/core/auth";
-import { generateOutreachToken, isSafeRulePath, OUTCOMES } from "@getmed/core/outreach";
+import { generateOutreachToken, isSafeRulePath } from "@getmed/core/outreach";
 
 type R = { ok: true } | { ok: false; error: string };
 
@@ -17,7 +17,6 @@ const contactSchema = z.object({
   pharmacyName: z.string().trim().min(2, "Enter the pharmacy name").max(120),
   contactEmail: z.string().trim().email("That is not an email address").or(z.literal("")).optional(),
   city: z.string().trim().max(80).optional(),
-  outcome: z.enum(OUTCOMES),
   notes: z.string().trim().max(2000).optional(),
 });
 
@@ -62,7 +61,6 @@ export async function saveContact(input: unknown): Promise<R> {
       pharmacy_name: d.pharmacyName,
       contact_email: email || null,
       city: d.city || null,
-      outcome: d.outcome,
       notes: d.notes || null,
     };
     const { error } = d.id
@@ -104,23 +102,6 @@ export async function markSent(id: string, sent: boolean): Promise<R> {
 export async function linkPharmacy(id: string, pharmacyId: string | null): Promise<R> {
   const { db } = await requireAdmin();
   const { error } = await db.from("outreach_contacts").update({ pharmacy_id: pharmacyId }).eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/tracking");
-  return { ok: true };
-}
-
-/**
- * The weak form: "I know they signed up, I cannot point at which row."
- *
- * Kept separate from the link rather than collapsed into one field, so the
- * table can show which claim it is resting on.
- */
-export async function markSignedUp(id: string, signedUp: boolean): Promise<R> {
-  const { db } = await requireAdmin();
-  const { error } = await db
-    .from("outreach_contacts")
-    .update({ manual_signed_up_at: signedUp ? new Date().toISOString() : null })
-    .eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/tracking");
   return { ok: true };

@@ -143,37 +143,26 @@ export type StageInput = {
   humanVisits: number;
   /** Set once a signup carried the token, or once an admin linked the row. */
   pharmacy: { status: string; submitted_at: string | null } | null;
-  /** The weaker claim, for a pharmacy that signed up before any of this existed. */
-  manualSignedUpAt: string | null;
-};
-
-export type StageResult = {
-  stage: OutreachStage;
-  /**
-   * Whether reaching `signed_up` or beyond rests on a linked pharmacy row
-   * rather than on somebody having ticked a box. The admin list says which,
-   * because a table that cannot tell them apart is a table that lies.
-   */
-  confirmed: boolean;
 };
 
 /**
  * Works out the stage from facts, never from a field someone maintains.
  *
- * Everything from `signed_up` upwards comes from the pharmacy row itself, so
- * it keeps up on its own as that pharmacy submits and gets approved. The only
- * thing a human sets is the fallback for an account that cannot be pointed at.
+ * Everything from `signed_up` upwards reads off the linked pharmacy row, so it
+ * keeps up on its own as that pharmacy submits and gets approved. There used
+ * to be a tick-box saying "signed up, but I cannot point at the account",
+ * which meant the table could show a stage nothing backed up; linking the
+ * pharmacy says the same thing and stays true afterwards.
  */
-export function outreachStage({ sentAt, humanVisits, pharmacy, manualSignedUpAt }: StageInput): StageResult {
+export function outreachStage({ sentAt, humanVisits, pharmacy }: StageInput): OutreachStage {
   if (pharmacy) {
-    if (pharmacy.status === "approved") return { stage: "approved", confirmed: true };
-    if (pharmacy.submitted_at) return { stage: "submitted", confirmed: true };
-    return { stage: "signed_up", confirmed: true };
+    if (pharmacy.status === "approved") return "approved";
+    if (pharmacy.submitted_at) return "submitted";
+    return "signed_up";
   }
-  if (manualSignedUpAt) return { stage: "signed_up", confirmed: false };
-  if (humanVisits > 0) return { stage: "visited", confirmed: false };
-  if (sentAt) return { stage: "sent", confirmed: false };
-  return { stage: "new", confirmed: false };
+  if (humanVisits > 0) return "visited";
+  if (sentAt) return "sent";
+  return "new";
 }
 
 export const STAGE_LABELS: Record<OutreachStage, string> = {
@@ -183,16 +172,6 @@ export const STAGE_LABELS: Record<OutreachStage, string> = {
   signed_up: "Signed up",
   submitted: "Profile submitted",
   approved: "Approved",
-};
-
-export const OUTCOMES = ["new", "contacted", "replied", "not_interested"] as const;
-export type Outcome = (typeof OUTCOMES)[number];
-
-export const OUTCOME_LABELS: Record<Outcome, string> = {
-  new: "—",
-  contacted: "Contacted",
-  replied: "Replied",
-  not_interested: "Not interested",
 };
 
 /**
@@ -296,10 +275,13 @@ export function joinUrl(base: string, path: string): string {
 
 export {
   DEFAULT_TEMPLATE,
+  htmlToPlainText,
   outreachPlaceholders,
+  outreachSendBlockers,
   renderOutreachEmail,
   type EmailTemplate,
   type Placeholder,
   type RenderedEmail,
+  type SendableContact,
   type TemplateContact,
 } from "./email";

@@ -1,6 +1,14 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { DEFAULT_TEMPLATE, outreachPlaceholders, renderOutreachEmail } from "./email.ts";
+import {
+  DEFAULT_TEMPLATE,
+  htmlToPlainText,
+  outreachPlaceholders,
+  outreachSendBlockers,
+  renderOutreachEmail,
+  type EmailTemplate,
+  type SendableContact,
+} from "./email.ts";
 import type { LinkRule } from "./index.ts";
 
 const RULES: LinkRule[] = [
@@ -155,4 +163,81 @@ test("the default template reads the city as prose, not as a slug", () => {
 test("the default template carries an unsubscribe link, which it is sent under", () => {
   const r = renderOutreachEmail(DEFAULT_TEMPLATE, CONTACT, RULES, URL);
   assert.ok(r.html.includes("https://pharmacy.getmed.ca/u/aB3kD9xQ2mZp"));
+});
+
+// ---------------- send blockers ----------------
+
+const SENDABLE: SendableContact = { ...CONTACT, contact_email: "rx@boltonrx.ca", unsubscribed_at: null };
+const render = (t: EmailTemplate, c: SendableContact = SENDABLE) => renderOutreachEmail(t, c, RULES, URL);
+
+test("a complete contact on the shipped template has nothing blocking it", () => {
+  assert.deepEqual(outreachSendBlockers(SENDABLE, DEFAULT_TEMPLATE, render(DEFAULT_TEMPLATE)), []);
+});
+
+test("no address, no send", () => {
+  const c = { ...SENDABLE, contact_email: null };
+  assert.deepEqual(outreachSendBlockers(c, DEFAULT_TEMPLATE, render(DEFAULT_TEMPLATE, c)), ["no email address on file"]);
+});
+
+test("an unsubscribed pharmacy is never sent to, whatever else is right", () => {
+  const c = { ...SENDABLE, unsubscribed_at: "2026-10-02T10:00:00Z" };
+  assert.deepEqual(outreachSendBlockers(c, DEFAULT_TEMPLATE, render(DEFAULT_TEMPLATE, c)), [
+    "they asked not to be contacted",
+  ]);
+});
+
+test("an unresolved placeholder blocks the send rather than going out in brackets", () => {
+  const t = { subject: "Hi", body: "<p>Hello [pharmcy-name] [unsubscribe-link]</p>" };
+  assert.deepEqual(outreachSendBlockers(SENDABLE, t, render(t)), ["[pharmcy-name] did not resolve"]);
+});
+
+test("a rate-card link with no city to put in it blocks the send", () => {
+  const c = { ...SENDABLE, city: null };
+  const reasons = outreachSendBlockers(c, DEFAULT_TEMPLATE, render(DEFAULT_TEMPLATE, c));
+  assert.deepEqual(reasons, ["[rates-link] did not resolve"]);
+});
+
+test("a template with no unsubscribe link cannot be sent", () => {
+  const t = { subject: "Hi", body: "<p>Hello [pharmacy-name]</p>" };
+  assert.deepEqual(outreachSendBlockers(SENDABLE, t, render(t)), ["the template has no [unsubscribe-link]"]);
+});
+
+test("an empty subject or body blocks the send", () => {
+  const t = { subject: "  ", body: "  [unsubscribe-link] " };
+  const reasons = outreachSendBlockers(SENDABLE, t, render(t));
+  assert.ok(reasons.includes("the template has no subject line"));
+});
+
+test("every reason is reported at once, not one per attempt", () => {
+  const c = { ...SENDABLE, contact_email: null, unsubscribed_at: "2026-10-02T10:00:00Z" };
+  const t = { subject: "Hi", body: "<p>[nope-link]</p>" };
+  assert.equal(outreachSendBlockers(c, t, render(t, c)).length, 4);
+});
+
+// ---------------- plain-text alternative ----------------
+
+test("the text part keeps the link destinations, which are the point", () => {
+  const text = htmlToPlainText('<p>See <a href="https://getmed.ca/i/abc">our rates</a> today.</p>');
+  assert.equal(text, "See our rates: https://getmed.ca/i/abc today.");
+});
+
+test("a link whose text is already the URL is not repeated twice", () => {
+  assert.equal(htmlToPlainText('<a href="https://getmed.ca">https://getmed.ca</a>'), "https://getmed.ca");
+});
+
+test("list items become bullets and entities are decoded", () => {
+  const text = htmlToPlainText("<ul><li>One &amp; two</li><li>Three &mdash; four</li></ul>");
+  assert.equal(text, "- One & two\n- Three — four");
+});
+
+test("style and script blocks do not leak into the text part", () => {
+  const text = htmlToPlainText("<style>p{color:red}</style><p>Hello</p><script>alert(1)</script>");
+  assert.equal(text, "Hello");
+});
+
+test("the shipped template produces a text part worth sending", () => {
+  const text = htmlToPlainText(render(DEFAULT_TEMPLATE).html);
+  assert.ok(text.length > 150, "not a stub");
+  assert.ok(!text.includes("<"), "no tags survive");
+  assert.ok(text.includes("https://pharmacy.getmed.ca/u/aB3kD9xQ2mZp"), "the way out survives too");
 });

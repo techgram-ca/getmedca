@@ -7,7 +7,9 @@ export type Bucket =
   | "licensing"
   | "pharmacy-media"
   | "driver-docs"
-  | "proof-of-delivery";
+  | "proof-of-delivery"
+  /** The only public one: marketing images a mail client fetches from an inbox. */
+  | "outreach-media";
 
 /** Short-lived signed URL (default 5 minutes) for a private object. */
 export async function signedUrl(db: ServiceClient, bucket: Bucket, path: string | null | undefined, expiresIn = 300) {
@@ -61,4 +63,16 @@ export async function uploadDataUrl(db: ServiceClient, bucket: Bucket, folder: s
   const { error } = await db.storage.from(bucket).upload(key, bytes, { contentType, upsert: false });
   if (error) throw new Error(`Upload failed: ${error.message}`);
   return key;
+}
+
+/**
+ * The permanent, unsigned URL of an object in a public bucket.
+ *
+ * Only `outreach-media` is public. An image inside a pitch email is fetched by
+ * the recipient's mail client weeks later, with no session and no way to
+ * refresh a signature, so a signed URL would turn into a broken image in an
+ * email somebody kept.
+ */
+export function publicUrl(db: ServiceClient, bucket: Extract<Bucket, "outreach-media">, path: string): string {
+  return db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
