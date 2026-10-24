@@ -24,7 +24,15 @@ type Row = {
   visits: { human: number; days: number };
 };
 type Draft = { pharmacyName: string; contactEmail: string; city: string; notes: string };
-export type SenderConfig = { ready: boolean; from: string | null; replyTo: string | null };
+export type SenderConfig = {
+  ready: boolean;
+  from: string | null;
+  replyTo: string | null;
+  /** Which way mail leaves. Named in the confirmation, so a placement
+   *  question later has an answer rather than a guess. */
+  via: "smtp" | "resend" | null;
+  smtpHost: string | null;
+};
 
 const EMPTY: Draft = { pharmacyName: "", contactEmail: "", city: "", notes: "" };
 
@@ -270,9 +278,9 @@ export function TrackingTable({
 
         {!sender.ready ? (
           <Alert tone="warning" className="mt-3">
-            Sending is off. Set <code className="font-mono">OUTREACH_FROM_EMAIL</code> and{" "}
-            <code className="font-mono">RESEND_API_KEY</code> to send from here — copying the HTML still works
-            without them.
+            Sending is off. Set <code className="font-mono">OUTREACH_FROM_EMAIL</code>, plus either the{" "}
+            <code className="font-mono">OUTREACH_SMTP_*</code> mailbox settings or{" "}
+            <code className="font-mono">RESEND_API_KEY</code> — copying the HTML still works without them.
           </Alert>
         ) : null}
       </div>
@@ -440,6 +448,7 @@ export function TrackingTable({
                 <p className="mt-2 text-xs text-ink-500">
                   From {sender.from}
                   {sender.replyTo ? <> · replies go to {sender.replyTo}</> : <> · no reply-to set</>}
+                  {sender.via === "smtp" ? <> · via {sender.smtpHost}</> : sender.via === "resend" ? <> · via Resend</> : null}
                 </p>
               </div>
 
