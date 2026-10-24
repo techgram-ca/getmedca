@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { Check, ChevronRight, Code2, Copy, Mail, Plus, RotateCcw, Send } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Code2, Copy, Mail, Plus, RotateCcw, Send } from "lucide-react";
 import {
   OUTREACH_STAGES, joinUrl, renderOutreachEmail, STAGE_LABELS,
   type LinkRule, type OutreachStage,
@@ -98,6 +98,8 @@ export function TrackingTable({
   const [sendPlan, setSendPlan] = useState<Row[] | null>(null);
   const [sendTemplateId, setSendTemplateId] = useState("");
   const [report, setReport] = useState<SendOutcome[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
 
   const cities = useMemo(
     () => [...new Set(rows.map((r) => r.city?.trim()).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b)),
@@ -106,6 +108,13 @@ export function TrackingTable({
 
   const shown = useMemo(() => rows.filter((r) => matches(r, f)), [rows, f]);
   const active = JSON.stringify(f) !== JSON.stringify(NO_FILTERS);
+
+  const pageCount = Math.max(1, Math.ceil(shown.length / perPage));
+  // Narrowing the filter can strand you past the last page. Corrected during
+  // render rather than in an effect, so the table never paints empty first.
+  if (page > pageCount) setPage(pageCount);
+  const current = Math.min(page, pageCount);
+  const paged = shown.slice((current - 1) * perPage, current * perPage);
 
   // Which template Source uses without asking. The dialog is for choosing a
   // different one; this button is for the common case, which is the default.
@@ -119,7 +128,9 @@ export function TrackingTable({
   const sendable = (c: Row) => !c.unsubscribed_at && !!c.contact_email?.trim();
   const pickedRows = shown.filter((c) => picked.has(c.id));
   const pickedSendable = pickedRows.filter(sendable);
-  const allShownPicked = shown.length > 0 && shown.every((c) => picked.has(c.id));
+  const sendableOnPage = paged.filter(sendable);
+  const allPagePicked = sendableOnPage.length > 0 && sendableOnPage.every((c) => picked.has(c.id));
+  const matchingSendable = shown.filter(sendable);
 
   const toggle = (id: string) =>
     setPicked((s) => {
@@ -129,15 +140,23 @@ export function TrackingTable({
       return next;
     });
 
-  // Only what is on screen: ticking the header while a filter is on should
-  // not quietly select the pharmacies the filter is hiding.
-  const toggleAll = () =>
+  /**
+   * The header tick covers this page, not the whole filtered set.
+   *
+   * Selecting every match in one click is a button away, but it must be the
+   * one you meant to press: the list is a few hundred pharmacies now, and the
+   * difference between a page and a filter is the difference between
+   * twenty-five emails and all of them.
+   */
+  const togglePage = () =>
     setPicked((s) => {
       const next = new Set(s);
-      if (allShownPicked) for (const c of shown) next.delete(c.id);
-      else for (const c of shown) next.add(c.id);
+      if (allPagePicked) for (const c of paged) next.delete(c.id);
+      else for (const c of sendableOnPage) next.add(c.id);
       return next;
     });
+
+  const selectEveryMatch = () => setPicked(new Set(matchingSendable.map((c) => c.id)));
 
   const openSend = (targets: Row[]) => {
     if (!templates.length) {
@@ -207,7 +226,10 @@ export function TrackingTable({
       } else toast.error(r.error);
     });
 
-  const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setF((s) => ({ ...s, [k]: v }));
+  const set = <K extends keyof Filters>(k: K, v: Filters[K]) => {
+    setF((s) => ({ ...s, [k]: v }));
+    setPage(1);
+  };
 
   return (
     <div>
@@ -243,7 +265,7 @@ export function TrackingTable({
             />
           </div>
 
-          <Button size="sm" variant="ghost" onClick={() => setF(NO_FILTERS)} disabled={!active}>
+          <Button size="sm" variant="ghost" onClick={() => { setF(NO_FILTERS); setPage(1); }} disabled={!active}>
             <RotateCcw /> Reset
           </Button>
           <Button size="sm" variant="outline" onClick={() => setDraft(EMPTY)}><Plus /> New contact</Button>
@@ -295,23 +317,35 @@ export function TrackingTable({
         </div>
       ) : (
         <div className="surface overflow-hidden">
+          {/* Offered only once the page is fully ticked, and only when there
+              is more behind it — otherwise it is a button that does nothing
+              visible next to one that sends a hundred emails. */}
+          {allPagePicked && matchingSendable.length > picked.size ? (
+            <div className="flex flex-wrap items-center justify-center gap-2 border-b border-ink-200 bg-brand-50 px-4 py-2.5 text-sm">
+              <span>All {sendableOnPage.length} on this page are selected.</span>
+              <button type="button" className="cursor-pointer font-semibold text-brand-700 underline" onClick={selectEveryMatch}>
+                Select all {matchingSendable.length} matching the filters
+              </button>
+            </div>
+          ) : null}
           <Table>
             <THead>
               <TR>
                 <TH className="w-10">
                   <input
                     type="checkbox"
-                    aria-label="Select all shown"
+                    aria-label="Select this page"
+                    title="Select the pharmacies on this page"
                     className="cursor-pointer"
-                    checked={allShownPicked}
-                    onChange={toggleAll}
+                    checked={allPagePicked}
+                    onChange={togglePage}
                   />
                 </TH>
                 <TH>Pharmacy</TH><TH>Stage</TH><TH>Visits</TH><TH>Send &amp; copy</TH><TH />
               </TR>
             </THead>
             <TBody>
-              {shown.map((c) => (
+              {paged.map((c) => (
                 <TR key={c.id} className={c.unsubscribed_at ? "opacity-55" : undefined}>
                   <TD>
                     <input
@@ -398,6 +432,32 @@ export function TrackingTable({
               ))}
             </TBody>
           </Table>
+
+          {shown.length > 10 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink-200 px-4 py-3 text-sm">
+              <span className="text-ink-500">
+                {(current - 1) * perPage + 1}&ndash;{Math.min(current * perPage, shown.length)} of {shown.length}
+              </span>
+
+              <div className="flex items-center gap-2">
+                <FilterSelect
+                  value={String(perPage)}
+                  label="Rows per page"
+                  onChange={(v) => { setPerPage(Number(v)); setPage(1); }}
+                >
+                  {[25, 50, 100].map((n) => <option key={n} value={n}>{n} per page</option>)}
+                  <option value="1000">All</option>
+                </FilterSelect>
+                <Button size="sm" variant="outline" disabled={current <= 1} onClick={() => setPage(current - 1)}>
+                  <ChevronLeft /> Previous
+                </Button>
+                <span className="text-ink-500">Page {current} of {pageCount}</span>
+                <Button size="sm" variant="outline" disabled={current >= pageCount} onClick={() => setPage(current + 1)}>
+                  Next <ChevronRight />
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
 
