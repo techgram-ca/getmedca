@@ -62,6 +62,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0022_outreach_email_templates.sql` | Reusable pitch-email templates, and one outreach contact per email address |
 | `migrations/0023_outreach_sending.sql` | Sending pitch emails from admin: a send log, template files, a public media bucket |
 | `migrations/0024_outreach_send_transport.sql` | Records whether a pitch left through Resend or a mailbox |
+| `prod/outreach-contacts-mississauga.sql` | Loads 50 gathered Mississauga pharmacies into Tracking, same checks |
 | `prod/outreach-contacts-vaughan.sql` | Loads 29 gathered Vaughan-area pharmacies into Tracking, skipping addresses already there |
 | `prod/outreach-12.sql` | 0018–0020 as one repeatable script, for applying outreach tracking in one go |
 | `seed.sql` | Reference data matching `migrations/0001_init.sql` (frozen) |
@@ -126,6 +127,11 @@ skipped and whether that contact has already been emailed, what went in, and wha
 sending: inserted names that resemble a name already there (a second branch and a typo'd address look
 identical to a script), and any city with no published rate card, since `[rates-link]` would otherwise
 be a live link to a 404 inside a pitch. Re-running it inserts nothing.
+
+`prod/outreach-contacts-mississauga.sql` is the same load for 50 Mississauga pharmacies, names only —
+the banner and street address are dropped on the way in, since the name opens the pitch. It prints the
+same three reports, and the rate-card one earns its place here: there is no published Mississauga card
+yet, so `[rates-link]` would 404 for all fifty until one exists.
 
 `prod/outreach-12.sql` is `migrations/0018`, `0019` and `0020` clubbed
 together — the outreach tables, their RLS policies and the four seeded invite
