@@ -359,6 +359,8 @@ export type OutreachSendRow = {
   to_email: string;
   subject: string;
   status: "sent" | "failed";
+  /** Resend, or an ordinary mailbox over SMTP. */
+  transport: "resend" | "smtp";
   provider_message_id: string | null;
   error: string | null;
   attachment_count: number;

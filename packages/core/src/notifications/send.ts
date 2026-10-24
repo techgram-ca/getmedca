@@ -40,6 +40,50 @@ export type EmailAttachment = {
   contentType?: string;
 };
 
+/**
+ * An SMTP mailbox to send through, instead of Resend.
+ *
+ * Exists because of a measured difference, not a theory: the same HTML from
+ * the same address lands in Gmail's Primary tab sent from the Zoho mailbox
+ * and in Promotions sent through Resend. Transactional mail is unaffected and
+ * stays on Resend — it arrives in Primary already, and a mailbox's daily send
+ * limit is not somewhere to put order alerts.
+ */
+export type SmtpConfig = {
+  host: string;
+  port: number;
+  /** True for an implicit-TLS port (465); false for STARTTLS (587). */
+  secure: boolean;
+  user: string;
+  password: string;
+};
+
+/**
+ * Reads an SMTP mailbox out of the environment, or null if it is not set up.
+ *
+ * The host is configuration rather than a constant because Zoho runs separate
+ * data centres — smtp.zoho.com, .eu, .ca and others — and a mailbox only
+ * authenticates against its own.
+ */
+export function smtpConfigFromEnv(prefix = "OUTREACH_SMTP"): SmtpConfig | null {
+  const host = process.env[`${prefix}_HOST`]?.trim();
+  const user = process.env[`${prefix}_USER`]?.trim();
+  const password = process.env[`${prefix}_PASSWORD`];
+  if (!host || !user || !password) return null;
+  const port = Number(process.env[`${prefix}_PORT`] ?? 465);
+  return {
+    host,
+    port: Number.isFinite(port) && port > 0 ? port : 465,
+    // 465 is implicit TLS; 587 upgrades with STARTTLS. Getting this backwards
+    // is the usual reason a working mailbox refuses to connect.
+    secure: (process.env[`${prefix}_SECURE`] ?? "").trim() === ""
+      ? port === 465
+      : process.env[`${prefix}_SECURE`]!.trim().toLowerCase() === "true",
+    user,
+    password,
+  };
+}
+
 export type HtmlEmail = {
   to: string;
   subject: string;
@@ -50,6 +94,12 @@ export type HtmlEmail = {
   /** Where a reply goes, which for outreach is a person rather than no-reply. */
   replyTo?: string;
   attachments?: EmailAttachment[];
+  /**
+   * Send through this mailbox instead of Resend. The caller decides, so a
+   * transactional notice cannot be routed down the outreach path by a
+   * stray environment variable.
+   */
+  smtp?: SmtpConfig | null;
 };
 
 /**
@@ -64,6 +114,7 @@ export type HtmlEmail = {
  * Nothing about the body is logged.
  */
 export async function sendHtmlEmail(message: HtmlEmail): Promise<{ id: string | null }> {
+  if (message.smtp) return sendOverSmtp(message, message.smtp);
   const key = process.env.RESEND_API_KEY;
   const from = message.from ?? process.env.RESEND_FROM_EMAIL ?? "GetMed <no-reply@getmed.ca>";
   if (!key) {
@@ -99,4 +150,45 @@ export async function sendHtmlEmail(message: HtmlEmail): Promise<{ id: string | 
   // that only caught exceptions would record every rejected send as a success.
   if (error) throw new Error(error.message || "Resend rejected the message");
   return { id: data?.id ?? null };
+}
+
+/**
+ * The same message over an ordinary mailbox.
+ *
+ * Nodemailer is imported lazily, like the Resend and Twilio clients above, so
+ * an install that never sends this way never loads it.
+ */
+async function sendOverSmtp(message: HtmlEmail, smtp: SmtpConfig): Promise<{ id: string | null }> {
+  const nodemailer = (await import("nodemailer")).default;
+  const transport = nodemailer.createTransport({
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    auth: { user: smtp.user, pass: smtp.password },
+  });
+  const info = await transport.sendMail({
+    // A mailbox will only send as itself or one of its own aliases, so an
+    // unrelated From is rejected at the server rather than silently rewritten.
+    from: message.from ?? smtp.user,
+    to: message.to,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+    ...(message.attachments?.length
+      ? {
+          attachments: message.attachments.map((a) => ({
+            filename: a.filename,
+            content: Buffer.from(a.content),
+            ...(a.contentType ? { contentType: a.contentType } : {}),
+          })),
+        }
+      : {}),
+  });
+  // Held for a retry rather than delivered: reported as a failure, because a
+  // caller that recorded this as sent would be recording something untrue.
+  if (info.rejected?.length) {
+    throw new Error(`The mail server rejected ${info.rejected.join(", ")}`);
+  }
+  return { id: info.messageId ?? null };
 }
