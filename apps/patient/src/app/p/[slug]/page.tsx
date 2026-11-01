@@ -101,7 +101,10 @@ export default async function PharmacyPage({ params, searchParams }: { params: P
   const highlights = [
     { icon: ShieldCheck, value: "Licensed", label: `Registered with the ${p.province === "ON" ? "Ontario College of Pharmacists" : "provincial college of pharmacists"}` },
     p.offers_delivery
-      ? { icon: Truck, value: p.estimated_delivery_time ?? "Same day", label: p.delivery_radius_km ? `Free delivery within ${p.delivery_radius_km} km` : "Free delivery to your door" }
+      // Not "within N km": the pharmacy form stopped asking for that number
+      // and search stopped using distance cutoffs, so it would be a delivery
+      // promise made from a figure nobody can correct.
+      ? { icon: Truck, value: p.estimated_delivery_time ?? "Same day", label: "Free delivery to your door" }
       : null,
     p.pharmacists.length ? { icon: Users, value: `${p.pharmacists.length} pharmacist${p.pharmacists.length > 1 ? "s" : ""}`, label: "On staff to answer your questions" } : null,
     p.offers_consultation ? { icon: Stethoscope, value: "Free advice", label: "Speak to a pharmacist without an appointment" } : null,
