@@ -4,6 +4,7 @@ import type { PlatformSettingsRow } from "@getmed/db/types";
 export const DEFAULT_SETTINGS: PlatformSettingsRow = {
   id: 1,
   search_radius_km: 10,
+  search_result_limit: 10,
   sla_minutes: 30,
   default_zone1_fee: 5,
   default_zone2_fee: 8,
@@ -40,6 +41,7 @@ export function isLaunched(settings: Pick<PlatformSettingsRow, "launched_at">): 
 export async function updatePlatformSettings(
   db: ServiceClient,
   patch: Partial<Pick<PlatformSettingsRow,   | "search_radius_km"
+    | "search_result_limit"
     | "sla_minutes"
     | "failed_delivery_fee_percent"
     | "default_zone1_fee"

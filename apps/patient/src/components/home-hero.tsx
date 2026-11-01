@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { Search } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import { AddressAutocomplete, Button, ImageWithFallback, type AddressValue } from "@getmed/ui";
 
 export function HomeHero() {
@@ -79,6 +80,18 @@ export function HomeHero() {
               <Search /> Find Pharmacies
             </Button>
           </form>
+
+          {/* The other way in. The search above answers "who is near me";
+              plenty of people already have a pharmacy and want that one. */}
+          <p className="mt-3 text-sm text-ink-500">
+            Already have a pharmacy?{" "}
+            <Link
+              href="/pharmacies"
+              className="font-semibold text-brand-700 underline-offset-2 hover:underline"
+            >
+              Order directly from your pharmacy <ArrowRight className="inline size-3.5" />
+            </Link>
+          </p>
 
           <div className="mt-5 flex items-center gap-3 text-xs text-ink-500">
             <div className="flex">

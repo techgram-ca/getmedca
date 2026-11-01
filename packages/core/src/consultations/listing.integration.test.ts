@@ -58,7 +58,7 @@ const origin = { lat: 43.7, lng: -79.4, placeName: "Toronto" };
 
 test("one card per pharmacist, nearest pharmacy first", async () => {
   const listing = await listWith(
-    { origin, radiusKm: 10, results: [pharmacy("p1", "Near", 1000), pharmacy("p2", "Far", 5000)] },
+    { origin, limit: 10, results: [pharmacy("p1", "Near", 1000), pharmacy("p2", "Far", 5000)] },
     [
       { id: "s1", pharmacy_id: "p1", name: "Amrit", languages: ["English", "Punjabi"] },
       { id: "s2", pharmacy_id: "p1", name: "Wei", languages: ["English", "Mandarin"] },
@@ -73,7 +73,7 @@ test("one card per pharmacist, nearest pharmacy first", async () => {
 
 test("a pharmacy with nobody on file still appears", async () => {
   const listing = await listWith(
-    { origin, radiusKm: 10, results: [pharmacy("p1", "Solo", 1000)] },
+    { origin, limit: 10, results: [pharmacy("p1", "Solo", 1000)] },
     [],
     [],
   );
@@ -84,7 +84,7 @@ test("a pharmacy with nobody on file still appears", async () => {
 
 test("language facets count pharmacists, not pharmacies", async () => {
   const listing = await listWith(
-    { origin, radiusKm: 10, results: [pharmacy("p1", "Near", 1000), pharmacy("p2", "Far", 5000)] },
+    { origin, limit: 10, results: [pharmacy("p1", "Near", 1000), pharmacy("p2", "Far", 5000)] },
     [
       { id: "s1", pharmacy_id: "p1", name: "Amrit", languages: ["English", "Punjabi"] },
       { id: "s2", pharmacy_id: "p1", name: "Wei", languages: ["english"] },
@@ -100,7 +100,7 @@ test("language facets count pharmacists, not pharmacies", async () => {
 
 test("filtering by language keeps the facets and reports what was hidden", async () => {
   const listing = await listWith(
-    { origin, radiusKm: 10, results: [pharmacy("p1", "Near", 1000), pharmacy("p2", "Far", 5000)] },
+    { origin, limit: 10, results: [pharmacy("p1", "Near", 1000), pharmacy("p2", "Far", 5000)] },
     [
       { id: "s1", pharmacy_id: "p1", name: "Amrit", languages: ["English", "Punjabi"] },
       { id: "s2", pharmacy_id: "p1", name: "Wei", languages: ["Mandarin"] },
@@ -115,7 +115,7 @@ test("filtering by language keeps the facets and reports what was hidden", async
 });
 
 test("no pharmacies nearby yields an empty listing, not a crash", async () => {
-  const listing = await listWith({ origin, radiusKm: 10, results: [] }, [], []);
+  const listing = await listWith({ origin, limit: 10, results: [] }, [], []);
   assert.deepEqual(listing.results, []);
   assert.deepEqual(listing.languages, []);
   assert.equal(listing.filteredOut, 0);
