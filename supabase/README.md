@@ -62,6 +62,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0022_outreach_email_templates.sql` | Reusable pitch-email templates, and one outreach contact per email address |
 | `migrations/0023_outreach_sending.sql` | Sending pitch emails from admin: a send log, template files, a public media bucket |
 | `migrations/0024_outreach_send_transport.sql` | Records whether a pitch left through Resend or a mailbox |
+| `migrations/0025_search_nearest_n.sql` | Patient search returns the N nearest pharmacies instead of everything in a radius |
 | `prod/outreach-contacts-mississauga.sql` | Loads 50 gathered Mississauga pharmacies into Tracking, same checks |
 | `prod/outreach-contacts-vaughan.sql` | Loads 29 gathered Vaughan-area pharmacies into Tracking, skipping addresses already there |
 | `prod/outreach-12.sql` | 0018–0020 as one repeatable script, for applying outreach tracking in one go |
@@ -127,6 +128,16 @@ skipped and whether that contact has already been emailed, what went in, and wha
 sending: inserted names that resemble a name already there (a second branch and a typo'd address look
 identical to a script), and any city with no published rate card, since `[rates-link]` would otherwise
 be a live link to a 404 inside a pitch. Re-running it inserts nothing.
+
+`migrations/0025_search_nearest_n.sql` adds `platform_settings.search_result_limit` and gives
+`pharmacies_near` a count. A radius answered the wrong question — ten kilometres is thirty pharmacies
+downtown and none in the country, and the patient wants a short list either way — so the setting is
+now how many of the nearest to return, with fewer returned when fewer exist. `search_radius_km` stops
+being read and is kept only because `seed.sql` is frozen and writes to it. The function is dropped
+and recreated rather than replaced, since a changed argument list would otherwise leave the old
+version in place as an overload, and it returns a surplus of candidates because it orders by straight
+line while the patient sees road distance. The outer bound lives in
+`packages/core/src/geo/search.ts` as a guard rather than a setting.
 
 `prod/outreach-contacts-mississauga.sql` is the same load for 50 Mississauga pharmacies, names only —
 the banner and street address are dropped on the way in, since the name opens the pitch. It prints the

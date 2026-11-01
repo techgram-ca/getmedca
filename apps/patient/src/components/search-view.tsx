@@ -8,6 +8,7 @@ import type { SearchResponse, SearchResult } from "@getmed/core/geo";
 import { formatDistance, formatDuration } from "@getmed/core/format";
 import { Alert, Avatar, Badge, Button, EmptyState, cn } from "@getmed/ui";
 import { HomeSearchInline } from "./home-search-inline";
+import { FindYourPharmacyCard } from "./pharmacy-directory";
 
 const SearchMap = dynamic(() => import("./search-map").then((m) => m.SearchMap), {
   ssr: false,
@@ -16,7 +17,7 @@ const SearchMap = dynamic(() => import("./search-map").then((m) => m.SearchMap),
 
 export function SearchView({ address, postal, response, error }: { address: string; postal?: string; response: SearchResponse; error: string | null }) {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const { results, origin, radiusKm } = response;
+  const { results, origin, limit } = response;
 
   // Pass the address the patient searched with (and its coordinates) through to
   // the pharmacy page and order form, so they are never asked for it twice.
@@ -36,7 +37,14 @@ export function SearchView({ address, postal, response, error }: { address: stri
           <h1 className="text-2xl font-semibold tracking-tight">Pharmacies near you</h1>
           {origin ? (
             <p className="mt-1 text-sm text-ink-500">
-              {results.length} {results.length === 1 ? "pharmacy" : "pharmacies"} within {radiusKm} km of <span className="font-medium text-ink-700">{origin.placeName}</span>
+              {/* "The N nearest" when the list is full, a plain count when it
+                  is not — "10 nearest" beside 3 results reads as a bug. */}
+              {results.length === 0
+                ? "No pharmacies found near "
+                : results.length >= limit
+                  ? `The ${results.length} nearest to `
+                  : `${results.length} ${results.length === 1 ? "pharmacy" : "pharmacies"} near `}
+              <span className="font-medium text-ink-700">{origin.placeName}</span>
             </p>
           ) : (
             <p className="mt-1 text-sm text-ink-500">Enter an address to see nearby pharmacies.</p>
@@ -52,13 +60,16 @@ export function SearchView({ address, postal, response, error }: { address: stri
           {origin && results.length === 0 && !error ? (
             <EmptyState
               icon={<MapPin />}
-              title="No pharmacies in range yet"
-              description={`We haven't onboarded a pharmacy within ${radiusKm} km of that address. Try a nearby address, or check back soon — we're adding pharmacies across Ontario.`}
+              title="No pharmacies near that address yet"
+              description="We haven't onboarded one close enough to deliver from. Try a nearby address, or search for your own pharmacy by name below."
             />
           ) : null}
           {results.map((r) => (
             <ResultCard key={r.id} r={r} active={activeId === r.id} onHover={() => setActiveId(r.id)} q={q} />
           ))}
+          {/* Under the list rather than above it: the nearest ten are the
+              answer for most people, and this is for the ones they are not. */}
+          {origin && !error ? <FindYourPharmacyCard className="mt-4" /> : null}
         </div>
         <div className="sticky top-24 hidden h-[calc(100vh-7rem)] overflow-hidden rounded-2xl border border-ink-200 lg:block">
           <SearchMap origin={origin} results={results} activeId={activeId} onActivate={setActiveId} />

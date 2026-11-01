@@ -26,7 +26,8 @@ export type LanguageFacet = { value: string; label: string; count: number };
 
 export type ConsultationListing = {
   origin: { lat: number; lng: number; placeName: string } | null;
-  radiusKm: number;
+  /** How many the search asked for; the results may be fewer. */
+  limit: number;
   /** Every language spoken nearby, with how many pharmacists speak it. */
   languages: LanguageFacet[];
   /** Pharmacists matching the language filter, nearest first. */
@@ -75,7 +76,7 @@ export async function listConsultationPharmacists(
   const search = await search_(db, input);
   const empty: ConsultationListing = {
     origin: search.origin,
-    radiusKm: search.radiusKm,
+    limit: search.limit,
     languages: [],
     results: [],
     filteredOut: 0,
@@ -165,7 +166,7 @@ export async function listConsultationPharmacists(
 
   return {
     origin: search.origin,
-    radiusKm: search.radiusKm,
+    limit: search.limit,
     languages,
     results,
     filteredOut: all.length - results.length,

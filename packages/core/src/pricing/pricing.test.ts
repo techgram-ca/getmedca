@@ -21,6 +21,7 @@ test("defaults are read as numbers even when the driver returns strings", () => 
   const prices = defaultZonePrices({
     id: 1,
     search_radius_km: 10,
+    search_result_limit: 10,
     sla_minutes: 30,
     default_zone1_fee: "4.50" as unknown as number,
     default_zone2_fee: 8,

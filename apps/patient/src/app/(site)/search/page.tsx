@@ -17,7 +17,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const lng = sp.lng ? Number(sp.lng) : undefined;
   const postal = sp.postal?.trim() ?? "";
 
-  let response: Awaited<ReturnType<typeof searchPharmacies>> = { origin: null, radiusKm: 0, results: [] };
+  let response: Awaited<ReturnType<typeof searchPharmacies>> = { origin: null, limit: 0, results: [] };
   let error: string | null = null;
   if (address || (lat != null && lng != null)) {
     try {
