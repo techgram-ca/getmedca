@@ -83,7 +83,12 @@ export default async function PharmacyDetail({ params }: { params: Promise<{ pha
           <CardHeader><CardTitle>Contact & operations</CardTitle></CardHeader>
           <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
             <Row k="Phone" v={p.phone ?? "—"} /><Row k="Email" v={p.email ?? "—"} />
-            <Row k="Delivery radius" v={p.delivery_radius_km ? `${p.delivery_radius_km} km` : "—"} /><Row k="Typical delivery" v={p.estimated_delivery_time ?? "—"} />
+            {/* No delivery radius here. The pharmacy form stopped asking for
+                it, and patient search stopped using distance cutoffs in 0025,
+                so the stored number is whatever was typed before either
+                change — showing it invites someone to act on a stale figure.
+                The column stays; only the display is gone. */}
+            <Row k="Typical delivery" v={p.estimated_delivery_time ?? "—"} />
             <Row k="Services" v={[p.offers_delivery && "Delivery", p.offers_transfer && "Transfers", p.offers_consultation && "Consultations"].filter(Boolean).join(", ") || "—"} />
             <Row k="Consultation topics" v={((issues ?? []) as unknown as { issues: { name: string } | null }[]).map((i) => i.issues?.name).filter(Boolean).join(", ") || "—"} />
             <div className="sm:col-span-2"><p className="text-xs uppercase tracking-wide text-ink-500">Hours</p><div className="mt-1 grid grid-cols-2 gap-x-4 text-xs">{DAY_KEYS.map((d) => { const h = hours[d]; return <p key={d} className="flex justify-between"><span>{DAY_LABELS[d]}</span><span>{!h || h.closed ? "Closed" : `${formatTime(h.open)}–${formatTime(h.close)}`}</span></p>; })}</div></div>

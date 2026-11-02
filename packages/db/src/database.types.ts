@@ -411,7 +411,10 @@ export type DeliveryRateRowRow = {
 
 export type PlatformSettingsRow = {
   id: number;
+  /** No longer read: superseded by search_result_limit in migration 0025. */
   search_radius_km: number;
+  /** How many of the nearest pharmacies patient search returns. */
+  search_result_limit: number;
   sla_minutes: number;
   /** Fallback prices used when a pharmacy has no override of its own. */
   default_zone1_fee: number;

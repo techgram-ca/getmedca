@@ -122,7 +122,7 @@ export default async function IssuePage({ params, searchParams }: { params: Prom
           ) : (
             <>
               <p className="text-sm text-ink-500">
-                {listing.results.length} {listing.results.length === 1 ? "pharmacist" : "pharmacists"} within {listing.radiusKm} km
+                {listing.results.length} {listing.results.length === 1 ? "pharmacist" : "pharmacists"} at the nearest pharmacies
                 {language ? <> speaking <span className="font-medium text-ink-950">{language}</span></> : null}
               </p>
               {listing.results.map((entry) => (

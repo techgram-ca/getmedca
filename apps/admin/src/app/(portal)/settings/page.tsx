@@ -18,7 +18,7 @@ export default async function SettingsPage() {
       </Card>
       <Card>
         <CardHeader><CardTitle>Platform settings</CardTitle><CardDescription>Applied at query time — no reprocessing needed. Delivery prices live on the Pricing page.</CardDescription></CardHeader>
-        <CardContent><PlatformSettingsForm searchRadiusKm={Number(s.search_radius_km)} slaMinutes={s.sla_minutes} /></CardContent>
+        <CardContent><PlatformSettingsForm searchResultLimit={Number(s.search_result_limit)} slaMinutes={s.sla_minutes} /></CardContent>
       </Card>
       <Card>
         <CardHeader><CardTitle>Admin account</CardTitle><CardDescription>Signed in as {session.email}. Single admin user.</CardDescription></CardHeader>
