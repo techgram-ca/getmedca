@@ -30,12 +30,14 @@ export default async function PricingPage() {
   const [pricing, configs, { data: taggedRows }] = await Promise.all([
     resolvePricingForAll(db, ids, settings),
     loadDeliveryConfigs(db, ids),
-    db.from("pharmacy_zone_areas").select("pharmacy_id").in("pharmacy_id", ids.length ? ids : ["-"]),
+    // Counted in the database, one row per pharmacy. Fetching the tag rows
+    // themselves and counting them here meant one row per pharmacy per
+    // postal area — thousands of them — and PostgREST stops returning rows
+    // at its cap without saying so, which showed tagged pharmacies as
+    // untagged depending only on where they fell in the result.
+    db.from("pharmacy_zone_area_counts").select("pharmacy_id, tagged").in("pharmacy_id", ids.length ? ids : ["-"]),
   ]);
-  const taggedCounts = (taggedRows ?? []).reduce<Record<string, number>>((acc, r) => {
-    acc[r.pharmacy_id] = (acc[r.pharmacy_id] ?? 0) + 1;
-    return acc;
-  }, {});
+  const taggedCounts = Object.fromEntries((taggedRows ?? []).map((r) => [r.pharmacy_id, r.tagged]));
   const cities = await listPostalAreas(db);
 
   return (

@@ -1,5 +1,5 @@
 import { requireAdmin } from "@getmed/core/auth";
-import { outreachStage, summariseVisits, type Visit } from "@getmed/core/outreach";
+import { outreachStage } from "@getmed/core/outreach";
 import { PageHeader } from "@getmed/ui";
 import { EmailTemplateEditor } from "@/components/email-template-editor";
 import { LinkRulesEditor } from "@/components/link-rules-editor";
@@ -10,27 +10,30 @@ export default async function TrackingPage() {
   const [{ data: contacts }, { data: visits }, { data: pharmacies }, { data: rules }, { data: templates }, { data: files }] =
     await Promise.all([
       db.from("outreach_contacts").select("*").order("created_at", { ascending: false }),
-      db.from("outreach_visits").select("contact_id, created_at, likely_bot, kind, path").order("created_at"),
+      // Counted in the database, one row per contact. Fetching the hits
+      // themselves and counting them here meant one row per hit across every
+      // contact ever pitched, and PostgREST stops returning rows at its cap
+      // without saying so — the contacts past it would have read as never
+      // having opened the link, which also walks their stage back to "Sent".
+      db.from("outreach_visit_counts").select("contact_id, human_visits, human_days"),
       db.from("pharmacies").select("id, name, status, submitted_at, email").order("name"),
       db.from("outreach_link_rules").select("*").order("sort_order").order("slug"),
       db.from("outreach_email_templates").select("*").order("is_default", { ascending: false }).order("name"),
       db.from("outreach_template_files").select("*").order("created_at"),
     ]);
 
-  const byContact = new Map<string, Visit[]>();
-  for (const v of visits ?? []) {
-    const list = byContact.get(v.contact_id) ?? [];
-    list.push({ created_at: v.created_at, likely_bot: v.likely_bot, kind: v.kind, path: v.path });
-    byContact.set(v.contact_id, list);
-  }
+  // A contact with only scanner hits is in the view with zero human visits;
+  // one that was never clicked is not in it at all. Both read as none.
+  const countsByContact = new Map((visits ?? []).map((v) => [v.contact_id, v]));
   const pharmacyById = new Map((pharmacies ?? []).map((p) => [p.id, p]));
 
   const rows = (contacts ?? []).map((c) => {
-    const summary = summariseVisits(byContact.get(c.id) ?? []);
+    const counts = countsByContact.get(c.id);
+    const human = counts?.human_visits ?? 0;
     const pharmacy = c.pharmacy_id ? pharmacyById.get(c.pharmacy_id) : null;
     const stage = outreachStage({
       sentAt: c.sent_at,
-      humanVisits: summary.human,
+      humanVisits: human,
       pharmacy: pharmacy ? { status: pharmacy.status, submitted_at: pharmacy.submitted_at } : null,
     });
     return {
@@ -43,7 +46,7 @@ export default async function TrackingPage() {
       sent_at: c.sent_at,
       created_at: c.created_at,
       stage,
-      visits: { human: summary.human, days: summary.days },
+      visits: { human, days: counts?.human_days ?? 0 },
     };
   });
 
