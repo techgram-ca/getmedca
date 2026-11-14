@@ -63,6 +63,7 @@ migration, and the same change is folded into `fresh/`.
 | `migrations/0023_outreach_sending.sql` | Sending pitch emails from admin: a send log, template files, a public media bucket |
 | `migrations/0024_outreach_send_transport.sql` | Records whether a pitch left through Resend or a mailbox |
 | `migrations/0025_search_nearest_n.sql` | Patient search returns the N nearest pharmacies instead of everything in a radius |
+| `migrations/0026_pharmacy_zone_area_counts.sql` | Counts tagged postal areas per pharmacy, so the pricing list cannot be truncated |
 | `prod/outreach-contacts-mississauga.sql` | Loads 50 gathered Mississauga pharmacies into Tracking, same checks |
 | `prod/outreach-contacts-vaughan.sql` | Loads 29 gathered Vaughan-area pharmacies into Tracking, skipping addresses already there |
 | `prod/outreach-12.sql` | 0018–0020 as one repeatable script, for applying outreach tracking in one go |
@@ -128,6 +129,14 @@ skipped and whether that contact has already been emailed, what went in, and wha
 sending: inserted names that resemble a name already there (a second branch and a typo'd address look
 identical to a script), and any city with no published rate card, since `[rates-link]` would otherwise
 be a live link to a 404 inside a pitch. Re-running it inserts nothing.
+
+`migrations/0026_pharmacy_zone_area_counts.sql` adds a view that counts tagged postal areas per
+pharmacy. The pricing list was fetching every row of `pharmacy_zone_areas` and counting them in
+JavaScript; PostgREST caps how many rows a request returns, and that table holds one row per pharmacy
+per postal area, so past the cap the remaining pharmacies came back with no rows and were shown as
+untagged. Counting in the database returns one row per pharmacy instead of one per postal area, which
+stays far below the cap however many areas are tagged. Anything listing a per-row child table across
+many parents has the same hazard.
 
 `migrations/0025_search_nearest_n.sql` adds `platform_settings.search_result_limit` and gives
 `pharmacies_near` a count. A radius answered the wrong question — ten kilometres is thirty pharmacies

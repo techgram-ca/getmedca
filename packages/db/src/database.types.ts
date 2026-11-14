@@ -634,6 +634,9 @@ export type Database = {
     };
     Views: {
       pharmacies_public: { Row: PharmacyPublicRow; Relationships: [] };
+      /** One row per pharmacy that has tagged postal areas, so a list of them
+       *  cannot be truncated by the PostgREST row cap. */
+      pharmacy_zone_area_counts: { Row: { pharmacy_id: string; tagged: number }; Relationships: [] };
       orders_admin: { Row: OrderAdminRow; Relationships: [] };
       orders_driver: { Row: OrderDriverRow; Relationships: [] };
     };
