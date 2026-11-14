@@ -637,6 +637,19 @@ export type Database = {
       /** One row per pharmacy that has tagged postal areas, so a list of them
        *  cannot be truncated by the PostgREST row cap. */
       pharmacy_zone_area_counts: { Row: { pharmacy_id: string; tagged: number }; Relationships: [] };
+      /** One row per outreach contact that has any visit, for the same reason.
+       *  Days are distinct UTC dates, matching `summariseVisits()`. */
+      outreach_visit_counts: {
+        Row: {
+          contact_id: string;
+          human_visits: number;
+          bot_visits: number;
+          human_days: number;
+          first_human: string | null;
+          last_human: string | null;
+        };
+        Relationships: [];
+      };
       orders_admin: { Row: OrderAdminRow; Relationships: [] };
       orders_driver: { Row: OrderDriverRow; Relationships: [] };
     };
