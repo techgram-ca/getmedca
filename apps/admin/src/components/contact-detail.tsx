@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { ArrowLeft, BadgeCheck, Ban, Check, Copy, Mail, Pencil, Save, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Ban, Check, Copy, Mail, MailCheck, MailX, Pencil, Save, Send, Trash2 } from "lucide-react";
 import { slugify } from "@getmed/core/format";
 import { joinUrl, STAGE_LABELS, type LinkRule, type OutreachStage } from "@getmed/core/outreach";
 import {
   Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Dialog, DialogContent,
   Field, Input, Select, TBody, TD, TH, THead, TR, Table, Textarea, toast,
 } from "@getmed/ui";
-import { deleteContact, linkPharmacy, markSent, saveContact, setUnsubscribed } from "@/lib/actions/outreach";
+import { deleteContact, linkPharmacy, markSent, saveContact, setEmailFailed, setUnsubscribed } from "@/lib/actions/outreach";
 import { sendOutreachEmails } from "@/lib/actions/outreach-send";
 import { EmailBuilderDialog } from "./email-builder-dialog";
 import type { Template } from "./email-template-editor";
@@ -20,6 +20,7 @@ type Contact = {
   id: string; token: string; pharmacy_name: string; contact_email: string | null; city: string | null;
   sent_at: string | null; pharmacy_id: string | null;
   notes: string | null; unsubscribed_at: string | null; created_at: string;
+  email_failed_at: string | null; email_failed_reason: string | null;
 };
 type SendRow = {
   id: string; template_name: string | null; to_email: string; subject: string;
@@ -59,7 +60,7 @@ export function ContactDetail({
   const [sendTemplateId, setSendTemplateId] = useState(
     templates.find((t) => t.is_default)?.id ?? templates[0]?.id ?? "",
   );
-  const canSend = senderReady && !contact.unsubscribed_at && !!contact.contact_email && templates.length > 0;
+  const canSend = senderReady && !contact.unsubscribed_at && !contact.email_failed_at && !!contact.contact_email && templates.length > 0;
   const [notes, setNotes] = useState(contact.notes ?? "");
   const [draft, setDraft] = useState({
     pharmacyName: contact.pharmacy_name,
@@ -120,6 +121,33 @@ export function ContactDetail({
         </Alert>
       ) : null}
 
+      {/* Second only to an unsubscribe, and for the same reason: it decides
+          whether there is anything to send, and what to do instead. */}
+      {contact.email_failed_at && !contact.unsubscribed_at ? (
+        <Alert tone="warning" title="This address does not work — it needs a new one">
+          <p>
+            Marked on {when(contact.email_failed_at)}. Sending is held back until it is cleared or the address is
+            changed.
+          </p>
+          {contact.email_failed_reason ? (
+            <p className="mt-1.5 font-mono text-xs text-ink-600">{contact.email_failed_reason}</p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => setEditing(true)}>
+              <Pencil /> Update the address
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => run(() => setEmailFailed(contact.id, false), "Mark cleared")}
+            >
+              <MailCheck /> It works after all — clear the mark
+            </Button>
+          </div>
+        </Alert>
+      ) : null}
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-ink-950">{contact.pharmacy_name}</h1>
@@ -144,11 +172,13 @@ export function ContactDetail({
                 ? "Sending is not configured"
                 : contact.unsubscribed_at
                   ? "They asked not to be contacted"
-                  : !contact.contact_email
-                    ? "No email address on file"
-                    : templates.length === 0
-                      ? "No template yet"
-                      : `Send to ${contact.contact_email}`
+                  : contact.email_failed_at
+                    ? "The address failed — update it, or clear the mark, first"
+                    : !contact.contact_email
+                      ? "No email address on file"
+                      : templates.length === 0
+                        ? "No template yet"
+                        : `Send to ${contact.contact_email}`
             }
             onClick={() => setSendOpen(true)}
           >
@@ -269,6 +299,34 @@ export function ContactDetail({
                 <p className="mt-1.5 text-xs text-ink-500">
                   Linking the account is what moves this past &ldquo;opened the link&rdquo; — and it keeps itself up to
                   date as they submit and get approved.
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Address</p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={contact.email_failed_at ? "ghost" : "secondary"}
+                    disabled={pending || !contact.contact_email}
+                    title={contact.contact_email ? undefined : "No address on file to mark"}
+                    onClick={() =>
+                      run(
+                        () => setEmailFailed(contact.id, !contact.email_failed_at),
+                        contact.email_failed_at ? "Mark cleared" : "Marked as a failed address",
+                      )
+                    }
+                  >
+                    {contact.email_failed_at ? <MailCheck /> : <MailX />}
+                    {contact.email_failed_at ? "Clear the failed mark" : "The address failed"}
+                  </Button>
+                  <span className="text-sm text-ink-600">
+                    {contact.email_failed_at ? when(contact.email_failed_at) : "Working, as far as anyone knows"}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs text-ink-500">
+                  For the bounce that came back to the reply-to mailbox. A server that refuses the recipient while
+                  sending marks this on its own; one that accepts and bounces later cannot be seen from here.
                 </p>
               </div>
 

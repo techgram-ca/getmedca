@@ -39,6 +39,7 @@ export default async function ContactPage({ params }: { params: Promise<{ contac
     sentAt: contact.sent_at,
     humanVisits: human,
     pharmacy: pharmacy ? { status: pharmacy.status, submitted_at: pharmacy.submitted_at } : null,
+    emailFailedAt: contact.email_failed_at,
   });
 
   return (

@@ -63,8 +63,28 @@ export async function saveContact(input: unknown): Promise<R> {
       city: d.city || null,
       notes: d.notes || null,
     };
+
+    // Finding a new address is the fix for a failed one, so applying it
+    // clears the mark rather than leaving the contact unsendable until
+    // somebody remembers a second step. Only when the address actually
+    // changed: saving a note on a bounced contact must not quietly make it
+    // sendable again.
+    let cleared = false;
+    if (d.id) {
+      const { data: before } = await db
+        .from("outreach_contacts")
+        .select("contact_email, email_failed_at")
+        .eq("id", d.id)
+        .maybeSingle();
+      const was = (before?.contact_email ?? "").trim().toLowerCase();
+      cleared = !!before?.email_failed_at && was !== email.toLowerCase();
+    }
+
     const { error } = d.id
-      ? await db.from("outreach_contacts").update(patch).eq("id", d.id)
+      ? await db
+          .from("outreach_contacts")
+          .update(cleared ? { ...patch, email_failed_at: null, email_failed_reason: null } : patch)
+          .eq("id", d.id)
       : await db.from("outreach_contacts").insert({ ...patch, token: generateOutreachToken() });
     // The index is the one that cannot be raced past. Its message names a
     // constraint, so it gets translated back into something readable.
@@ -75,6 +95,7 @@ export async function saveContact(input: unknown): Promise<R> {
       throw error;
     }
     revalidatePath("/tracking");
+    if (d.id) revalidatePath(`/tracking/${d.id}`);
     return { ok: true };
   } catch (e) {
     return fail(e);
@@ -104,6 +125,38 @@ export async function linkPharmacy(id: string, pharmacyId: string | null): Promi
   const { error } = await db.from("outreach_contacts").update({ pharmacy_id: pharmacyId }).eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/tracking");
+  return { ok: true };
+}
+
+/**
+ * Records that the address does not work, or that it does after all.
+ *
+ * The send path sets this itself when a server refuses the recipient
+ * outright, but that is the smaller half: a relay usually accepts the message
+ * and bounces it minutes later to the reply-to mailbox, where the only thing
+ * that can see it is a person reading their mail. This is how that gets back
+ * into the list.
+ *
+ * Clearing it is the way to say "try this one again" — it drops the contact
+ * back to whatever was actually known, which for a send that failed outright
+ * is "Not sent", because such a send never recorded one.
+ */
+export async function setEmailFailed(id: string, failed: boolean, reason?: string): Promise<R> {
+  const { db } = await requireAdmin();
+  const note = (reason ?? "").trim().slice(0, 500);
+  const { error } = await db
+    .from("outreach_contacts")
+    .update(
+      failed
+        ? { email_failed_at: new Date().toISOString(), email_failed_reason: note || "Marked by hand" }
+        // Both together: the column only allows a reason alongside the mark,
+        // and a stale one would show up under an address that is fine.
+        : { email_failed_at: null, email_failed_reason: null },
+    )
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/tracking");
+  revalidatePath(`/tracking/${id}`);
   return { ok: true };
 }
 
