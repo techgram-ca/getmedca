@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@getmed/core/auth";
-import { sendHtmlEmail, smtpConfigFromEnv, type EmailAttachment } from "@getmed/core/notifications";
+import {
+  isUndeliverableAddressError,
+  sendHtmlEmail,
+  smtpConfigFromEnv,
+  type EmailAttachment,
+} from "@getmed/core/notifications";
 import {
   dropUnresolvedLinks,
   htmlToPlainText,
@@ -115,6 +120,21 @@ export async function sendOutreachEmails(contactIds: string[], templateId: strin
     const outcomes: SendOutcome[] = [];
 
     for (const contact of contacts) {
+      // Checked here as well as in the list, which already hides the button:
+      // a page left open since before the mark would otherwise send to it,
+      // and a repeated hard bounce is the quickest way to get the mailbox
+      // itself blocked. Clearing the mark, or changing the address, is how
+      // the send is retried.
+      if (contact.email_failed_at) {
+        outcomes.push({
+          contactId: contact.id,
+          pharmacyName: contact.pharmacy_name,
+          status: "skipped",
+          detail: `Marked as a failed address — ${contact.email_failed_reason ?? "needs a new one"}`,
+        });
+        continue;
+      }
+
       const rendered = renderOutreachEmail(shape, contact, linkRules, pharmacyUrl);
       const blockers = outreachSendBlockers(contact, shape, rendered);
       if (blockers.length) {
@@ -173,7 +193,26 @@ export async function sendOutreachEmails(contactIds: string[], templateId: strin
           error: detail.slice(0, 500),
           attachment_count: attachments.length,
         });
-        outcomes.push({ contactId: contact.id, pharmacyName: contact.pharmacy_name, status: "failed", detail });
+
+        // When the server refused this recipient in particular, the contact
+        // is marked here rather than left for someone to copy out of the
+        // report before it closes. Only then: a bad password or a dropped
+        // connection fails the whole batch, and marking forty good addresses
+        // dead would be a worse mistake than missing one.
+        const badAddress = isUndeliverableAddressError(detail);
+        if (badAddress) {
+          await db
+            .from("outreach_contacts")
+            .update({ email_failed_at: new Date().toISOString(), email_failed_reason: detail.slice(0, 500) })
+            .eq("id", contact.id);
+        }
+
+        outcomes.push({
+          contactId: contact.id,
+          pharmacyName: contact.pharmacy_name,
+          status: "failed",
+          detail: badAddress ? `${detail} — marked as a failed address` : detail,
+        });
       }
     }
 

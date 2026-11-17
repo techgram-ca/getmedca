@@ -35,6 +35,7 @@ export default async function TrackingPage() {
       sentAt: c.sent_at,
       humanVisits: human,
       pharmacy: pharmacy ? { status: pharmacy.status, submitted_at: pharmacy.submitted_at } : null,
+      emailFailedAt: c.email_failed_at,
     });
     return {
       id: c.id,
@@ -44,6 +45,8 @@ export default async function TrackingPage() {
       city: c.city,
       unsubscribed_at: c.unsubscribed_at,
       sent_at: c.sent_at,
+      email_failed_at: c.email_failed_at,
+      email_failed_reason: c.email_failed_reason,
       created_at: c.created_at,
       stage,
       visits: { human, days: counts?.human_days ?? 0 },

@@ -134,8 +134,18 @@ export function summariseVisits(visits: Visit[]): VisitSummary {
   return { human, bot, days: days.size, byDestination, firstHuman: first, lastHuman: last };
 }
 
-/** Where a contact has got to. Ordered: each stage implies the ones before it. */
-export const OUTREACH_STAGES = ["new", "sent", "visited", "signed_up", "submitted", "approved"] as const;
+/**
+ * Where a contact has got to.
+ *
+ * The first six are the funnel, in order: each implies the ones before it.
+ * `bad_email` is last because it is not a step in that sequence at all but a
+ * dead end off the start of it — the address does not work, so nothing after
+ * it can happen until somebody finds a new one. Nothing reads this array as
+ * an ordering; it is the list the stage filter offers.
+ */
+export const OUTREACH_STAGES = [
+  "new", "sent", "visited", "signed_up", "submitted", "approved", "bad_email",
+] as const;
 export type OutreachStage = (typeof OUTREACH_STAGES)[number];
 
 export type StageInput = {
@@ -143,6 +153,12 @@ export type StageInput = {
   humanVisits: number;
   /** Set once a signup carried the token, or once an admin linked the row. */
   pharmacy: { status: string; submitted_at: string | null } | null;
+  /**
+   * Set once the address is known not to work: a recipient-level rejection at
+   * send time, or an admin marking it after a bounce landed in the reply-to
+   * mailbox.
+   */
+  emailFailedAt?: string | null;
 };
 
 /**
@@ -154,13 +170,22 @@ export type StageInput = {
  * which meant the table could show a stage nothing backed up; linking the
  * pharmacy says the same thing and stays true afterwards.
  */
-export function outreachStage({ sentAt, humanVisits, pharmacy }: StageInput): OutreachStage {
+export function outreachStage({ sentAt, humanVisits, pharmacy, emailFailedAt }: StageInput): OutreachStage {
   if (pharmacy) {
     if (pharmacy.status === "approved") return "approved";
     if (pharmacy.submitted_at) return "submitted";
     return "signed_up";
   }
+  // A dead address that somebody nonetheless clicked through, or signed up
+  // from, is not the thing this stage is for. Whatever the mark says, mail
+  // demonstrably reached a person, and showing "Email failed" over real
+  // progress would lose the progress and mislead about the address.
   if (humanVisits > 0) return "visited";
+  // Above `sent` rather than below it: the common case is a bounce after the
+  // relay accepted the message, so `sent_at` is set and still means nothing
+  // arrived. Clearing the mark drops back through to `sent`, or to `new` for
+  // a send that failed outright, which never sets it.
+  if (emailFailedAt) return "bad_email";
   if (sentAt) return "sent";
   return "new";
 }
@@ -172,6 +197,7 @@ export const STAGE_LABELS: Record<OutreachStage, string> = {
   signed_up: "Signed up",
   submitted: "Profile submitted",
   approved: "Approved",
+  bad_email: "Email failed",
 };
 
 /**
