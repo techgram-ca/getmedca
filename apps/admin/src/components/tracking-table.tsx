@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { Check, ChevronLeft, ChevronRight, Code2, Copy, Mail, Plus, RotateCcw, Send } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Code2, Copy, Mail, MailCheck, MailX, Plus, RotateCcw, Send } from "lucide-react";
 import {
   OUTREACH_STAGES, joinUrl, renderOutreachEmail, STAGE_LABELS,
   type LinkRule, type OutreachStage,
@@ -12,7 +12,7 @@ import {
   Alert, Badge, Button, Dialog, DialogContent, Field, FilterSelect, Input, Select,
   TBody, TD, TH, THead, TR, Table, Textarea, toast,
 } from "@getmed/ui";
-import { saveContact } from "@/lib/actions/outreach";
+import { saveContact, setEmailFailed } from "@/lib/actions/outreach";
 import { sendOutreachEmails, type SendOutcome } from "@/lib/actions/outreach-send";
 import { EmailBuilderDialog } from "./email-builder-dialog";
 import type { Template } from "./email-template-editor";
@@ -21,6 +21,8 @@ type Row = {
   id: string; token: string; pharmacy_name: string; contact_email: string | null; city: string | null;
   unsubscribed_at: string | null; stage: OutreachStage;
   sent_at: string | null; created_at: string;
+  /** Set once the address is known not to work. Blocks sending until cleared. */
+  email_failed_at: string | null; email_failed_reason: string | null;
   visits: { human: number; days: number };
 };
 type Draft = { pharmacyName: string; contactEmail: string; city: string; notes: string };
@@ -36,8 +38,9 @@ export type SenderConfig = {
 
 const EMPTY: Draft = { pharmacyName: "", contactEmail: "", city: "", notes: "" };
 
-export const STAGE_TONE: Record<OutreachStage, "neutral" | "brand" | "success" | "warning"> = {
+export const STAGE_TONE: Record<OutreachStage, "neutral" | "brand" | "success" | "warning" | "danger"> = {
   new: "neutral", sent: "neutral", visited: "warning", signed_up: "brand", submitted: "brand", approved: "success",
+  bad_email: "danger",
 };
 
 type Filters = {
@@ -125,7 +128,13 @@ export function TrackingTable({
     setTimeout(() => setCopied(null), 1600);
   };
 
-  const sendable = (c: Row) => !c.unsubscribed_at && !!c.contact_email?.trim();
+  // A known-dead address is held back as firmly as an unsubscribe. Sending
+  // to it again cannot work, and a mailbox that keeps producing hard bounces
+  // is the quickest way to get the mailbox itself blocked. Clearing the mark,
+  // or filling in a new address, is how it becomes sendable again.
+  const sendable = (c: Row) =>
+    !c.unsubscribed_at && !c.email_failed_at && !!c.contact_email?.trim();
+  const needFixing = rows.filter((c) => c.email_failed_at);
   const pickedRows = shown.filter((c) => picked.has(c.id));
   const pickedSendable = pickedRows.filter(sendable);
   const sendableOnPage = paged.filter(sendable);
@@ -215,6 +224,18 @@ export function TrackingTable({
     }
   };
 
+  /** The address is wrong, or it was not after all. */
+  const toggleFailed = (c: Row) =>
+    start(async () => {
+      const r = await setEmailFailed(c.id, !c.email_failed_at);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success(c.email_failed_at ? "Mark cleared — it can be sent to again" : "Marked as a failed address");
+      router.refresh();
+    });
+
   const save = () =>
     start(async () => {
       if (!draft) return;
@@ -296,6 +317,18 @@ export function TrackingTable({
           {picked.size > pickedSendable.length ? (
             <> ({picked.size - pickedSendable.length} cannot be sent to)</>
           ) : null}
+          {needFixing.length ? (
+            <>
+              {" · "}
+              <button
+                type="button"
+                className="cursor-pointer font-semibold text-danger-500 underline"
+                onClick={() => { setF({ ...NO_FILTERS, stage: "bad_email" }); setPage(1); }}
+              >
+                {needFixing.length} address{needFixing.length === 1 ? "" : "es"} to fix
+              </button>
+            </>
+          ) : null}
         </p>
 
         {!sender.ready ? (
@@ -354,7 +387,15 @@ export function TrackingTable({
                       className="cursor-pointer disabled:cursor-not-allowed"
                       checked={picked.has(c.id)}
                       disabled={!sendable(c)}
-                      title={sendable(c) ? undefined : c.unsubscribed_at ? "Unsubscribed" : "No email address"}
+                      title={
+                        sendable(c)
+                          ? undefined
+                          : c.unsubscribed_at
+                            ? "Unsubscribed"
+                            : c.email_failed_at
+                              ? "The address failed — update it first"
+                              : "No email address"
+                      }
                       onChange={() => toggle(c.id)}
                     />
                   </TD>
@@ -367,7 +408,19 @@ export function TrackingTable({
                       <span className="mx-1.5 text-ink-300">|</span>
                       {c.contact_email ?? "No email"}
                     </p>
-                    {c.unsubscribed_at ? <Badge tone="danger" className="mt-1">Do not contact</Badge> : null}
+                    {c.unsubscribed_at || (c.email_failed_at && c.stage !== "bad_email") ? (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {c.unsubscribed_at ? <Badge tone="danger">Do not contact</Badge> : null}
+                        {/* Only when the Stage column is saying something
+                            else. A marked contact that was also clicked
+                            reads as "Opened the link", and the row would
+                            otherwise not say its address is dead — but
+                            repeating the stage back at itself is noise. */}
+                        {c.email_failed_at && c.stage !== "bad_email" ? (
+                          <Badge tone="danger" title={c.email_failed_reason ?? undefined}>Email failed</Badge>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </TD>
 
                   <TD>
@@ -397,9 +450,11 @@ export function TrackingTable({
                             ? "Sending is not configured"
                             : c.unsubscribed_at
                               ? "They asked not to be contacted"
-                              : !c.contact_email
-                                ? "No email address on file"
-                                : `Send ${fallbackTemplate?.name ?? "the pitch"} to ${c.contact_email}`
+                              : c.email_failed_at
+                                ? `The address failed — ${c.email_failed_reason ?? "it needs updating"}`
+                                : !c.contact_email
+                                  ? "No email address on file"
+                                  : `Send ${fallbackTemplate?.name ?? "the pitch"} to ${c.contact_email}`
                         }
                         onClick={() => openSend([c])}
                       >
@@ -419,6 +474,27 @@ export function TrackingTable({
                       </Button>
                       <Button size="sm" variant="outline" className="shrink-0" title="Preview, pick a template, copy for Gmail" onClick={() => setEmailFor(c)}>
                         <Mail /> Email
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={c.email_failed_at ? "danger" : "outline"}
+                        className="shrink-0 px-2.5"
+                        disabled={pending || !c.contact_email?.trim()}
+                        aria-label={
+                          c.email_failed_at
+                            ? `Clear the failed mark on ${c.pharmacy_name}`
+                            : `Mark ${c.pharmacy_name}'s address as failed`
+                        }
+                        title={
+                          !c.contact_email?.trim()
+                            ? "No address to mark"
+                            : c.email_failed_at
+                              ? `Clear the mark — ${c.email_failed_reason ?? "marked by hand"}. It goes back to not sent and can be sent to again.`
+                              : "The address does not work — mark it so it shows up as needing a new one"
+                        }
+                        onClick={() => toggleFailed(c)}
+                      >
+                        {c.email_failed_at ? <MailCheck /> : <MailX />}
                       </Button>
                     </div>
                   </TD>
@@ -589,6 +665,12 @@ function matches(r: Row, f: Filters): boolean {
 
   if (f.stage === "__unsub") {
     if (!r.unsubscribed_at) return false;
+  } else if (f.stage === "bad_email") {
+    // On the mark rather than the stage. A marked contact that was also
+    // clicked reads as "Opened the link", and it still belongs on the list
+    // of addresses to go and find again — which is the only reason to pick
+    // this filter.
+    if (!r.email_failed_at) return false;
   } else if (f.stage && r.stage !== f.stage) return false;
 
   if (f.sentOn) {

@@ -323,6 +323,10 @@ export type OutreachContactRow = {
   pharmacy_id: string | null;
   notes: string | null;
   unsubscribed_at: string | null;
+  /** Set when the address is known not to work; blocks sending until cleared. */
+  email_failed_at: string | null;
+  /** The server's response, or the admin's note. Null unless the mark is set. */
+  email_failed_reason: string | null;
   created_at: string;
   updated_at: string;
 };

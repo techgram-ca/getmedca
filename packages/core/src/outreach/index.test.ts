@@ -135,6 +135,31 @@ test("a scanner-only hit does not promote anyone to visited", () => {
   assert.equal(outreachStage({ ...base, sentAt: SENT, humanVisits: 0 }), "sent");
 });
 
+test("a dead address reads as failed rather than as never sent", () => {
+  // The send that failed outright: sent_at was never set, so without the
+  // mark this row is indistinguishable from a pharmacy nobody has tried.
+  assert.equal(outreachStage({ ...base, emailFailedAt: SENT }), "bad_email");
+  // The bounce: the relay took the message, so sent_at is set and says
+  // nothing about whether it arrived.
+  assert.equal(outreachStage({ ...base, sentAt: SENT, emailFailedAt: SENT }), "bad_email");
+});
+
+test("clearing the mark drops back to what was actually known", () => {
+  assert.equal(outreachStage({ ...base, emailFailedAt: null }), "new");
+  assert.equal(outreachStage({ ...base, sentAt: SENT, emailFailedAt: null }), "sent");
+});
+
+test("mail that demonstrably reached someone outranks the mark", () => {
+  // Marked by hand on the wrong row, or marked and then the address worked.
+  // Either way a person clicked, and hiding that behind "Email failed" would
+  // lose the one fact in the row worth having.
+  assert.equal(outreachStage({ ...base, sentAt: SENT, humanVisits: 1, emailFailedAt: SENT }), "visited");
+  assert.equal(
+    outreachStage({ ...base, emailFailedAt: SENT, pharmacy: { status: "approved", submitted_at: SENT } }),
+    "approved",
+  );
+});
+
 // ---------------- joinUrl ----------------
 
 test("a base URL with a trailing slash does not produce a double slash", () => {

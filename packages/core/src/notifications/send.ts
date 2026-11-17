@@ -192,3 +192,58 @@ async function sendOverSmtp(message: HtmlEmail, smtp: SmtpConfig): Promise<{ id:
   }
   return { id: info.messageId ?? null };
 }
+
+/**
+ * Phrases that mean the problem is this one recipient and will not go away.
+ *
+ * Mostly enhanced status codes, which say the same thing in every server's
+ * wording, plus the prose the common ones put beside them.
+ */
+const BAD_ADDRESS_SIGNALS = [
+  "5.1.1", "5.1.2", "5.1.3", "5.1.6", "5.1.10", "5.2.1", "5.4.4",
+  "user unknown", "unknown user", "no such user", "no such recipient",
+  "recipient not found", "recipient address rejected", "recipient rejected",
+  "invalid recipient", "unknown recipient", "address does not exist",
+  "mailbox unavailable", "mailbox not found", "mailbox does not exist",
+  "does not exist", "unrouteable address", "unroutable address",
+  "domain not found", "host or domain name not found", "nxdomain",
+  "not a valid email", "invalid `to`",
+  // Ours, from `info.rejected`: refused for this recipient by construction.
+  "the mail server rejected",
+];
+
+/**
+ * Reasons a send failed that say nothing about the address.
+ *
+ * These are the ones worth being careful about. A bad password or a dropped
+ * connection fails every message in a batch, and treating that as "all forty
+ * of these addresses are dead" would be a worse outcome than not noticing a
+ * real one.
+ */
+const NOT_THE_ADDRESS = [
+  "authentic", "invalid login", "not configured", "no way to send",
+  "econnection", "esocket", "etimedout", "timeout", "timed out",
+  "connection", "socket", "network", "dns",
+  "rate limit", "too many", "quota", "mailbox full", "over the limit",
+  "try again", "temporar", "greylist", "deferred",
+  "attachment",
+];
+
+/**
+ * Whether a failed send means the address itself is wrong.
+ *
+ * Errs towards saying no. A false yes stops the pitch going to a pharmacy
+ * whose address was fine and puts it on a list of addresses to go and
+ * re-find; a false no just leaves a dead address to be marked by hand, which
+ * is where most of them come from anyway — a relay accepts the message and
+ * bounces it minutes later, where nothing in this process can see it.
+ */
+export function isUndeliverableAddressError(detail: string | null | undefined): boolean {
+  const text = (detail ?? "").toLowerCase();
+  if (!text.trim()) return false;
+  if (NOT_THE_ADDRESS.some((fragment) => text.includes(fragment))) return false;
+  // A 4xx reply is the server asking for the message again later, whatever
+  // prose it put after the code. Only a 5xx is a refusal that stands.
+  if (/\b4\d\d\b/.test(text) && !/\b5\d\d\b/.test(text)) return false;
+  return BAD_ADDRESS_SIGNALS.some((fragment) => text.includes(fragment));
+}
