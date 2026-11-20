@@ -16,6 +16,7 @@
     "@sentry/nextjs": "^10.75.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
+    "@vercel/analytics": "^2.0.1",
     "inngest": "^4.20.0",
     "lucide-react": "^1.47.0",
     "mapbox-gl": "^3.31.0",

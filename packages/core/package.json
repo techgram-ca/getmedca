@@ -23,6 +23,7 @@
     "./storage": "./src/storage.ts",
     "./hours": "./src/hours.ts",
     "./format": "./src/format.ts",
+  "./analytics": "./src/analytics.ts",
     "./errors": "./src/errors.ts"
   },
   "scripts": {
